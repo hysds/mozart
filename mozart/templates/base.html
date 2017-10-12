@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    {% block head %}
+    <meta charset="utf-8">
+    <title>{{ title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="HySDS Resource Management">
+    <meta name="author" content="Gerald Manipon">
+
+    <!-- Le styles -->
+    <link href="{{ url_for('static', filename='bootstrap/css/bootstrap.css') }}" rel="stylesheet">
+    <style type="text/css">
+      body {
+        padding-top: 20px;
+        padding-bottom: 60px;
+      }
+
+      /* Custom container */
+      .container {
+        margin: 0 auto;
+        max-width: 1000px;
+      }
+      .container > hr {
+        margin: 60px 0;
+      }
+
+      {% block jumbotron_style %}
+      /* Main message */
+      .jumbotron {
+        margin: 80px 0;
+        text-align: center;
+      }
+      .jumbotron h1 {
+        font-size: 100px;
+        line-height: 1;
+      }
+      .jumbotron .lead {
+        font-size: 24px;
+        line-height: 1.25;
+      }
+      .jumbotron .btn {
+        font-size: 21px;
+        padding: 14px 24px;
+      }
+      {% endblock jumbotron_style %}
+
+      /* Supporting marketing content */
+      .marketing {
+        margin: 60px 0;
+      }
+      .marketing p + h4 {
+        margin-top: 28px;
+      }
+
+      /* jquery validation */
+      label.valid {
+        width: 24px;
+        height: 24px;
+        background: url({{ url_for('static', filename='img/valid.png') }}) center center no-repeat;
+        display: inline-block;
+        text-indent: -9999px;
+      }
+
+      label.error {
+        font-weight: bold;
+        color: red;
+        padding: 2px 8px;
+        margin-top: 2px;
+      }
+    </style>
+    <link href="{{ url_for('static', filename='bootstrap/css/bootstrap-responsive.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='jquery-ui-1.10.2.custom/css/vader/jquery-ui-1.10.2.custom.css') }}" rel="stylesheet">
+
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="{{ url_for('static', filename='html5shiv.js') }}"></script>
+    <![endif]-->
+
+    <script src="{{ url_for('static', filename='jquery-ui-1.10.2.custom/js/jquery-1.9.1.js') }}"></script>
+    <script src="{{ url_for('static', filename='jquery-ui-1.10.2.custom/js/jquery-ui-1.10.2.custom.js') }}"></script>
+    <script src="{{ url_for('static', filename='jquery-validation-1.11.1/dist/jquery.validate.js') }}"></script>
+    <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.js') }}"></script>
+    {% endblock head %}
+  </head>
+
+  <body>
+
+    <div class="navbar navbar-inverse navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container">
+          <button type="button" class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <div class="nav-collapse collapse">
+            <ul class="nav">
+              <li><a href="{{ url_for('views/main.index') }}">Home</a></li>
+              <li><a href="{{ config.KIBANA_JOB_METRICS_URL }}" target="_blank">metric:Jobs</a></li>
+              <li><a href="{{ config.KIBANA_INSTANCE_STATS_URL }}" target="_blank">metric:Workers</a></li>
+              <li><a href="{{ config.TOSCA_URL }}" target="_blank">Products</a></li>
+              <li><a href="{{ config.FLOWER_URL }}" target="_blank">Celery</a></li>
+              <li><a href="{{ config.RABBITMQ_ADMIN_URL }}" target="_blank">Queues</a></li>
+              <li><a href="{{ config.ES_HEAD_URL }}" target="_blank">es:head</a></li>
+              <li><a href="{{ config.ES_KOPF_URL }}" target="_blank">es:kopf</a></li>
+              <li><a href="{{ url_for('api_v0-1.api_doc') }}">API</a></li>
+            </ul>
+          </div><!--/.nav-collapse -->
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+
+      {% block content %}{% endblock content %}
+
+      <hr>
+
+      {% block footer %}
+      <div class="footer">
+        <p><a href="http://www.jpl.nasa.gov/copyrights.cfm">Privacy</a> |
+           <a href="http://www.jpl.nasa.gov/imagepolicy/">Image Policy</a> |
+           &copy; Jet Propulsion Laboratory {{ current_year }}</p>
+      </div>
+      {% endblock footer %}
+
+    </div> <!-- /container -->
+  </body>
+</html>

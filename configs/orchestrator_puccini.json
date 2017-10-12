@@ -1,0 +1,38 @@
+{
+  "job_completed_queue": "completed_queue",
+  "job_error_queue": "error_queue",
+  "job_status_exchange": "job_status_exch",
+  "queues": [ "product_staged" ],
+  "configs": [
+    {
+      "job_type": "puccini:product_ingest-low",
+      "job_creators": [
+        {
+          "job_name": "product_ingest",
+          "function": "puccini.createJob",
+          "job_queues": [ "puccini_product_ingest-low" ]
+        }
+      ]
+    },
+    {
+      "job_type": "puccini:product_ingest",
+      "job_creators": [
+        {
+          "job_name": "product_ingest",
+          "function": "puccini.createJob",
+          "job_queues": [ "puccini_product_ingest" ]
+        }
+      ]
+    },
+    {
+      "job_type": "puccini:product_ingest-high",
+      "job_creators": [
+        {
+          "job_name": "product_ingest",
+          "function": "puccini.createJob",
+          "job_queues": [ "puccini_product_ingest-high" ]
+        }
+      ]
+    }
+  ]
+} 

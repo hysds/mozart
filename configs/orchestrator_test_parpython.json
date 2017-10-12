@@ -1,0 +1,28 @@
+{
+  "job_completed_queue": "completed_queue",
+  "job_error_queue": "error_queue",
+  "job_status_exchange": "job_status_exch",
+  "queues": [ "parpython_jobs_processed" ],
+  "configs": [
+    {
+      "job_type": "job:parpython_map_job",
+      "job_creators": [
+        {
+          "job_name": "parpython_map_job",
+          "function": "test_parpython.createParPythonMapJob",
+          "job_queues": [ "parpython_jobs" ]
+        }
+      ]
+    },
+    {
+      "job_type": "job:parpython_reduce_job",
+      "job_creators": [
+        {
+          "job_name": "parpython_reduce_job",
+          "function": "test_parpython.createParPythonReduceJob",
+          "job_queues": [ "parpython_jobs" ]
+        }
+      ]
+    }
+  ]
+} 

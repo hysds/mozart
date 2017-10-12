@@ -1,0 +1,8 @@
+{
+  "job_completed_queue": "completed_queue",
+  "job_error_queue": "error_queue",
+  "job_status_exchange": "job_status_exch",
+  "queues": [ "event_processed" ],
+  "configs": [
+  ]
+} 

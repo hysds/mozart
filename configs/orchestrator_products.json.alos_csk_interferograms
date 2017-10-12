@@ -1,0 +1,38 @@
+{
+  "job_completed_queue": "completed_queue",
+  "job_error_queue": "error_queue",
+  "job_status_exchange": "job_status_exch",
+  "queues": [ "product_processed" ],
+  "configs": [
+    {
+      "job_type": "product:ariamh::data/ALOS",
+      "job_creators": [
+        {
+          "job_name": "sciflo-create_ALOS-interferograms",
+          "function": "ariamh.createJob",
+          "job_queues": [ "aria-sciflo" ]
+        }
+      ]
+    },
+    {
+      "job_type": "product:ariamh::data/CSK",
+      "job_creators": [
+        {
+          "job_name": "sciflo-create_CSK-interferograms",
+          "function": "ariamh.createJob",
+          "job_queues": [ "aria-sciflo" ]
+        }
+      ]
+    },
+    {
+      "job_type": "product:ccmods::data/IGRA-AIRS-MODIS_Matchups",
+      "job_creators": [
+        {
+          "job_name": "get_airs_all",
+          "function": "ccmods.createAggregateAirsJob",
+          "job_queues": [ "ccmods" ]
+        }
+      ]
+    }
+  ]
+} 

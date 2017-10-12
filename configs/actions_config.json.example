@@ -1,0 +1,111 @@
+{
+  "actions": [
+    {
+      "type": "user_tagger-job",
+      "job_type": "user_tagger-job",
+      "public": false,
+      "allowed_accounts": [ "ops" ],
+      "monitoring_allowed": true,
+      "processing_allowed": true,
+      "label": "OPS - User Tagger",
+      "kwargs": [
+        {
+          "name": "tag",
+          "type": "textbox",
+          "placeholder": "tag value e.g. test tag",
+          "validator": {
+            "required": true
+          }
+        }
+      ]
+    },
+    {
+      "type": "queue_router_job",
+      "job_type": "queue_router_job",
+      "public": false,
+      "allowed_accounts": [ "ops" ],
+      "monitoring_allowed": true,
+      "processing_allowed": true,
+      "label": "OPS - Route to Queue",
+      "kwargs": [
+        {
+          "name": "queues",
+          "type": "textbox",
+          "placeholder": "space-separated queue list e.g. this_queue that_queue",
+          "validator": {
+            "required": true
+          }
+        }
+      ]
+    },
+    {
+      "type": "retry_job",
+      "job_type": "retry_job",
+      "public": false,
+      "allowed_accounts": [ "ops" ],
+      "monitoring_allowed": false,
+      "processing_allowed": true,
+      "label": "OPS - Retry Job",
+      "kwargs": [
+      ]
+    },
+    {
+      "type": "stop_tasks",
+      "job_type": "url:/task/stop/job_status?source={\"query\":${query_string}}",
+      "public": false,
+      "allowed_accounts": [ "ops" ],
+      "monitoring_allowed": false,
+      "processing_allowed": true,
+      "label": "OPS - Stops running tasks and jobs",
+      "kwargs": [
+      ]
+    },
+    {
+      "type": "purge_inactive_tasks",
+      "job_type": "url:/task/purge/job_status?source={\"query\":${query_string}}",
+      "public": false,
+      "allowed_accounts": [ "ops" ],
+      "monitoring_allowed": false,
+      "processing_allowed": true,
+      "label": "OPS - Remove non-running tasks and jobs",
+      "kwargs": [
+      ]
+    },
+    {
+      "type": "notify_job_by_email",
+      "job_type": "notify_job_by_email",
+      "public": true,
+      "monitoring_allowed": true,
+      "processing_allowed": true,
+      "label": "Notify By Email",
+      "kwargs": [
+        {
+          "name": "email_addresses",
+          "type": "textarea",
+          "placeholder": "comma-separated list of email addresses",
+          "validator": {
+            "required": true
+          }
+        }
+      ]
+    },
+    {
+      "type": "notify_job_by_tweet",
+      "job_type": "notify_job_by_tweet",
+      "public": true,
+      "monitoring_allowed": true,
+      "processing_allowed": true,
+      "label": "Notify By Tweet",
+      "kwargs": [
+        {
+          "name": "hash_tags",
+          "type": "textbox",
+          "placeholder": "e.g. #datastager #cosmoskymed",
+          "validator": {
+            "required": true
+          }
+        }
+      ]
+    }
+  ]
+}

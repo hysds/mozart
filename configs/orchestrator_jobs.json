@@ -1,0 +1,118 @@
+{
+  "job_completed_queue": "completed_queue",
+  "job_error_queue": "error_queue",
+  "job_status_exchange": "job_status_exch",
+  "queues": [ "jobs_processed" ],
+  "configs": [
+    {
+      "job_type": "job:get_igra_modis_all",
+      "job_creators": [
+        {
+          "job_name": "create_igra_matchup",
+          "function": "ccmods.createIgraMatchupJob",
+          "job_queues": [ "ccmods" ]
+        }
+      ]
+    },
+    {
+      "job_type": "job:ccmods_get_agg_file",
+      "job_creators": [
+        {
+          "job_name": "get_agg_file",
+          "function": "ccmods_parpython.get_agg_file",
+          "job_queues": [ "ccmods" ]
+        }
+      ]
+    },
+    {
+      "job_type": "job:ccmods_generate_merged_file",
+      "job_creators": [
+        {
+          "job_name": "generate_merged_file",
+          "function": "ccmods_parpython.generate_merged_file",
+          "job_queues": [ "ccmods" ]
+        }
+      ]
+    },
+    {
+      "job_type": "job:ccmods_generate_pdf_plots",
+      "job_creators": [
+        {
+          "job_name": "generate_pdf_plots",
+          "function": "ccmods_parpython.generate_pdf_plots",
+          "job_queues": [ "ccmods" ]
+        }
+      ]
+    },
+    {
+      "job_type": "job:datastager",
+      "job_creators": [
+        {
+          "job_name": "datastager",
+          "function": "ariamh.createDatastagerJob",
+          "job_queues": [ "datastager" ]
+        }
+      ]
+    },
+    {
+      "job_type": "job:ariamh_sciflo_create_interferogram",
+      "job_creators": [
+        {
+          "job_name": "sciflo-create_interferograms",
+          "function": "ariamh.createJob",
+          "job_queues": [ "aria-sciflo" ]
+        }
+      ]
+    },
+    {
+      "job_type": "job:ariamh_network_selector",
+      "job_creators": [
+        {
+          "job_name": "network_selector",
+          "function": "ariamh_parpython.network_selector",
+          "job_queues": [ "aria-net_sel" ]
+        }
+      ]
+    },
+    {
+      "job_type": "job:ariamh_create_interferogram",
+      "job_creators": [
+        {
+          "job_name": "create_interferogram",
+          "function": "ariamh_parpython.create_interferogram",
+          "job_queues": [ "aria-create_ifg" ]
+        }
+      ]
+    },
+    {
+      "job_type": "job:wvcc_generate_matchup",
+      "job_creators": [
+        {
+          "job_name": "wvcc_generate_matchup",
+          "function": "ccmods_parpython.wvcc_generate_matchup",
+          "job_queues": [ "wvcc" ]
+        }
+      ]
+    },
+    {
+      "job_type": "job:notify_by_email",
+      "job_creators": [
+        {
+          "job_name": "notify_by_email",
+          "function": "utils.notify_by_email",
+          "job_queues": [ "notify_by_email" ]
+        }
+      ]
+    },
+    {
+      "job_type": "job:ftp_push",
+      "job_creators": [
+        {
+          "job_name": "ftp_push",
+          "function": "utils.ftp_push",
+          "job_queues": [ "ftp_push" ]
+        }
+      ]
+    }
+  ]
+} 

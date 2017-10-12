@@ -1,0 +1,1621 @@
+{% extends "base-fluid.html" %}
+
+{% block head %}
+  {{ super() }}
+
+  <script src="{{ url_for('static', filename='JSON-js/json2.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='facetview/vendor/linkify/1.1/jquery.linkify.min.js') }}"></script>  
+  <script type="text/javascript" src="{{ url_for('static', filename='facetview/jquery.facetview.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='facetview/css/facetview.css') }}">
+  <link href="{{ url_for('static', filename='nvd3/nv.d3.min.css') }}" rel="stylesheet" type="text/css"></link>
+  <script type="text/javascript" src="{{ url_for('static', filename='nvd3/lib/d3.v3.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='nvd3/nv.d3.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='nvd3/src/tooltip.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='nvd3/src/utils.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='nvd3/src/models/legend.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='nvd3/src/models/axis.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='nvd3/src/models/discreteBar.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='nvd3/src/models/discreteBarChart.js') }}"></script>
+  <link href="{{ url_for('static', filename='tablecloth-1.0.0/assets/css/tablecloth.css' ) }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='tablecloth-1.0.0/assets/css/prettify.css' ) }}" rel="stylesheet"> 
+  <script src="{{ url_for('static', filename='tablecloth-1.0.0/assets/js/jquery.metadata.js' ) }}"></script>
+  <script src="{{ url_for('static', filename='tablecloth-1.0.0/assets/js/jquery.tablesorter.min.js' ) }}"></script>
+  <script src="{{ url_for('static', filename='tablecloth-1.0.0/assets/js/jquery.tablecloth.js' ) }}"></script>
+  <script src="{{ url_for('static', filename='jquery-tagcloud-0.5.0/jquery.tagcloud.js' ) }}"></script>
+  <link href="{{ url_for('static', filename='facetview/vendor/bootstrap-tags/bootstrap-tags.css') }}" rel="stylesheet">
+  <script src="{{ url_for('static', filename='facetview/vendor/bootstrap-tags/bootstrap-tags.js') }}"></script>
+  <script src="{{ url_for('static', filename='readmore/readmore.js') }}"></script>
+
+  <style>
+    .btn-group {
+      vertical-align: top;
+    }
+
+    .modal {
+      max-height: 80%;
+      height: 80%;
+      overflow-y: none;
+      width: 90%;
+      left: 5%;
+      margin-left:auto;
+      margin-right:auto;
+    }
+
+    .modal-body {
+      max-height: 80%;
+      height: 80%;
+      overflow-y: none;
+    }
+
+    iframe.monitor_frame {
+      border-width: 0;
+      overflow-y: auto;
+      max-height: none;
+      height: 850px;
+      width: 99.6%;
+      zoom: 0.6;
+    }
+
+    #stats_chart {
+      height: 500px;
+      margin: 10px;
+      min-width: 100px;
+      min-height: 100px; 
+    }
+  </style>
+
+  <script type="text/javascript">
+
+    // helper to escape special chars in ID
+    function jq( myid ) {
+      return "#" + myid.replace( /(@|:|\.|\[|\]|\/)/g, "\\$1" );
+    }
+
+    // return url to resource icon
+    function get_icon(resource) {
+      if (resource === "job") {
+        return "<img src='{{ url_for('static', filename='facetview/img/job.png') }}' class='img-rounded'/>";
+      }else if (resource === "task") {
+        return "<img src='{{ url_for('static', filename='facetview/img/task.png') }}' class='img-rounded'/>";
+      }else if (resource === "worker") {
+        return "<img src='{{ url_for('static', filename='facetview/img/worker.png') }}' class='img-rounded'/>";
+      }else {
+        return "";
+      }
+    }
+
+    function set_left_margin() {
+      return ($(window).width() - $(this).width())/2;
+    }
+    
+    function add_user_tag(id, tag) {
+      $.ajax({
+        type: 'POST',
+        url: "{{ url_for('services/user_tags.add_user_tag') }}",
+        data: { id: id, tag: tag }
+      }); 
+    }
+
+    function remove_user_tag(id, tag) {
+      $.ajax({
+        type: 'POST',
+        url: "{{ url_for('services/user_tags.remove_user_tag') }}",
+        data: { id: id, tag: tag }
+      }); 
+    }
+
+    jQuery(document).ready(function($) {
+
+      $('time.timeago').timeago();
+
+      Tags.bootstrapVersion = "2";
+      
+      $('.facet-view-simple').facetview({
+        search_url: "{{ url_for('services/es.query', index='job_status') }}?",
+        search_index: 'elasticsearch',
+        post_search_callback: update_dashboard,
+        facets: [
+            {'field':'user_tags.untouched', 'display': 'user tags'},
+            {'field':'short_error.untouched', 'display': 'error'},
+            {'field':'resource', 'display': 'resource'},
+            {'field':'tags.untouched', 'display': 'tag'},
+            {'field':'job.job.username', 'display': 'username'},
+            {'field':'status', 'display': 'status'}, 
+            {'field':'type', 'display': 'type'},
+            {'field':'job.job.priority', 'display': 'priority'},
+            {'field':'job.job.container_image_name', 'display': 'container'},
+            {'field':'job.delivery_info.redelivered', 'display': 'redelivered'}, 
+            {'field':'uuid', 'display': 'task ID'},
+            {'field':'payload_id', 'display': 'payload ID'},
+            {'field':'job.job_info.facts.virtual', 'display': 'virtual'},
+            {'field':'job.job_info.facts.ec2_instance_type', 'display': 'instance type'},
+            {'field':'job.job_info.facts.ec2_placement_availability_zone', 'display': 'availability zone'},
+            {'field':'job.job_info.facts.physicalprocessorcount', 'display': 'physical processors'},
+            {'field':'job.job_info.facts.processorcount', 'display': 'processors'},
+            {'field':'job.job_info.facts.memorytotal', 'display': 'total memory'},
+            {'field':'job.job_info.facts.swapsize', 'display': 'swap size'},
+            {'field':'job.job_info.execute_node', 'display': 'worker'}
+        ],
+        paging: {
+          from: 0,
+          size: 25
+        },
+        pager_on_top: true,
+        search_sortby: [{ 'display': 'priority', 'field': 'job.priority' }, { 'display': 'timestamp', 'field': '@timestamp' }],
+        sort: [{ '@timestamp': { "order": "desc"} }],
+        fields: [ '@timestamp', '_source' ],
+        json_fields: [ 'user_tags' ],
+        filterchoice_result_fields: {
+            'uuid': 'uuid',
+            'job.job_info.job_payload.payload_task_id': 'job.job_info.job_payload.payload_task_id',
+            'celery_hostname': 'celery_hostname'
+            //'job.type': 'job.type'
+        },
+        display_images: false,
+        result_display: [
+          [
+            {
+              "pre": "<strong id='resource_",
+              "field": "_type",
+              "post": "_"
+            },
+            {
+              "pre": "",
+              "field": "_id",
+              "post": "'></strong><script>$(function() {\n" +
+                      "  var resource = null;\n" +
+                      "  var job_name = null;\n"
+            },
+            {
+              "pre": "  resource = '",
+              "field": "_type",
+              "post": "';\n"
+            },
+            {
+              "pre": "  job_name = '",
+              "field": "job.name",
+              "post": "';\n"
+            },
+            {
+              "pre": "  id = '",
+              "field": "_id",
+              "post": "';\n" +
+                      "  var strong = $(jq('resource_' + resource + '_' + id));\n" +
+                      "  $(get_icon(resource)).insertBefore(strong);\n" +
+                      "  if (resource == 'job') {\n" +
+                      //"    strong.text(' (' + resource + ') ' + job_name);\n" +
+                      "    strong.text(' ' + job_name);\n" +
+                      "  } else {\n" +
+                      //"    strong.text(' (' + resource + ') ' + id);\n" +
+                      "    strong.text(' ' + id);\n" +
+                      "  }\n" +
+                      "});\n" +
+                      "<\/script>"
+            }
+          ],
+          [
+            {
+              "pre": "resource: <font color='blue'>",
+              "field": "_type",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "timestamp: <font color='blue'>",
+              "field": "@timestamp",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "worker: <font color='blue'>",
+              "field": "celery_hostname",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "job ID: <font color='blue'>",
+              "field": "job.job_id",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "task ID: <font color='blue'>",
+              "field": "uuid",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "payload ID: <font color='blue'>",
+              "field": "job.job_info.job_payload.payload_task_id",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "job type: <font color='blue'>",
+              "field": "job.type",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "job queue: <font color='blue'>",
+              "field": "job.job_info.job_queue",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "status: <font color='blue'>",
+              "field": "status",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": 'node: <a href="#" onclick="show_node_stats(\'',
+              "field": "job.job_info.execute_node",
+              "post": '\'); return false;">'
+            },
+            {
+              "pre": "",
+              "field": "job.job_info.execute_node",
+              "post": "</a>"
+            }
+          ],
+          [
+            {
+              "pre": "priority: <font color='blue'>",
+              "field": "job.priority",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "redelivered: <font color='blue'>",
+              "field": "job.delivery_info.redelivered",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "time queued: <font color='blue'>",
+              "field": "job.job_info.time_queued",
+              "post": "</font>"
+            },
+            {
+              "pre": " | time started: <font color='blue'>",
+              "field": "job.job_info.time_start",
+              "post": "</font>"
+            },
+            {
+              "pre": " | time ended: <font color='blue'>",
+              "field": "job.job_info.time_end",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "duration: <font color='blue'>",
+              "field": "job.job_info.duration",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "jobspec: <font color='blue'>",
+              "field": "job.context.job_specification.id",
+              "post": "</font> | "
+            },
+            {
+              "pre": "container: <font color='blue'>",
+              "field": "job.container_image_name",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "exception: <pre>",
+              "field": "error",
+              "post": "</pre>"
+            }
+          ],
+          [
+            {
+              "pre": "traceback: <pre>",
+              "field": "traceback",
+              "post": "</pre>"
+            }
+          ],
+          [
+            {
+              "pre": "freq: <font color='blue'>",
+              "field": "event.freq",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "sw_ident: <font color='blue'>",
+              "field": "event.sw_ident",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "sw_ver: <font color='blue'>",
+              "field": "event.sw_ver",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "sw_sys: <font color='blue'>",
+              "field": "event.sw_sys",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "active: <font color='blue'>",
+              "field": "event.active",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "processed: <font color='blue'>",
+              "field": "event.processed",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "name: <font color='blue'>",
+              "field": "event.name",
+              "post": "</font>"
+            }
+          ],
+          [
+            {
+              "pre": "args: <pre>",
+              "field": "event.args",
+              "post": "</pre>"
+            }
+          ],
+          [ 
+            {
+              "pre": '<a target="_blank" href="{{ config['FLOWER_URL'] }}/task/',
+              "field": "event.uuid",
+              "post": '">view task</a> | '
+            },
+            {
+              "pre": '<a target="_blank" href="{{ config['FLOWER_URL'] }}/worker/',
+              "field": "event.hostname",
+              "post": '">view worker</a>'
+            }
+          ],
+          [
+            {
+              "pre": '<a href="#" onclick="show_job_info(\'',
+              "field": "payload_id",
+              "post": '\'); return false;">view job</a>'
+            },
+            {
+              "pre": ' | <a target="_blank" href="',
+              "field": "job.job_info.job_url",
+              "post": '">work directory</a>'
+            }
+          ],
+          [
+            {
+              "pre": "<div id='user_tags_div_",
+              "field": "_id",
+              "post": "'>"
+            },
+            { 
+              "pre": "user tags:<div id='user_tags_",
+              "field": "_id",
+              "post": "'></div><script>$(function() {\n" +
+              "  var status = null;\n" +
+              "  var tagData = null;\n"
+            },
+            {
+              "pre": "  tagData = ",
+              "field": "user_tags",
+              "post": ";\n"
+            },
+            {
+              "pre": "  status = '",
+              "field": "status",
+              "post": "';\n"
+            },
+            {
+              "pre": "  var id='",
+              "field": "_id",
+              "post": "';\n" +
+              "  var ut_div = $('div[id=\"user_tags_div_' + id + '\"]');\n" +
+              "  ut_div.next('br').remove()\n" +
+              "  if (status == 'job-failed' || status == 'job-completed') {\n" +
+              "    var tags =  $('div[id=\"user_tags_' + id + '\"]').tags({\n" +
+              "      tagSize: 'sm',\n" +
+              "      tagData: tagData,\n" +
+              "      afterAddingTag: function(t) { add_user_tag(id, t); },\n" +
+              "      afterDeletingTag: function(t) { remove_user_tag(id, t); }\n" +
+              "    });\n" +
+              "  } else {\n" +
+              "    ut_div.remove()\n" +
+              "  }\n" +
+              "});<\/script>" +
+              "</div>"
+            }
+          ],
+          //Containers type Display
+          [
+            {
+              "pre":"container version: ",
+              "field":"version",
+              "post":""
+            }
+          ],
+          //Job-spec type Display
+          [
+            {
+              "pre":"job version: ",
+              "field":"job-version",
+              "post":""
+            }
+          ],
+          [
+            {
+              "pre":"container: ",
+              "field":"container",
+              "post":""
+            }
+          ]
+        ]
+      });
+
+      // set tablecloth
+      var rules_table = $('#rules_table').tablecloth({
+        theme: "stats",
+        striped: true,
+        condensed: true
+      });
+
+      // validate form
+      var validator = $( '#rule_form' ).validate({
+        rules: {
+          rule_name: {
+            required: true
+          },
+          query_string: {
+            required: true
+          },
+          workflow: {
+            minlength: 1,
+            required: true
+          },
+          priority: {
+            minlength: 1,
+            required: true
+          }
+        },
+        messages: {
+          rule_name: "Please specify a name for this rule.",
+          workflow: "Please select an action.",
+          priority: "Please select a priority."
+        }
+      });
+
+      // validate procthis form
+      var procthis_validator = $( '#procthis_form' ).validate({
+        rules: {
+          procthis_name: {
+            required: true
+          },
+          query_string: {
+            required: true
+          },
+          workflow: {
+            minlength: 1,
+            required: true
+          },
+          priority: {
+            minlength: 1,
+            required: true
+          }
+        },
+        messages: {
+          procthis_name: "Please specify a tag for this job.",
+          workflow: "Please select an action.",
+          priority: "Please select a priority."
+        }
+      });
+
+      // show rules modal
+      $('#my_rules').on('click', function() {
+        $.ajax({
+          url: "user_rules/list",
+          success: function(data, sts, xhr) {
+            //console.log(data);
+            $('#general_error').html("");
+    
+            // clear table
+            var tbody = $('#rules_table > tbody'); 
+            tbody.empty();
+    
+            // populate table
+            for (var i=0; i < data.rules.length; i++) {
+              var status_cell = "<td><button class='btn btn-mini btn-danger toggle_rule' type='button' value='" +
+                                data.rules[i]['id'] + "'>Off</button></td>";
+              if (data.rules[i]['enabled'])
+                status_cell = "<td><button class='btn btn-mini btn-success toggle_rule' type='button' value='" +
+                              data.rules[i]['id'] + "'>On</button></td>";
+              tbody.append("<tr id='rule_" + data.rules[i]['id'] + "'>" +
+                           "<td>" + data.rules[i]['rule_name'] + "</td>" +
+                           "<td>" + data.rules[i]['query_string'] + "</td>" +
+                           "<td>" + data.rules[i]['workflow'] + "</td>" +
+                           "<td>" + data.rules[i]['queue'] + "</td>" +
+                           "<td>" + data.rules[i]['priority'] + "</td>" +
+                           "<td>" + data.rules[i]['kwargs'] + "</td>" +
+            {% if g.user.id == config['OPS_USER'] %}
+                           "<td>" + data.rules[i]['username'] + "</td>" +
+            {% endif %}
+                           status_cell +
+                           "<td><button class='btn btn-mini btn-primary edit_rule' type='button' value='" + 
+                           data.rules[i]['id'] + "'>Edit</button></td>" +
+                           "<td><button class='btn btn-mini btn-warning remove_rule' type='button' value='" + 
+                           data.rules[i]['id'] + "' rule_name='" + data.rules[i]['rule_name'] + 
+                           "'>Delete</button></td></tr>");
+            }
+            // append handlers to status buttons
+            $('button.toggle_rule').on('click', function() {
+              var button = $(this);
+              var rule_id = button.attr('value');
+              var cur_status = button.text();
+              if (cur_status == "Off") {
+                var new_status_text = "On";
+                var new_status = "true";
+                var remove_class = "btn-danger";
+                var add_class = "btn-success";
+              }else {
+                var new_status_text = "Off";
+                var new_status = "false";
+                var remove_class = "btn-success";
+                var add_class = "btn-danger";
+              }
+              $.ajax({
+                type: "POST",
+                url: "user_rules/toggle_status",
+                data: {
+                  id: rule_id,
+                  enabled: new_status
+                },
+                success: function(data, sts, xhr) {
+                  button.toggleClass(remove_class + " " + add_class).text(new_status_text);
+                },
+                error: function(xhr, sts, err) {
+                  $('#general_error').html("Error: " + xhr.responseText);
+                  $('#error_modal').modal('show').css({'left': set_left_margin});
+                }
+              });
+            });
+    
+            // append handlers to delete buttons
+            $('button.remove_rule').on('click', function() {
+              var rule_id = $(this).attr('value');
+              var rule_name = $(this).attr('rule_name');
+              $('#delete_rule_name').text(rule_name);
+              $('#delete_rule_id').val(rule_id);
+              $('#confirm_delete_modal').modal('show').css({'left': set_left_margin});
+            });
+    
+            // append handlers to edit buttons
+            $('button.edit_rule').on('click', function() {
+              var parent_tr = $(this).closest('tr');
+              var rule_id = $(this).attr('value');
+              $('#rule_id').val(rule_id);
+              $('#rule_name').val(parent_tr.children().eq(0).text());
+              $('#query_string').val(parent_tr.children().eq(1).text());
+              $('#workflow_val').val(parent_tr.children().eq(2).text());
+              $('#queue_val').val(parent_tr.children().eq(3).text());
+              $('#priority_val').val(parent_tr.children().eq(4).text());
+              $('#kwargs').val(parent_tr.children().eq(5).text());
+              $('#rule_modal_label').text("Edit Rule");
+              $('#rule_modal').modal('show').css({'left': set_left_margin});
+              $('#list_rules_modal').modal('hide');
+            });
+    
+            // show modal
+            $('#list_rules_modal').modal('show').css({'left': set_left_margin});
+          },
+          error: function(xhr, sts, err) {
+            //console.log(xhr);
+            $('#general_error').html("Error: " + xhr.responseText);
+            $('#error_modal').modal('show').css({'left': set_left_margin});
+          }
+        });
+        return false;
+      });
+
+      // handler for confirm_delete_btn
+      $('#confirm_delete_btn').on('click', function() {
+        var rule_id = $('#delete_rule_id').val();
+        $.ajax({
+          type: "POST",
+          url: "user_rules/remove",
+          data: {
+            id: rule_id
+          },
+          success: function(data, sts, xhr) {
+            $('#rule_' + rule_id).remove();
+            $('#confirm_delete_modal').modal('hide');
+            $('#general_error').html("");
+          },
+          error: function(xhr, sts, err) {
+            $('#confirm_delete_modal').modal('hide');
+            $('#general_error').html("Error: " + xhr.responseText);
+            $('#error_modal').modal('show').css({'left': set_left_margin});
+          }
+        });
+      });
+
+      // handler for rule_modal
+      $('#rule_modal').on('show', function() {
+        $('#ajax_error').html("");
+        var rule_id = $('#rule_id').val();
+    
+        // check if we're in add mode
+        if (rule_id === "") {
+          var edit_mode = false;
+          var cur_kwargs = {};
+    
+          // reset everything
+          $('#dynamic_fields').empty();
+          validator.resetForm();
+    
+          // populate query_string
+          var query_json = JSON.stringify(JSON.parse(QUERY_STRING).query, null, '  ');
+          $('#query_string').val(query_json);
+          //$('#query_string').val(query_json).attr('disabled', true);
+        }else {
+          var edit_mode = true;
+          var cur_kwargs = JSON.parse($('#kwargs').val());
+        }
+        //console.log("workflow_val: " + $('#workflow_val').val());
+        //console.log("priority_val: " + $('#priority_val').val());
+        //console.log("kwargs: " + $('#kwargs').val());
+    
+        // get actions config
+        $.ajax({
+          url: "user_rules/actions_config?ifc=monitor",
+          success: function(data, sts, xhr) {
+            //console.log(data);
+            // populate workflow/action select options
+            var workflow = $('#workflow');
+            workflow.empty();
+            workflow.append("<option value=''></option>");
+            var actions_cfg = {};
+            for (var i=0; i < data.actions.length; i++) {
+              actions_cfg[data.actions[i].type] = data.actions[i];
+              var disabled = data.actions[i].public ? ">" : "disabled>";
+              workflow.append("<option value='" + data.actions[i].type + "' " +
+                              disabled + data.actions[i].label + "</option>");
+            }
+    
+            // add handler to build dynamic form on selected option
+            var queue_group = $("#queue_group");
+            workflow.change(function() {
+              // build dynamic form
+              var workflow_type = $(this).val();
+              // queue handling
+              var queueDrop = $("#queue");
+              $.ajax({
+                  url: "user_rules/get_job_queues?job_type="+actions_cfg[workflow_type].wiring["job-specification"],
+                  success: function(data, sts, xhr) {
+                      var queues = data.queues;
+                      var html_to_add = ""
+                      for (var i = 0; i < queues.length; i++)
+                      {
+                           html_to_add += "<option value='"+queues[i]+"'>"+queues[i]+"</option>\n"
+                      } 
+                      queueDrop.html(html_to_add);
+                  }
+              });
+              var dyn_fields = $('#dynamic_fields');
+              dyn_fields.empty();
+              var kwargs = actions_cfg[workflow_type].kwargs;
+              dyn_fields.append("<legend>" + workflow_type + " parameters</legend>");
+              for (var i=0; i < kwargs.length; i++) {
+                var kwarg = kwargs[i];
+                if (kwarg.type == "textbox") {
+                  dyn_fields.append("<div class='control-group'>" +
+                                    "<label class='control-label' for='" + 
+                                    kwarg.name + "'>" + kwarg.name + "</label>" +
+                                    "<div class='controls'>" +
+                                    "<input class='field span4' type='text' name='" + kwarg.name +
+                                    "' placeholder='" + kwarg.placeholder + "'></div></div>");
+                  $('#rule_form input[name=' + kwarg.name + ']').rules("add", kwarg.validator);
+                  if (kwarg.name in cur_kwargs)
+                    $('#dynamic_fields input[name=' + kwarg.name + ']').val(cur_kwargs[kwarg.name]);
+                }else if (kwarg.type == "textarea") {
+                  dyn_fields.append("<div class='control-group'>" +
+                                    "<label class='control-label' for='" + 
+                                    kwarg.name + "'>" + kwarg.name + "</label>" +
+                                    "<div class='controls'>" +
+                                    "<textarea class='field span4' type='textarea' rows='5' name='" + kwarg.name +
+                                    "' placeholder='" + kwarg.placeholder + "'></textarea></div></div>");
+                  $('#rule_form textarea[name=' + kwarg.name + ']').rules("add", kwarg.validator);
+                  if (kwarg.name in cur_kwargs)
+                    $('#dynamic_fields textarea[name=' + kwarg.name + ']').val(cur_kwargs[kwarg.name]);
+                }else {
+                }
+              }
+            });
+    
+            // select the current workflow
+            if (edit_mode) {
+              $('#workflow').val($('#workflow_val').val()).change();
+              $('#queue').val($('#queue_val').val()).change();
+              $('#priority').val($('#priority_val').val()).change();
+            }
+          },
+          error: function(xhr, sts, err) {
+            //console.log(xhr.responseData);
+            $('#general_error').html("Error: " + xhr.responseText);
+            $('#error_modal').modal('show').css({'left': set_left_margin});
+          }
+        });
+      });
+
+      $('#rule_modal').on('hide', function() {
+        $('#rule_id').val("");
+        $('#workflow_val').val("");
+        $('#queue_val').val("");
+        $('#priority_val').val("");
+        $('#kwargs').val("");
+      });
+    
+      // handler for rule button
+      $('#rule_btn').on('click', function() {
+        var rule_id = $('#rule_id').val();
+    
+        // check if we're in add mode
+        if (rule_id === "") var edit_mode = false;
+        else var edit_mode = true;
+    
+        if ($('#rule_form').valid()) {
+          //console.log("workflow: " + $('#workflow').val());
+          //console.log("priority: " + $('#priority').val());
+          //console.log("rule_name: " + $('#rule_name').val());
+          //console.log("query_string: " + $('#query_string').val());
+          df_fields = {};
+          $.each($('#dynamic_fields').find('.field'), function(idx, value) {
+            var dyn_input = $(value);
+            df_fields[dyn_input.attr('name')] = dyn_input.val();
+          });
+    
+          if (edit_mode) {
+            var rule_data = {
+              id: rule_id,
+              rule_name: $('#rule_name').val(),
+              workflow: $('#workflow').val(),
+              queue: $('#queue').val(),
+              priority: $('#priority').val(),
+              query_string: $('#query_string').val(),
+              kwargs: JSON.stringify(df_fields, null, '  ')
+            };
+            var update_url = "user_rules/edit";
+          }else {
+            var rule_data = {
+              rule_name: $('#rule_name').val(),
+              workflow: $('#workflow').val(),
+              queue: $('#queue').val(),
+              priority: $('#priority').val(),
+              query_string: $('#query_string').val(),
+              kwargs: JSON.stringify(df_fields, null, '  ')
+            };
+            var update_url = "user_rules/add";
+          }
+          $.ajax({
+            type: "POST",
+            url: update_url,
+            data: rule_data,
+            success: function(data, sts, xhr) {
+              //console.log(data);
+              $('#ajax_error').html("");
+              $('#rule_modal').modal('hide');
+            },
+            error: function(xhr, sts, err) {
+              //console.log(xhr);
+              var resp = JSON.parse(xhr.responseText);
+              $('#ajax_error').html("Error: " + resp.message);
+            }
+          });
+        }
+      });
+
+      // handler for procthis_modal
+      $('#procthis_modal').on('show', function() {
+    
+        var cur_kwargs = {};
+    
+        // reset everything
+        $('#procthis_dynamic_fields').empty();
+        procthis_validator.resetForm();
+    
+        // populate query_string
+        var query_json = JSON.stringify(JSON.parse(QUERY_STRING).query, null, '  ');
+        $('#procthis_query_string').val(query_json);
+        //$('#procthis_query_string').val(query_json).attr('disabled', true);
+        //console.log("workflow_val: " + $('#procthis_workflow_val').val());
+        //console.log("priority_val: " + $('#procthis_priority_val').val());
+        //console.log("kwargs: " + $('#procthis_kwargs').val());
+    
+        // get actions config
+        $.ajax({
+          url: "user_rules/actions_config?ifc=process",
+          success: function(data, sts, xhr) {
+            //console.log(data);
+            // populate workflow/action select options
+            var workflow = $('#procthis_workflow');
+            workflow.empty();
+            workflow.append("<option value=''></option>");
+            var actions_cfg = {};
+            for (var i=0; i < data.actions.length; i++) {
+              actions_cfg[data.actions[i].type] = data.actions[i];
+              var disabled = data.actions[i].public ? ">" : "disabled>";
+              workflow.append("<option value='" + data.actions[i].type + "' " +
+                              disabled + data.actions[i].label + "</option>");
+            }
+            //queue handling
+            var queue_group = $("#procthis_queue_group");    
+            // add handler to build dynamic form on selected option
+            workflow.change(function() {
+              // build dynamic form
+              var workflow_type = $(this).val();
+              // queue handling
+              var queueDrop = $("#procthis_queue");
+              $.ajax({
+                  url: "user_rules/get_job_queues?job_type="+actions_cfg[workflow_type].wiring["job-specification"],
+                  success: function(data, sts, xhr) {
+                      var queues = data.queues;
+                      var html_to_add = ""
+                      for (var i = 0; i < queues.length; i++)
+                      {
+                          html_to_add += "<option value='"+queues[i]+"'>"+queues[i]+"</option>\n"
+                      } 
+                      queueDrop.html(html_to_add);
+                  }
+              });
+              var dyn_fields = $('#procthis_dynamic_fields');
+              dyn_fields.empty();
+              var kwargs = actions_cfg[workflow_type].kwargs;
+              dyn_fields.append("<legend>" + workflow_type + " parameters</legend>");
+              for (var i=0; i < kwargs.length; i++) {
+                var kwarg = kwargs[i];
+                if (kwarg.type == "textbox") {
+                  dyn_fields.append("<div class='control-group'>" +
+                                    "<label class='control-label' for='" + 
+                                    kwarg.name + "'>" + kwarg.name + "</label>" +
+                                    "<div class='controls'>" +
+                                    "<input class='field span4' type='text' name='" + kwarg.name +
+                                    "' placeholder='" + kwarg.placeholder + "'></div></div>");
+                  $('#procthis_form input[name=' + kwarg.name + ']').rules("add", kwarg.validator);
+                  if (kwarg.name in cur_kwargs)
+                    $('#procthis_dynamic_fields input[name=' + kwarg.name + ']').val(cur_kwargs[kwarg.name]);
+                }else if (kwarg.type == "textarea") {
+                  dyn_fields.append("<div class='control-group'>" +
+                                    "<label class='control-label' for='" + 
+                                    kwarg.name + "'>" + kwarg.name + "</label>" +
+                                    "<div class='controls'>" +
+                                    "<textarea class='field span4' type='textarea' rows='5' name='" + kwarg.name +
+                                    "' placeholder='" + kwarg.placeholder + "'></textarea></div></div>");
+                  $('#procthis_form textarea[name=' + kwarg.name + ']').rules("add", kwarg.validator);
+                  if (kwarg.name in cur_kwargs)
+                    $('#procthis_dynamic_fields textarea[name=' + kwarg.name + ']').val(cur_kwargs[kwarg.name]);
+                }else {
+                }
+              }
+            });
+          },
+          error: function(xhr, sts, err) {
+            //console.log(xhr.responseData);
+            $('#general_error').html("Error: " + xhr.responseText);
+            $('#error_modal').modal('show').css({'left': set_left_margin});
+          }
+        });
+      });
+
+      // handler for procthis button
+      $('#procthis_btn').on('click', function() {
+        if ($('#procthis_form').valid()) {
+          //console.log("workflow: " + $('#procthis_workflow').val());
+          //console.log("priority: " + $('#procthis_priority').val());
+          //console.log("procthis_name: " + $('#procthis_name').val());
+          //console.log("query_string: " + $('#procthis_query_string').val());
+          df_fields = {};
+          $.each($('#procthis_dynamic_fields').find('.field'), function(idx, value) {
+            var dyn_input = $(value);
+            df_fields[dyn_input.attr('name')] = dyn_input.val();
+          });
+    
+          var procthis_data = {
+            name: $('#procthis_name').val(),
+            workflow: $('#procthis_workflow').val(),
+            queue: $('#procthis_queue').val(),
+            priority: $('#procthis_priority').val(),
+            query_string: $('#procthis_query_string').val(),
+            kwargs: JSON.stringify(df_fields, null, '  ')
+          };
+          $('#procthis_modal').modal('hide');
+          $('#result_modal').modal('show').css({'left': set_left_margin});
+    
+          var submit_url = "user_rules/submit_job";
+          $.ajax({
+            type: "POST",
+            url: submit_url,
+            data: procthis_data,
+            success: function(data, sts, xhr) {
+              //console.log(data);
+              $('#result_modal .modal-body-div').html(data.html);
+            },
+            error: function(xhr, sts, err) {
+              //console.log(xhr);
+              $('#result_modal .modal-body-div').html("");
+              try {
+                var resp = JSON.parse(xhr.responseText);
+                $('#procthis_ajax_error').html("Error: " + resp.message);
+              } catch(jerr) {
+                $('#procthis_ajax_error').html("Error: " + err);
+              }
+            }
+          });
+        }
+      });
+
+      // handler for result_modal
+      $('#result_modal').on('show', function() {
+        $('#procthis_ajax_error').html("");
+        $('#result_modal .modal-body-div').html(
+          "<p>Processing...</p>" +
+          "<div class=\"text-center\">" +
+          "<img src=\"{{ url_for('static', filename='preloaders/square/128x128/Preloader_5/Preloader_5.gif') }}\"/>" +
+          "</div>");
+      });
+
+      // open up all facets on page load
+      $('.facetview_filtershow').each(function(index, value) {
+        $(value).click();
+      });
+
+      // set buttons actions
+      $( "#total_btn" ).on('click', function(e) { clear_reload(); });
+      $( "#queued_btn" ).on('click', function(e) { update('job-queued'); });
+      $( "#started_btn" ).on('click', function(e) { update('job-started'); });
+      $( "#completed_btn" ).on('click', function(e) { update('job-completed'); });
+      $( "#revoked_btn" ).on('click', function(e) { update('job-revoked'); });
+      $( "#offline_btn" ).on('click', function(e) { update('job-offline'); });
+      $( "#failed_btn" ).on('click', function(e) { update('job-failed'); });
+
+    });
+
+
+    function update(status) {
+      var status_params = '?source={"query":{"bool":{"must":[{"term":{"status":"' + status + '"}}]}},"size":25,"sort":[{"_timestamp":{"order":"desc"}}],"fields":["_timestamp","status","uuid","job"]}';
+      window.location = window.location.pathname + status_params;
+    }
+    
+    
+    function update_dashboard() {
+      $.ajax({
+        url: "{{ url_for('services/jobs.job_count') }}",
+        success: function(data, sts, xhr) {
+          $( '#total_count' ).html(data.counts.total);
+          $( '#queued_count' ).html(data.counts['job-queued'] !== undefined ? data.counts['job-queued'] : 0);
+          $( '#started_count' ).html(data.counts['job-started'] !== undefined ? data.counts['job-started'] : 0);
+          $( '#completed_count' ).html(data.counts['job-completed'] !== undefined ? data.counts['job-completed'] : 0);
+          $( '#revoked_count' ).html(data.counts['job-revoked'] !== undefined ? data.counts['job-revoked'] : 0);
+          $( '#offline_count' ).html(data.counts['job-offline'] !== undefined ? data.counts['job-offline'] : 0);
+          $( '#failed_count' ).html(data.counts['job-failed'] !== undefined ? data.counts['job-failed'] : 0);
+        }
+      });
+    }
+
+
+    function show_job_info(uuid) {
+      $.ajax({
+        url: "{{ url_for('services/es.get_job_info') }}",
+        data: { id: uuid },
+        success: function(data, sts, xhr) {
+        
+          // set label
+          $( '#jobinfo_modal_label' ).html('Task ID: ' + uuid);
+
+          // set content in job info tab
+          $( '#job_info' ).html('<pre>' + data.result.job_info + '</pre>');
+          $( '#traceback' ).html('<pre>' + data.result.traceback + '</pre>');
+
+          if (data.result.job_url == null) {
+            $( '#context' ).html('<pre>Not available</pre>');
+            $( '#stdout' ).html('<pre>Not available</pre>');
+            $( '#stderr' ).html('<pre>Not available</pre>');
+            $( '#work_dir' ).html('<pre>Not available</pre>');
+          }else {
+            // set content in context tab
+            $.ajax({
+              url: "{{ url_for('services/jobs.get_text') }}",
+              data: {
+                file: data.result.job_url + '/_context.json'
+              },
+              beforeSend: function(xhr) {
+                $( '#context' ).html(
+                  "<div class=\"text-center\">" +
+                  "<img src=\"{{ url_for('static', filename='preloaders/square/128x128/Preloader_3/Preloader_3.gif') }}\"/>" +
+                  "<p>Loading...</p>" +
+                  "</div>");
+              },
+              success: function(d, sts, xhr) {
+                $( '#context' ).html('<pre>' + d.content + '</pre>');
+              },
+              error: function(xhr, sts, err) {
+                $( '#context' ).html('<pre>Not available</pre>');
+                alert("Status:" + sts);
+              }
+            });
+
+            // set content in stdout tab
+            $.ajax({
+              url: "{{ url_for('services/jobs.get_text') }}",
+              data: {
+                file: data.result.job_url + '/_stdout.txt'
+              },
+              beforeSend: function(xhr) {
+                $( '#stdout' ).html(
+                  "<div class=\"text-center\">" +
+                  "<img src=\"{{ url_for('static', filename='preloaders/square/128x128/Preloader_3/Preloader_3.gif') }}\"/>" +
+                  "<p>Loading...</p>" +
+                  "</div>");
+              },
+              success: function(d, sts, xhr) {
+                $( '#stdout' ).html('<pre>' + d.content + '</pre>');
+              },
+              error: function(xhr, sts, err) {
+                $( '#stdout' ).html('<pre>Not available</pre>');
+                alert("Status:" + sts);
+              }
+            });
+
+            // set content in stderr tab
+            $.ajax({
+              url: "{{ url_for('services/jobs.get_text') }}",
+              data: {
+                file: data.result.job_url + '/_stderr.txt'
+              },
+              beforeSend: function(xhr) {
+                $( '#stderr' ).html(
+                  "<div class=\"text-center\">" +
+                  "<img src=\"{{ url_for('static', filename='preloaders/square/128x128/Preloader_3/Preloader_3.gif') }}\"/>" +
+                  "<p>Loading...</p>" +
+                  "</div>");
+              },
+              success: function(d, sts, xhr) {
+                $( '#stderr' ).html('<pre>' + d.content + '</pre>');
+              },
+              error: function(xhr, sts, err) {
+                $( '#stderr' ).html('<pre>Not available</pre>');
+                alert("Status:" + sts);
+              }
+            });
+
+            // set work_dir iframe
+            $.ajax({
+              url: "get_text",
+              data: {
+                file: data.result.job_url
+              },
+              beforeSend: function(xhr) {
+                $( '#work_dir' ).html(
+                  "<div class=\"text-center\">" +
+                  "<img src=\"{{ url_for('static', filename='preloaders/square/128x128/Preloader_3/Preloader_3.gif') }}\"/>" +
+                  "<p>Loading...</p>" +
+                  "</div>");
+              },
+              success: function(d, sts, xhr) {
+                if (d.success == true) {
+                  $( '#work_dir' ).html('<iframe class="monitor_frame" src="' + 
+                                        data.result.job_url +
+                                        '"></iframe>');
+                }else {
+                  $( '#work_dir' ).html('<pre>' + d.content + '</pre>');
+                }
+              },
+              error: function(xhr, sts, err) {
+                $( '#work_dir' ).html('<pre>Not available</pre>');
+                alert("Status:" + sts);
+              }
+            });
+          }
+    
+          // set job_info tab as active
+          $( '#jobinfo_tab a:first' ).tab('show');
+    
+          // show modal
+          $( '#jobinfo_modal' ).modal('show');
+        },
+        error: function(xhr, sts, err) {
+          alert("Status:" + sts);
+        }
+      });
+    }
+
+
+    function show_node_stats(node) {
+      // set label
+      $( '#nodestats_modal_label' ).html(node);
+
+      // set content
+      $( '#cpu_stats' ).html('<div class="text-center"><img src="{{ url_for('static', filename='img/ajax-loader.gif') }}" /></div>');
+      $( '#mem_stats' ).html('');
+      $( '#top_stats' ).html('');
+
+      // set refresh stats button
+      $( '#refresh_stats_btn' ).on('click', function() {
+        refresh_stats(node);
+      });
+    
+      // show modal
+      $( '#nodestats_modal' ).modal('show');
+
+      // update stats
+      update_stats(node);
+    }
+
+    function update_stats(node) {
+      $.ajax({
+        url: "{{ url_for('services/stats.get_cpu_mem_stats') }}",
+        data: { node: node },
+        success: function(data, sts, xhr) {
+          // set label
+          if (data.date === null)
+            $( '#nodestats_modal_label' ).html(node);
+          else
+            $( '#nodestats_modal_label' ).html(node + ': ' + data.date);
+
+          nv.addGraph(function() {
+            stats_chart = nv.models.discreteBarChart()
+              .x(function(d) { return d.label })
+              .y(function(d) { return d.value })
+              .staggerLabels(true)
+              .tooltips(true)
+              .showValues(true)
+              .transitionDuration(250)
+              ;
+
+            //stats_chart.xAxis
+            //  .axisLabel("% utilization");
+
+            if (data.data.length == 0) $( '#stats_chart' ).html('<svg/>');
+
+            d3.select('#stats_chart svg')
+              .datum(data.data)
+              .call(stats_chart);
+
+            nv.utils.windowResize(stats_chart.update);
+
+            return stats_chart;
+          });
+
+          // set content
+          if (data.stats.cpu === null) $( '#cpu_stats' ).html('');
+          else $( '#cpu_stats' ).html('<pre>' + data.stats.cpu + '</pre>');
+          if (data.stats.memory === null) $( '#mem_stats' ).html('');
+          else $( '#mem_stats' ).html('<pre>' + data.stats.memory + '</pre>');
+          if (data.stats.top === null) $( '#top_stats' ).html('');
+          else $( '#top_stats' ).html('<pre>' + data.stats.top + '</pre>');
+
+        },
+        error: function(xhr, sts, err) {
+          alert("Status:" + sts);
+        }
+      });
+    }
+
+    function refresh_stats(node) {
+      // set content
+      $( '#cpu_stats' ).html('<div class="text-center"><img src="{{ url_for('static', filename='img/ajax-loader.gif') }}" /></div>');
+      $( '#mem_stats' ).html('');
+      $( '#top_stats' ).html('');
+
+      // update stats
+      update_stats(node);
+    }
+  </script>
+
+{% endblock head %}
+
+
+{% block content %}
+
+  <!-- Jumbotron -->
+  <div class="jumbotron">
+    <h1>HySDS Resource Management</h1>
+    <p class="lead">Monitoring Hybrid-Cloud Science Data System jobs, tasks, and workers.</p>
+    <!--<a class="btn btn-large btn-success" href="#">Get started today</a>-->
+  </div>
+
+  <div class="row-fluid">
+
+<!--
+    <div class="span2">
+      <button id="total_btn" class="btn btn-large btn-block btn-inverse">
+        <div class="caption">
+          <h4><i class="icon-tasks icon-white"></i><br/>Total</h4>
+          <h3 id="total_count" />
+        </div>
+      </button>
+    </div>
+-->
+
+    <div class="span2">
+      <button id="queued_btn" class="btn btn-large btn-block btn-info">
+        <div class="caption">
+          <h4><i class="icon-download-alt icon-white"></i><br/>Queued</h4>
+          <h3 id="queued_count" />
+        </div>
+      </button>
+    </div>
+
+    <div class="span2">
+      <button id="started_btn" class="btn btn-large btn-block btn-success">
+        <div class="caption">
+          <h4><i class="icon-play-circle icon-white"></i><br/>Started</h4>
+          <h3 id="started_count" />
+        </div>
+      </button>
+    </div>
+
+    <div class="span2">
+      <button id="completed_btn" class="btn btn-large btn-block btn-primary">
+        <div class="caption">
+          <h4><i class="icon-thumbs-up icon-white"></i><br/>Completed</h4>
+          <h3 id="completed_count" />
+        </div>
+      </button>
+    </div>
+
+    <div class="span2">
+      <button id="revoked_btn" class="btn btn-large btn-block btn-warning">
+        <div class="caption">
+          <h4><i class="icon-remove-circle icon-white"></i><br/>Revoked</h4>
+          <h3 id="revoked_count" />
+        </div>
+      </button>
+    </div>
+
+    <div class="span2">
+      <button id="offline_btn" class="btn btn-large btn-block btn-inverse">
+        <div class="caption">
+          <h4><i class="icon-warning-sign icon-white"></i><br/>Offline</h4>
+          <h3 id="offline_count" />
+        </div>
+      </button>
+    </div>
+
+    <div class="span2">
+      <button id="failed_btn" class="btn btn-large btn-block btn-danger">
+        <div class="caption">
+          <h4><i class="icon-thumbs-down icon-white"></i><br/>Failed</h4>
+          <h3 id="failed_count" />
+        </div>
+      </button>
+    </div>
+
+  </div>
+
+  <hr/>
+
+  <!--<h4>GRQ facets</h4>-->
+  <div class="facet-view-simple"></div>
+
+
+  <!-- job info modal -->
+  <div id="jobinfo_modal" class="modal hide fade" tabindex="-1" aria-labelledby="jobinfo_modal_label"
+       aria-hidden="true" data-backdrop="static" data-keyboard="true">
+    <div class="modal-header">
+      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+      <h3 id="jobinfo_modal_label"></h3>
+    </div>
+    <div class="modal-body">
+      <ul id="jobinfo_tab" class="nav nav-tabs">
+        <li class="active">
+          <a href="#job_info" data-toggle="tab">Job Info</a>
+        </li>
+        <li class="">
+          <a href="#context" data-toggle="tab">Context</a>
+        </li>
+        <li class="">
+          <a href="#stdout" data-toggle="tab">STDOUT</a>
+        </li>
+        <li class="">
+          <a href="#stderr" data-toggle="tab">STDERR</a>
+        </li>
+        <li class="">
+          <a href="#traceback" data-toggle="tab">Worker Traceback</a>
+        </li>
+        <li class="">
+          <a href="#work_dir" data-toggle="tab">Work Dir</a>
+        </li>
+      </ul>
+      <div class="tab-content">
+        <div class="tab-pane active" id="job_info"></div>
+        <div class="tab-pane" id="context"></div>
+        <div class="tab-pane" id="stdout"></div>
+        <div class="tab-pane" id="stderr"></div>
+        <div class="tab-pane" id="traceback"></div>
+        <div class="tab-pane" id="work_dir"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+    </div>
+  </div>
+
+
+  <!-- execute node stats modal -->
+  <div id="nodestats_modal" class="modal hide fade" tabindex="-1" aria-labelledby="nodestats_modal_label"
+       aria-hidden="true" data-backdrop="static" data-keyboard="true">
+    <div class="modal-header">
+      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+      <h3 id="nodestats_modal_label"></h3>
+    </div>
+    <div class="modal-body">
+      <h4 class="text-center">% CPU and Memory Utilization</h4>
+      <div id="stats_chart" class="with-3d-shadow with-transitions"><svg/></div>
+      <div id="cpu_stats"></div>
+      <div id="mem_stats"></div>
+      <div id="top_stats"></div>
+    </div>
+    <div class="modal-footer">
+      <button id="refresh_stats_btn" type="button" class="btn btn-primary" aria-hidden="true">Refresh</button>
+    </div>
+  </div>
+
+  <!-- create rule modal -->
+  <div id="rule_modal" class="modal hide fade" tabindex="-1" role="dialog"
+       aria-labelledby="rule_modal_label" aria-hidden="true" data-backdrop="static"
+       data-keyboard="false">
+    <div class="modal-header">
+      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+      <h3 id="rule_modal_label">Trigger Rules</h3>
+    </div>
+    <div class="modal-body">
+      <div class="modal-body-div">
+        <form id="rule_form" class="form-horizontal">
+          <legend>action parameters</legend>
+          <input type="hidden" id="rule_id"/>
+          <input type="hidden" id="workflow_val"/>
+          <input type="hidden" id="queue_val"/>
+          <input type="hidden" id="priority_val"/>
+          <input type="hidden" id="kwargs"/>
+          <div class="control-group">
+            <label class="control-label" for="rule_name">Rule name</label>
+            <div class="controls">
+              <input class="field span4" type="text" id="rule_name" name="rule_name" placeholder="e.g. Email CSK Product Ingest">
+            </div>
+          </div>
+          <div class="control-group">
+            <label class="control-label" for="query_string">Condition</label>
+            <div class="controls">
+              <textarea class="field span4" type="textarea" rows="5" id="query_string" name="query_string"></textarea>
+            </div>
+          </div>
+          <div class="control-group">
+            <label class="control-label" for="workflow">Action</label>
+            <div class="controls">
+              <select class="field span4" name="workflow" id="workflow"></select>
+            </div>
+          </div>
+          <div class="control-group" id="queue_group">
+            <label class="control-label" for="queue">Queue</label>
+            <div class="controls">
+              <select class="field span4" name="queue" id="queue"></select>
+            </div>
+          </div>
+            <div class="control-group">
+              <label class="control-label" for="priority">Priority</label>
+              <div class="controls">
+                <select class="field span1" name="priority" id="priority">
+                  <option>0</option>
+                  <option>1</option>
+                  <option>2</option>
+                  <option>3</option>
+                  <option>4</option>
+                  <option>5</option>
+                  <option>6</option>
+                  <option>7</option>
+                  <option>8</option>
+                  <option>9</option>
+                </select>
+              </div>
+            </div>
+          <fieldset id="dynamic_fields" />
+        </form>
+      </div>
+      <div>
+        <label id="ajax_error" class="error" style="display: block;"></label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn cancel_rule" data-dismiss="modal" aria-hidden="true">Cancel</button>
+      <button id="rule_btn" class="btn btn-primary">OK</button>
+    </div>
+  </div>
+
+  <!-- process this modal -->
+  <div id="procthis_modal" class="modal hide fade" tabindex="-1" role="dialog"
+       aria-labelledby="procthis_modal_label" aria-hidden="true" data-backdrop="static"
+       data-keyboard="false">
+    <div class="modal-header">
+      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+      <h3 id="procthis_modal_label">On-Demand</h3>
+    </div>
+    <div class="modal-body">
+      <div class="modal-body-div">
+        <form id="procthis_form" class="form-horizontal">
+          <legend>action parameters</legend>
+          <input type="hidden" id="procthis_workflow_val"/>
+          <input type="hidden" id="procthis_queue_val"/>
+          <input type="hidden" id="procthis_priority_val"/>
+          <input type="hidden" id="procthis_kwargs"/>
+          <div class="control-group">
+            <label class="control-label" for="procthis_name">Tag</label>
+            <div class="controls">
+              <input class="field span4" type="text" id="procthis_name" name="procthis_name" placeholder="e.g. Purge CSK Product Ingest">
+            </div>
+          </div>
+          <div class="control-group">
+            <label class="control-label" for="query_string">Condition</label>
+            <div class="controls">
+              <textarea class="field span4" type="textarea" rows="5" id="procthis_query_string" name="query_string"></textarea>
+            </div>
+          </div>
+          <div class="control-group">
+            <label class="control-label" for="workflow">Action</label>
+            <div class="controls">
+              <select class="field span4" name="workflow" id="procthis_workflow"></select>
+            </div>
+          </div>
+          <div class="control-group" id="procthis_queue_group" >
+            <label class="control-label" for="queue">Queue</label>
+            <div class="controls">
+              <select class="field span4" name="queue" id="procthis_queue"></select>
+            </div>
+          </div>
+            <div class="control-group">
+              <label class="control-label" for="priority">Priority</label>
+              <div class="controls">
+                <select class="field span1" name="priority" id="procthis_priority">
+                  <option>0</option>
+                  <option>1</option>
+                  <option>2</option>
+                  <option>3</option>
+                  <option>4</option>
+                  <option>5</option>
+                  <option>6</option>
+                  <option>7</option>
+                  <option>8</option>
+                  <option>9</option>
+                </select>
+              </div>
+            </div>
+          <fieldset id="procthis_dynamic_fields" />
+        </form>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn cancel_rule" data-dismiss="modal" aria-hidden="true">Cancel</button>
+      <button id="procthis_btn" class="btn btn-primary">Process Now</button>
+    </div>
+  </div>
+
+  <!-- list my rules modal -->
+  <div id="list_rules_modal" class="modal hide fade list_rules_modal" tabindex="-1" role="dialog"
+       aria-labelledby="list_rules_modal_label" aria-hidden="true" data-backdrop="static"
+       data-keyboard="false">
+    <div class="modal-header">
+      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+      <h3 id="list_rules_modal_label">My Rules</h3>
+    </div>
+    <div class="modal-body">
+      <div class="modal-body-div">
+        <table id="rules_table" cellspacing="1" cellpadding="3" class="tablehead" style="background:#CCC;">
+          <caption>
+            These are the rules you have defined.
+          </caption>
+          <thead>
+            <tr class="colhead">
+              <th>Name</th>
+              <th>Condition</th>
+              <th>Action</th>
+              <th>Priority</th>
+              <th>Keyword Args</th>
+        {% if g.user.id == config['OPS_USER'] %}
+              <th>User</th>
+        {% endif %}
+              <th class="{sorter: false}">Status</th>
+              <th class="{sorter: false}">Edit</th>
+              <th class="{sorter: false}">Delete</th>
+            </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn close_list_rules" data-dismiss="modal" aria-hidden="true">Close</button>
+    </div>
+  </div>
+
+  <!-- confirm deletion modal -->
+  <div id="confirm_delete_modal" class="modal hide fade" tabindex="-1" role="dialog"
+       aria-labelledby="confirm_delete_modal_label" aria-hidden="true" data-backdrop="static"
+       data-keyboard="false">
+    <div class="modal-header">
+      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+      <h3 id="confirm_delete_modal_label">Delete Confirmation</h3>
+    </div>
+    <div class="modal-body">
+      <div class="modal-body-div">
+        <p>Are you sure you want to delete the rule named "<b id="delete_rule_name"></b>"?</p>
+        <input type="hidden" id="delete_rule_id"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn cancel_confirm_delete" data-dismiss="modal" aria-hidden="true">No</button>
+      <button id="confirm_delete_btn" class="btn btn-primary confirm_delete">Yes</button>
+    </div>
+  </div>
+
+  <!-- error message modal -->
+  <div id="error_modal" class="modal hide fade error_modal" tabindex="-1" role="dialog"
+       aria-labelledby="error_modal_label" aria-hidden="true" data-backdrop="static"
+       data-keyboard="false">
+    <div class="modal-header">
+      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+      <h3 id="error_modal_label">Encountered Error</h3>
+    </div>
+    <div class="modal-body">
+      <div class="modal-body-div"><label id="general_error" class="error" style="display: block;"></label></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn close_error" data-dismiss="modal" aria-hidden="true">Close</button>
+    </div>
+  </div>
+
+  <!-- result modal -->
+  <div id="result_modal" class="modal hide fade result_modal" tabindex="-1" role="dialog"
+       aria-labelledby="result_modal_label" aria-hidden="true" data-backdrop="static"
+       data-keyboard="false">
+    <div class="modal-header">
+      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+      <h3 id="result_modal_label">Processing Results</h3>
+    </div>
+    <div class="modal-body">
+      <div class="modal-body-div"></div>
+      <div>
+        <label id="procthis_ajax_error" class="error" style="display: block;"></label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn close_error" data-dismiss="modal" aria-hidden="true">Close</button>
+    </div>
+  </div>
+
+{% endblock content %}

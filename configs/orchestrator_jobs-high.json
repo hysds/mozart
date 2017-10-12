@@ -1,0 +1,18 @@
+{
+  "job_completed_queue": "completed_queue",
+  "job_error_queue": "error_queue",
+  "job_status_exchange": "job_status_exch",
+  "queues": [ "jobs_processed-high" ],
+  "configs": [
+    {
+      "job_type": "job:datastager-high",
+      "job_creators": [
+        {
+          "job_name": "datastager-high",
+          "function": "ariamh.createDatastagerJobHigh",
+          "job_queues": [ "datastager-high" ]
+        }
+      ]
+    }
+  ]
+} 
