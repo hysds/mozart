@@ -485,6 +485,7 @@ class GetContainerAdd(Resource):
     parser.add_argument('name', required=True, type=str, help="Container Name")
     parser.add_argument('url', required=True, type=str, help="Container URL")
     parser.add_argument('version', required=True, type=str, help="Container Version")
+    parser.add_argument('digest', required=True, type=str, help="Container Digest")
 
     @api.expect(parser)
     @api.marshal_with(resp_model)
@@ -499,13 +500,18 @@ class GetContainerAdd(Resource):
             name = request.form.get('name', request.args.get('name', None))
             url = request.form.get('url', request.args.get('url', None))
             version = request.form.get('version', request.args.get('version', None))
+            digest = request.form.get('digest', request.args.get('digest', None))
             if name is None:
                 raise Exception("'name' must be supplied")
             if url is None:
                 raise Exception("'url' must be supplied")
             if version is None:
                 raise Exception("'version' must be supplied")
-            ident = hysds_commons.container_utils.add_container(app.config['ES_URL'], name, url, version, logger=app.logger)
+            if digest is None:
+                raise Exception("'digest' must be supplied")
+            ident = hysds_commons.container_utils.add_container(app.config['ES_URL'], 
+                                                                name, url, version, 
+                                                                digest, logger=app.logger)
         except Exception as e:
             message = "Failed to add container {2}. {0}:{1}".format(type(e),str(e),name)
             app.logger.warning(message)
