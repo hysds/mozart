@@ -46,6 +46,7 @@ FLOWER_URL = "http://{{ MOZART_FQDN }}:5555"
 
 # RabbitMQ Admin URL
 RABBITMQ_ADMIN_URL = "http://{{ MOZART_RABBIT_FQDN }}:15672"
+RABBITMQ_ADMIN_API = "http://{{ MOZART_RABBIT_PVT_IP }}:15672"
 
 # System protected queue
 PROTECTED_QUEUES = ["{{ SYSTEM_JOBS_QUEUE }}"]

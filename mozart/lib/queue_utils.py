@@ -15,7 +15,7 @@ def get_queue_names(ident):
     '''
 
     #Non-celery queues set
-    queues = set(get_all_queues(app.config["RABBITMQ_ADMIN_URL"]))
+    queues = set(get_all_queues(app.config["RABBITMQ_ADMIN_API"]))
     #app.logger.info("queues: %s" % queues)
     protected = set(app.config["PROTECTED_QUEUES"])
     #app.logger.info("protected: %s" % protected)
