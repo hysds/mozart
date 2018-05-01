@@ -1,7 +1,7 @@
 from datetime import datetime
 import hashlib, simpleldap
 from flask import render_template, Blueprint, g, redirect, session, request, url_for, flash, abort
-from flask.ext.login import login_required, login_user, logout_user, current_user
+from flask_login import login_required, login_user, logout_user, current_user
 
 from mozart import app, db, lm
 from mozart.lib.job_utils import get_execute_nodes

@@ -1,6 +1,6 @@
 import os, json, time, re, requests, traceback, cgi
 from flask import jsonify, Blueprint, request, Response
-from flask.ext.login import login_required
+from flask_login import login_required
 from datetime import datetime, timedelta
 from dateutil.parser import parse
 from pprint import pprint, pformat

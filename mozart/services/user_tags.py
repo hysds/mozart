@@ -1,6 +1,6 @@
 import json, requests, types, re
 from flask import jsonify, Blueprint, request, Response, render_template, make_response
-from flask.ext.login import login_required
+from flask_login import login_required
 from pprint import pformat
 
 from mozart import app

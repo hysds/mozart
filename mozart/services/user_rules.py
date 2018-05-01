@@ -1,7 +1,7 @@
 import os, json, requests, types, re, time
 from flask import (jsonify, Blueprint, request, Response, render_template,
 make_response, g, url_for, redirect)
-from flask.ext.login import login_required
+from flask_login import login_required
 from pprint import pformat
 from string import Template
 from urlparse import urljoin
