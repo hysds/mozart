@@ -24,7 +24,7 @@ def main():
 
     # print chunks
     for rec in recs:
-        print(rec['chunk'].strip())
+        print((rec['chunk'].strip()))
     
 if __name__ == "__main__":
     main()

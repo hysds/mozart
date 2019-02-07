@@ -45,7 +45,7 @@ if __name__ == '__main__':
     pop = Popen(["sudo", "rabbitmqctl", "list_queues"], 
                 stdin=PIPE, stdout=PIPE, stderr=PIPE, env=os.environ)
     try: sts = pop.wait()  #wait for child to terminate and get status
-    except Exception, e: print str(e)
+    except Exception as e: print(str(e))
     status = pop.returncode
     #print "returncode is:",status
     stdOut = pop.stdout.read()
@@ -54,7 +54,7 @@ if __name__ == '__main__':
         if line.startswith("error_queue"):
             COUNT = int(line.split()[1])
             break
-    print "Total number of messages in error_queue:", COUNT
+    print("Total number of messages in error_queue:", COUNT)
     if COUNT == 0: sys.exit()
 
     # Connect to RabbitMQ

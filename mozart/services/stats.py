@@ -113,7 +113,7 @@ def get_mpstat():
         user = app.config['PUCCINI_USER']
     else: user = app.config['EXECUTE_NODE_USER']
     try: output = mpstat(user, node)
-    except (Exception, SystemExit), e:
+    except (Exception, SystemExit) as e:
         app.logger.info("Failed to execute mpstat('%s', '%s'):\n%s\n%s" %
                         (user, node, str(e), traceback.format_exc()))
         return jsonify({
@@ -145,7 +145,7 @@ def get_mem_free():
         user = app.config['PUCCINI_USER']
     else: user = app.config['EXECUTE_NODE_USER']
     try: output = mem_free(user, node)
-    except (Exception, SystemExit), e:
+    except (Exception, SystemExit) as e:
         app.logger.info("Failed to execute mem_free('%s', '%s'):\n%s\n%s" %
                         (user, node, str(e), traceback.format_exc()))
         return jsonify({
@@ -183,7 +183,7 @@ def get_cpu_mem_stats():
         values.extend(parse_mem_stats(mem_stats))
         date = sys_date(user, node)
         top_procs = top(user, node)
-    except (Exception, SystemExit), e:
+    except (Exception, SystemExit) as e:
         app.logger.info("Failed to execute mpstat/mem_free('%s', '%s'):\n%s\n%s" %
                         (user, node, str(e), traceback.format_exc()))
         return jsonify({

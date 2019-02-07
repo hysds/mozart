@@ -1,5 +1,5 @@
 import os, sys
-from urlparse import urlsplit
+from urllib.parse import urlsplit
 from pprint import pprint, pformat
 
 from mozart import app
@@ -23,7 +23,7 @@ def createIgraMatchupJob(info):
           }
     """
 
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     # build parrams
@@ -37,7 +37,7 @@ def createIgraMatchupJob(info):
             'localize_urls': []
           }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job
 
@@ -62,7 +62,7 @@ def createAggregateAirsJob(info):
           }
     """
 
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     # sav file
@@ -85,6 +85,6 @@ def createAggregateAirsJob(info):
             'localize_urls': [{'url': dav_url}]
           }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job

@@ -39,18 +39,18 @@ def getFunction(funcStr, addToSysPath=None):
     if libmatch:
         importLib = libmatch.group(1)
         if addToSysPath:
-            exec "import sys; sys.path.insert(1,'%s')" % addToSysPath
-        exec "import %s" % importLib
-        exec "reload(%s)" % importLib
+            exec("import sys; sys.path.insert(1,'%s')" % addToSysPath)
+        exec("import %s" % importLib)
+        exec("reload(%s)" % importLib)
 
     #check there are args
     argsMatch = re.search(r'\((\w+)\..+\)$', funcStr)
     if argsMatch:
         importLib2 = argsMatch.group(1)
         if addToSysPath:
-            exec "import sys; sys.path.insert(1,'%s')" % addToSysPath
-        exec "import %s" % importLib2
-        exec "reload(%s)" % importLib2
+            exec("import sys; sys.path.insert(1,'%s')" % addToSysPath)
+        exec("import %s" % importLib2)
+        exec("reload(%s)" % importLib2)
 
     #return function
     return eval(funcStr)
@@ -570,7 +570,7 @@ def main():
         try:
             orch = Orchestrator(amqp_url, config_file)
             break
-        except socket.error, e:
+        except socket.error as e:
             logger.error("Failed to connect: %s" % str(e))
             time.sleep(3)
 

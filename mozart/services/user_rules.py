@@ -4,7 +4,7 @@ make_response, g, url_for, redirect)
 from flask_login import login_required
 from pprint import pformat
 from string import Template
-from urlparse import urljoin
+from urllib.parse import urljoin
 
 from hysds.orchestrator import submit_job
 

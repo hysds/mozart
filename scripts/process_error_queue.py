@@ -18,24 +18,24 @@ def handle_delivery(channel, method_frame, body):
     elif 'job' in j and 'job_info' in j['job'] and 'job_queue' in j['job']['job_info']:
         queue_name = str(j['job']['job_info']['job_queue'])
     else: queue_name = "<unknown>"
-    print "#" * 80
-    print "queue: %s" % queue_name
-    print "delivery-tag: %i" % method_frame.delivery_tag
-    print "-" * 80
-    print "error: %s" % j["error"]
-    print "traceback: %s" % j["traceback"]
+    print("#" * 80)
+    print("queue: %s" % queue_name)
+    print("delivery-tag: %i" % method_frame.delivery_tag)
+    print("-" * 80)
+    print("error: %s" % j["error"])
+    print("traceback: %s" % j["traceback"])
 
     #ask for an action
     while True:
-        print "Please select an action:"
-        print "1. Print body of message"
-        print "2. Move message back on %s queue" % queue_name
-        print "3. Remove message from error queue"
-        print "4. Do nothing"
-        print "\nPress CTRL-C to quit."
-        option = raw_input("Select [1,2,3,4] ")
+        print("Please select an action:")
+        print("1. Print body of message")
+        print("2. Move message back on %s queue" % queue_name)
+        print("3. Remove message from error queue")
+        print("4. Do nothing")
+        print("\nPress CTRL-C to quit.")
+        option = input("Select [1,2,3,4] ")
         if option == '1':
-            print "body:"
+            print("body:")
             try: pprint.pprint(json.loads(j['body']))
             except: pprint.pprint(j)
         elif option == '2':
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     pop = Popen(["sudo", "rabbitmqctl", "list_queues"], 
                 stdin=PIPE, stdout=PIPE, stderr=PIPE, env=os.environ)
     try: sts = pop.wait()  #wait for child to terminate and get status
-    except Exception, e: print str(e)
+    except Exception as e: print(str(e))
     status = pop.returncode
     #print "returncode is:",status
     stdOut = pop.stdout.read()
@@ -78,7 +78,7 @@ if __name__ == '__main__':
         if line.startswith("error_queue"):
             COUNT = int(line.split()[1])
             break
-    print "Total number of messages in error_queue:", COUNT
+    print("Total number of messages in error_queue:", COUNT)
     if COUNT == 0: sys.exit()
 
     # Connect to RabbitMQ

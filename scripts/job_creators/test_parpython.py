@@ -1,5 +1,5 @@
 import os, sys, ftplib
-from urlparse import urlsplit
+from urllib.parse import urlsplit
 from pprint import pprint, pformat
 
 from mozart import app
@@ -22,7 +22,7 @@ def createParPythonMapJob(info):
           }
     """
 
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     # build parrams
@@ -33,7 +33,7 @@ def createParPythonMapJob(info):
             'localize_urls': []
           }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job
 
@@ -53,7 +53,7 @@ def createParPythonReduceJob(info):
           }
     """
 
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     # build parrams
@@ -64,6 +64,6 @@ def createParPythonReduceJob(info):
             'localize_urls': []
           }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job

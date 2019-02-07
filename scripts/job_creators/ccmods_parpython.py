@@ -1,5 +1,5 @@
 import os, sys, ftplib
-from urlparse import urlsplit
+from urllib.parse import urlsplit
 from pprint import pprint, pformat
 
 from mozart import app
@@ -22,7 +22,7 @@ def get_agg_file(info):
           }
     """
 
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     # build params
@@ -33,12 +33,12 @@ def get_agg_file(info):
             'localize_urls': []
           }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job
 
 def generate_merged_file(info):
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     # build parrams
@@ -49,12 +49,12 @@ def generate_merged_file(info):
             'localize_urls': info['agg_urls']
           }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job
 
 def generate_pdf_plots(info):
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     # build parrams
@@ -65,7 +65,7 @@ def generate_pdf_plots(info):
             'localize_urls': [info['merge_url']]
           }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job
 
@@ -85,7 +85,7 @@ def wvcc_generate_matchup(info):
           }
     """
 
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     airs_id = os.path.basename(info['dap_url'])[5:19]
@@ -98,6 +98,6 @@ def wvcc_generate_matchup(info):
             'localize_urls': []
           }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job

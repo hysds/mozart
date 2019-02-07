@@ -1,5 +1,5 @@
 import os, sys, ftplib
-from urlparse import urlsplit
+from urllib.parse import urlsplit
 from pprint import pprint, pformat
 
 from mozart import app

@@ -1,5 +1,5 @@
 import os, sys, ftplib
-from urlparse import urlsplit
+from urllib.parse import urlsplit
 from pprint import pprint, pformat
 
 from mozart import app
@@ -21,7 +21,7 @@ def network_selector(info):
           }
     """
 
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     # build params
@@ -32,7 +32,7 @@ def network_selector(info):
             'localize_urls': []
           }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job
 
@@ -55,7 +55,7 @@ def create_interferogram(info):
           }
     """
 
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     # build params
@@ -66,6 +66,6 @@ def create_interferogram(info):
             'localize_urls': [{'url': info['netsel_url']}]
           }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job

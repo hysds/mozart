@@ -4,7 +4,7 @@ from flask_login import login_required
 from datetime import datetime, timedelta
 from dateutil.parser import parse
 from pprint import pprint, pformat
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 from hysds.celery import app as celapp
 from mozart import app
@@ -60,7 +60,7 @@ def get_text():
 
     # read contents
     try: r = requests.get(url_file, verify=False)
-    except Exception, e:
+    except Exception as e:
         return jsonify({
             'success': False,
             'content': "%s\n%s" % (str(e), traceback.format_exc())
@@ -170,7 +170,7 @@ def purge(index,purge):
                     try:
                         r = requests.delete(url, timeout=5)
                         yield 'done.\n'
-                    except Exception, e:
+                    except Exception as e:
                         yield 'failed (%s).\n' % str(e)
             # Both associated task and job from ES
             yield 'Removing ES for %s:%s' % (doctype,payload_id)

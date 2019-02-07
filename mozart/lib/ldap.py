@@ -14,7 +14,7 @@ def ldap_user_verified(username, password):
     try:
         l = simpleldap.Connection(host, dn='uid=%s,%s' % (username, base_dn),
                                   encryption='ssl', password=password) 
-    except Exception, e:
+    except Exception as e:
         app.logger.info("Got error trying to verify LDAP user %s:" % username)
         app.logger.info("%s:\n\n%s" % (str(e), traceback.format_exc()))
         return None

@@ -30,7 +30,7 @@ def pika_callback(queue_name):
         def wrapped_fn(ch, method, properties, body):
             logger.info(" [x] Received message from %s" % queue_name)
             try: fn(ch, method, properties, body)
-            except Exception, e:
+            except Exception as e:
                 processError(queue_name, body, str(e), traceback.format_exc())
             logger.info(" [x] Done")
             ch.basic_ack(method.delivery_tag)
