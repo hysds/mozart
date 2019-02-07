@@ -1,4 +1,10 @@
-import os, json, time, re, requests, traceback, math
+import os
+import json
+import time
+import re
+import requests
+import traceback
+import math
 from flask import jsonify, Blueprint, request
 from datetime import datetime, timedelta
 from dateutil.parser import parse
@@ -13,7 +19,8 @@ from mozart.lib.job_utils import get_execute_nodes
 mod = Blueprint('services/stats', __name__)
 
 
-CPU_RE = re.compile(r'^Average:\s+(?P<cpu>.*?)\s+(?P<user>.*?)\s+.*?\s+(?P<sys>.*?)')
+CPU_RE = re.compile(
+    r'^Average:\s+(?P<cpu>.*?)\s+(?P<user>.*?)\s+.*?\s+(?P<sys>.*?)')
 MEM_RE = re.compile(r'^Mem:\s+(?P<total>\d+)\s+(?P<used>\d+)')
 SWAP_RE = re.compile(r'^Swap:\s+(?P<total>\d+)\s+(?P<used>\d+)')
 
@@ -24,9 +31,11 @@ def parse_cpu_stats(output):
     values = []
     for line in output.split('\n'):
         match = CPU_RE.search(line.strip())
-        if not match: continue
+        if not match:
+            continue
         stats = match.groupdict()
-        if stats['cpu'] == 'CPU': continue
+        if stats['cpu'] == 'CPU':
+            continue
         elif stats['cpu'] == 'all':
             values.extend([
                 {
@@ -50,7 +59,7 @@ def parse_cpu_stats(output):
                 }
             ])
     return values
-               
+
 
 def parse_mem_stats(output):
     """Parse memory stats to NVD3 discrete bar chart data."""
@@ -62,12 +71,14 @@ def parse_mem_stats(output):
             stats = match.groupdict()
             mem_total = float(stats['total'])
             mem_used = float(stats['used'])
-            if mem_total == 0.: mem_used_perc = 0.
+            if mem_total == 0.:
+                mem_used_perc = 0.
             else:
-                mem_used_perc = math.ceil(float(stats['used'])/float(stats['total'])*100.)
+                mem_used_perc = math.ceil(
+                    float(stats['used'])/float(stats['total'])*100.)
             values.append({
-                    'label': 'memory',
-                    'value': mem_used_perc
+                'label': 'memory',
+                'value': mem_used_perc
             })
             continue
         match = SWAP_RE.search(line.strip())
@@ -75,16 +86,18 @@ def parse_mem_stats(output):
             stats = match.groupdict()
             swap_total = float(stats['total'])
             swap_used = float(stats['used'])
-            if swap_total == 0.: swap_used_perc = 0.
+            if swap_total == 0.:
+                swap_used_perc = 0.
             else:
-                swap_used_perc = math.ceil(float(stats['used'])/float(stats['total'])*100.)
+                swap_used_perc = math.ceil(
+                    float(stats['used'])/float(stats['total'])*100.)
             values.append({
-                    'label': 'swap',
-                    'value': swap_used_perc
+                'label': 'swap',
+                'value': swap_used_perc
             })
             continue
     return values
-               
+
 
 @mod.route('/execute_nodes', methods=['GET'])
 def execute_nodes():
@@ -111,8 +124,10 @@ def get_mpstat():
         }), 500
     if node == app.config['PUCCINI_HOST']:
         user = app.config['PUCCINI_USER']
-    else: user = app.config['EXECUTE_NODE_USER']
-    try: output = mpstat(user, node)
+    else:
+        user = app.config['EXECUTE_NODE_USER']
+    try:
+        output = mpstat(user, node)
     except (Exception, SystemExit) as e:
         app.logger.info("Failed to execute mpstat('%s', '%s'):\n%s\n%s" %
                         (user, node, str(e), traceback.format_exc()))
@@ -143,8 +158,10 @@ def get_mem_free():
         }), 500
     if node == app.config['PUCCINI_HOST']:
         user = app.config['PUCCINI_USER']
-    else: user = app.config['EXECUTE_NODE_USER']
-    try: output = mem_free(user, node)
+    else:
+        user = app.config['EXECUTE_NODE_USER']
+    try:
+        output = mem_free(user, node)
     except (Exception, SystemExit) as e:
         app.logger.info("Failed to execute mem_free('%s', '%s'):\n%s\n%s" %
                         (user, node, str(e), traceback.format_exc()))
@@ -175,7 +192,8 @@ def get_cpu_mem_stats():
         }), 500
     if node == app.config['PUCCINI_HOST']:
         user = app.config['PUCCINI_USER']
-    else: user = app.config['EXECUTE_NODE_USER']
+    else:
+        user = app.config['EXECUTE_NODE_USER']
     try:
         cpu_stats = mpstat(user, node)
         values = parse_cpu_stats(cpu_stats)

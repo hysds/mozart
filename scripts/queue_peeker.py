@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-import sys, pprint, os, json
+import sys
+import pprint
+import os
+import json
 from subprocess import Popen, PIPE
 
 from pika import BasicProperties
@@ -18,6 +21,7 @@ def usage():
     print("e.g. %s localhost product_queue" % sys.argv[0])
     sys.exit(1)
 
+
 def handle_delivery(channel, method_frame, header_frame, body):
     global COUNT, QUEUE_NAME
     queue_name = QUEUE_NAME
@@ -25,15 +29,16 @@ def handle_delivery(channel, method_frame, header_frame, body):
     try:
         j = json.loads(body)
         body = json.dumps(j, indent=2)
-    except: pass
- 
+    except:
+        pass
+
     print("#" * 80)
     print("queue: %s" % queue_name)
     print("delivery-tag: %i" % method_frame.delivery_tag)
     print("-" * 80)
     print("body: %s" % body)
 
-    #ask for an action
+    # ask for an action
     while COUNT > 0:
         print("Please select an action:")
         print("1. Print body of message")
@@ -41,7 +46,8 @@ def handle_delivery(channel, method_frame, header_frame, body):
         print("3. Leave message on %s queue" % queue_name)
         print("\nPress CTRL-C to quit.")
         option = input("Select [1,2,3] ")
-        if option == '1': print("body: %s" % body)
+        if option == '1':
+            print("body: %s" % body)
         elif option == '2':
             # Acknowledge the message
             channel.basic_ack(delivery_tag=method_frame.delivery_tag)
@@ -51,11 +57,12 @@ def handle_delivery(channel, method_frame, header_frame, body):
             COUNT -= 1
             break
 
-    #quit if no more
+    # quit if no more
     if COUNT == 0:
         channel.stop_consuming()
         CONNECTION.close()
         sys.exit()
+
 
 if __name__ == '__main__':
 
@@ -63,15 +70,18 @@ if __name__ == '__main__':
     try:
         host = sys.argv[1]
         QUEUE_NAME = sys.argv[2]
-    except: usage()
+    except:
+        usage()
 
     # get message count on queue
-    pop = Popen(["sudo", "rabbitmqctl", "list_queues"], 
+    pop = Popen(["sudo", "rabbitmqctl", "list_queues"],
                 stdin=PIPE, stdout=PIPE, stderr=PIPE, env=os.environ)
-    try: sts = pop.wait()  #wait for child to terminate and get status
-    except Exception as e: print(str(e))
+    try:
+        sts = pop.wait()  # wait for child to terminate and get status
+    except Exception as e:
+        print(str(e))
     status = pop.returncode
-    #print "returncode is:",status
+    # print "returncode is:",status
     stdOut = pop.stdout.read()
     stdErr = pop.stderr.read()
     for line in stdOut.split('\n'):
@@ -79,7 +89,8 @@ if __name__ == '__main__':
             COUNT = int(line.split()[1])
             break
     print("Total number of messages in %s: %d" % (QUEUE_NAME, COUNT))
-    if COUNT == 0: sys.exit()
+    if COUNT == 0:
+        sys.exit()
 
     # Connect to RabbitMQ
     CONNECTION = BlockingConnection(ConnectionParameters(host))

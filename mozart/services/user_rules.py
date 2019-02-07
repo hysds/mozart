@@ -1,6 +1,11 @@
-import os, json, requests, types, re, time
+import os
+import json
+import requests
+import types
+import re
+import time
 from flask import (jsonify, Blueprint, request, Response, render_template,
-make_response, g, url_for, redirect)
+                   make_response, g, url_for, redirect)
 from flask_login import login_required
 from pprint import pformat
 from string import Template
@@ -72,13 +77,16 @@ def get_actions_config():
                                                                     app.config["MOZART_URL"],
                                                                     app.config["OPS_USER"]),
                          key=lambda s: s['label'].lower()):
-        if not action[ifc_filter]: continue
+        if not action[ifc_filter]:
+            continue
         if action['public'] is False:
             if g.user.id in action.get('allowed_accounts', []):
                 action['public'] = True
         actions.append(action)
 
     return jsonify({'actions': actions})
+
+
 @mod.route('/user_rules/get_job_queues', methods=['GET'])
 @login_required
 def get_job_queues():
@@ -86,6 +94,7 @@ def get_job_queues():
     job_type = request.args.get("job_type")
     queues = mozart.lib.queue_utils.get_queue_names(job_type)
     return jsonify(queues)
+
 
 @mod.route('/user_rules/add', methods=['POST'])
 @login_required
@@ -131,20 +140,22 @@ def add_user_rule():
         "query": {
             "bool": {
                 "must": [
-                    { "term": { "username": g.user.id }  },
-                    { "term": { "rule_name": rule_name } },
+                    {"term": {"username": g.user.id}},
+                    {"term": {"rule_name": rule_name}},
                 ]
             }
         }
     }
-    r = requests.post('%s/%s/.percolator/_search' % (es_url, es_index), data=json.dumps(query))
+    r = requests.post('%s/%s/.percolator/_search' %
+                      (es_url, es_index), data=json.dumps(query))
     result = r.json()
     if r.status_code != 200:
-        app.logger.debug("Failed to query ES. Got status code %d:\n%s" % 
+        app.logger.debug("Failed to query ES. Got status code %d:\n%s" %
                          (r.status_code, json.dumps(result, indent=2)))
     r.raise_for_status()
     if result['hits']['total'] == 1:
-        app.logger.debug("Found a rule using that name already: %s" % rule_name)
+        app.logger.debug(
+            "Found a rule using that name already: %s" % rule_name)
         return jsonify({
             'success': False,
             'message': "Found a rule using that name already: %s" % rule_name,
@@ -159,7 +170,7 @@ def add_user_rule():
                          key=lambda s: s['label'].lower()):
         if action['type'] == workflow:
             job_type = action['job_type']
-    if job_type is None: 
+    if job_type is None:
         app.logger.debug("No job_type find for '%s'." % workflow)
         return jsonify({
             'success': False,
@@ -180,13 +191,14 @@ def add_user_rule():
         "query": json.loads(query_string),
         "queue": queue
     }
-    r = requests.post('%s/%s/.percolator/' % (es_url, es_index), data=json.dumps(new_doc))
+    r = requests.post('%s/%s/.percolator/' %
+                      (es_url, es_index), data=json.dumps(new_doc))
     result = r.json()
     if r.status_code != 201:
-        app.logger.debug("Failed to insert new rule for %s. Got status code %d:\n%s" % 
+        app.logger.debug("Failed to insert new rule for %s. Got status code %d:\n%s" %
                          (g.user.id, r.status_code, json.dumps(result, indent=2)))
     r.raise_for_status()
-    
+
     return jsonify({
         'success': True,
         'message': "",
@@ -213,13 +225,13 @@ def get_user_rules():
 
     # query
     if g.user.id == app.config['OPS_USER']:
-        query = {"query":{"match_all": {}}}
+        query = {"query": {"match_all": {}}}
     else:
         query = {
             "query": {
                 "bool": {
                     "must": [
-                        { "term": { "username": g.user.id }  }
+                        {"term": {"username": g.user.id}}
                     ]
                 }
             }
@@ -227,7 +239,7 @@ def get_user_rules():
     r = requests.post('%s/%s/.percolator/_search?search_type=scan&scroll=10m&size=100' % (es_url, es_index),
                       data=json.dumps(query))
     if r.status_code != 200:
-        app.logger.debug("Failed to query ES. Got status code %d:\n%s" % 
+        app.logger.debug("Failed to query ES. Got status code %d:\n%s" %
                          (r.status_code, json.dumps(r.json(), indent=2)))
     r.raise_for_status()
     #app.logger.debug("result: %s" % pformat(r.json()))
@@ -240,18 +252,20 @@ def get_user_rules():
     rules = []
     rule_count = 0
     while True:
-        r = requests.post('%s/_search/scroll?scroll=10m' % es_url, data=scroll_id)
+        r = requests.post('%s/_search/scroll?scroll=10m' %
+                          es_url, data=scroll_id)
         res = r.json()
         scroll_id = res['_scroll_id']
-        if len(res['hits']['hits']) == 0: break
+        if len(res['hits']['hits']) == 0:
+            break
         for hit in res['hits']['hits']:
             rule_count += 1
             rule = hit['_source']
-            rule['#'] = rule_count 
+            rule['#'] = rule_count
             rule['id'] = hit['_id']
             rules.append(rule)
 
-    return jsonify({ "success": True, "rules": rules})
+    return jsonify({"success": True, "rules": rules})
 
 
 @mod.route('/user_rules/remove', methods=['POST'])
@@ -278,7 +292,7 @@ def remove_user_rule():
         app.logger.debug("Failed to delete rule with ID %s. Got status code %d" %
                          (id, r.status_code))
     r.raise_for_status()
-    
+
     return jsonify({
         'success': True,
         'message': "",
@@ -303,21 +317,24 @@ def toggle_status():
     app.logger.debug("Setting enabled to '%s' to id '%s'." % (enabled, id))
 
     # update enabled
-    if enabled == "true": enabled = True
-    else: enabled = False
+    if enabled == "true":
+        enabled = True
+    else:
+        enabled = False
     new_doc = {
-        "doc": { "enabled": enabled },
+        "doc": {"enabled": enabled},
         "doc_as_upsert": True
     }
     es_url = app.config['ES_URL']
     es_index = app.config['USER_RULES_INDEX']
-    r = requests.post('%s/%s/.percolator/%s/_update' % (es_url, es_index, id), data=json.dumps(new_doc))
+    r = requests.post('%s/%s/.percolator/%s/_update' %
+                      (es_url, es_index, id), data=json.dumps(new_doc))
     result = r.json()
     if r.status_code != 200:
-        app.logger.debug("Failed to update enabled field for %s. Got status code %d:\n%s" % 
+        app.logger.debug("Failed to update enabled field for %s. Got status code %d:\n%s" %
                          (id, r.status_code, json.dumps(result, indent=2)))
     r.raise_for_status()
-    
+
     return jsonify({
         'success': True,
         'message': ""
@@ -362,7 +379,7 @@ def edit_user_rule():
         if action['type'] == workflow:
             job_type = action['job_type']
 
-    if job_type is None: 
+    if job_type is None:
         app.logger.debug("No job_type find for '%s'." % workflow)
         return jsonify({
             'success': False,
@@ -390,13 +407,14 @@ def edit_user_rule():
     #url = '%s/%s/%s/%s/_update' % (es_url, es_index, 'user_rule', id)
     #app.logger.debug("url: %s" % url)
     #app.logger.debug("data: %s" % json.dumps(new_doc, indent=2))
-    r = requests.post('%s/%s/.percolator/%s/_update' % (es_url, es_index, id), data=json.dumps(new_doc))
+    r = requests.post('%s/%s/.percolator/%s/_update' %
+                      (es_url, es_index, id), data=json.dumps(new_doc))
     result = r.json()
     if r.status_code != 200:
-        app.logger.debug("Failed to update rule for %s. Got status code %d:\n%s" % 
+        app.logger.debug("Failed to update rule for %s. Got status code %d:\n%s" %
                          (id, r.status_code, json.dumps(result, indent=2)))
     r.raise_for_status()
-    
+
     return jsonify({
         'success': True,
         'message': "",
@@ -413,7 +431,7 @@ def process_this():
     name = request.form['name']
     workflow = request.form['workflow']
     priority = int(request.form.get('priority', 0))
-    queue = request.form.get('queue',None)
+    queue = request.form.get('queue', None)
     query_string = request.form['query_string']
     kwargs = request.form['kwargs']
     if workflow is None:
@@ -477,22 +495,26 @@ def process_this():
         # html result
         html = "<b>Execute and retrieve the result of your job "
         html += "<a href='%s' target='_blank'>here</a>.</b>" % result_link
-        
+
         return jsonify({
             'success': True,
             'message': "",
             'html': html
         })
-    #Setup input arguments here
-    rule_temp = {"rule_name":rule["rule_name"],"queue":app.config.get("JOB_SUBMISSION_QUEUE",rule["queue"]),"priority":rule["priority"],"kwargs":"{}"}
-    param_temp = [{"name":"submitter","from":"value","value":"mozart"},{"name":"submitter_rule","from":"value","value":json.dumps(rule)}]
+    # Setup input arguments here
+    rule_temp = {"rule_name": rule["rule_name"], "queue": app.config.get(
+        "JOB_SUBMISSION_QUEUE", rule["queue"]), "priority": rule["priority"], "kwargs": "{}"}
+    param_temp = [{"name": "submitter", "from": "value", "value": "mozart"}, {
+        "name": "submitter_rule", "from": "value", "value": json.dumps(rule)}]
 
-    hysds_commons.job_rest_utils.single_process_and_submission(app.config["MOZART_URL"], {}, rule_temp , hysdsio={"id":"internal-temporary-wiring","params":param_temp,"job-specification":app.config["JOB_SUBMISSION_JOB_SPEC"]})
+    hysds_commons.job_rest_utils.single_process_and_submission(app.config["MOZART_URL"], {}, rule_temp, hysdsio={
+                                                               "id": "internal-temporary-wiring", "params": param_temp, "job-specification": app.config["JOB_SUBMISSION_JOB_SPEC"]})
 
-    #SKIP User Run History -- Historical reason
+    # SKIP User Run History -- Historical reason
 
     # monitor jobs by tag and username
-    monitor_url = url_for('.monitor_jobs', tag=rule['rule_name'], username=rule['username'])
+    monitor_url = url_for(
+        '.monitor_jobs', tag=rule['rule_name'], username=rule['username'])
     html = "<b>You're HySDS jobs were submitted. Monitor their execution "
     html += '<a href="%s" target="_blank">here</a>.</b>' % monitor_url
 
@@ -518,10 +540,12 @@ def monitor_job():
     app.logger.debug("orch_task_id: %s" % orch_task_id)
 
     # get orchestrator task ID of job
-    r = requests.get('%s/api/task/info/%s' % (app.config['FLOWER_URL'], orch_task_id))
+    r = requests.get('%s/api/task/info/%s' %
+                     (app.config['FLOWER_URL'], orch_task_id))
     orch_task_info = r.json()
     if r.status_code != 200:
-        app.logger.debug("Failed to retrieve orchestrator task info for %s." % orch_task_id)
+        app.logger.debug(
+            "Failed to retrieve orchestrator task info for %s." % orch_task_id)
     r.raise_for_status()
 
     # check state and get task id
@@ -529,13 +553,14 @@ def monitor_job():
         task_id = eval(eval(orch_task_info['result']))[0]
         app.logger.debug("task_id: %s" % task_id)
     else:
-        app.logger.debug("Failed to retrieve orchestrator task state of 'SUCCESS'.")
+        app.logger.debug(
+            "Failed to retrieve orchestrator task state of 'SUCCESS'.")
         return jsonify({
             'success': False,
             'message': "Failed to retrieve orchestrator task with state 'SUCCESS'.",
             'task_info': orch_task_info,
         })
-    
+
     # get Mozart link to job
     moz_url = '?source={"query":{"query_string":{"query":"task_id:%s"}}}' % task_id
 

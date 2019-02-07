@@ -1,4 +1,6 @@
-import os, sys, ftplib
+import os
+import sys
+import ftplib
 from urllib.parse import urlsplit
 from pprint import pprint, pformat
 
@@ -8,7 +10,7 @@ from mozart import app
 def network_selector(info):
     """
     Create job json for network selector.
-    
+
     Example:
 
     job = {
@@ -26,20 +28,21 @@ def network_selector(info):
 
     # build params
     job = {
-            'type': 'network_selector',
-            'name': 'network_selector-%s' % info['id'],
-            'params': info,
-            'localize_urls': []
-          }
+        'type': 'network_selector',
+        'name': 'network_selector-%s' % info['id'],
+        'params': info,
+        'localize_urls': []
+    }
 
     print("Job:")
     pprint(job, indent=2)
     return job
 
+
 def create_interferogram(info):
     """
     Create map job json for generating interferogram.
-    
+
     Example:
 
     job = {
@@ -60,11 +63,11 @@ def create_interferogram(info):
 
     # build params
     job = {
-            'type': 'create_interferogram',
-            'name': 'create_interferogram-%s' % info['netsel_file'],
-            'params': info,
-            'localize_urls': [{'url': info['netsel_url']}]
-          }
+        'type': 'create_interferogram',
+        'name': 'create_interferogram-%s' % info['netsel_file'],
+        'params': info,
+        'localize_urls': [{'url': info['netsel_url']}]
+    }
 
     print("Job:")
     pprint(job, indent=2)

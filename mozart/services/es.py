@@ -1,4 +1,8 @@
-import os, json, requests, types, re
+import os
+import json
+import requests
+import types
+import re
 from flask import jsonify, Blueprint, request, Response, render_template, make_response
 from pprint import pformat
 from dateutil.parser import parse
@@ -34,13 +38,16 @@ def query(index=None):
         hit['fields'] = hit['_source']
         hit['fields']['_id'] = hit['_id']
         hit['fields']['_type'] = hit['_type']
-        if "type" in hit['fields'] and hit['fields']['type'] == "job": 
+        if "type" in hit['fields'] and hit['fields']['type'] == "job":
             job_info = hit['fields'].get('job', {}).get('job_info', {})
-            job_info['time_queued'] = parse(job_info['time_queued']).isoformat(' ').split('.')[0] if 'time_queued' in job_info else ''
-            job_info['time_start'] = parse(job_info['time_start']).isoformat(' ').split('.')[0] if 'time_start' in job_info else ''
-            job_info['time_end'] = parse(job_info['time_end']).isoformat(' ').split('.')[0] if 'time_end' in job_info else ''
-        hit['fields']['@timestamp'] = parse(hit['fields']['@timestamp']).isoformat(' ').split('.')[0] if '@timestamp' in hit['fields'] else ''
-        
+            job_info['time_queued'] = parse(job_info['time_queued']).isoformat(
+                ' ').split('.')[0] if 'time_queued' in job_info else ''
+            job_info['time_start'] = parse(job_info['time_start']).isoformat(
+                ' ').split('.')[0] if 'time_start' in job_info else ''
+            job_info['time_end'] = parse(job_info['time_end']).isoformat(
+                ' ').split('.')[0] if 'time_end' in job_info else ''
+        hit['fields']['@timestamp'] = parse(hit['fields']['@timestamp']).isoformat(
+            ' ').split('.')[0] if '@timestamp' in hit['fields'] else ''
 
     # return JSONP
     return Response('%s(%s)' % (callback, json.dumps(result)),
@@ -66,14 +73,16 @@ def get_job_info():
     r = requests.post('%s/%s/_search' % (es_url, index), data=q)
     result = r.json()
     #app.logger.debug("result: %s" % pformat(r.json()))
-    hit = result['hits']['hits'][0]['_source'] if len(result['hits']['hits']) > 0 else None
+    hit = result['hits']['hits'][0]['_source'] if len(
+        result['hits']['hits']) > 0 else None
     #app.logger.debug("hit: %s" % pformat(hit))
 
     if hit:
         # build job info
         #app.logger.debug("hit: %s" % json.dumps(hit, indent=2))
         job_info = hit['job'].get('job_info', {})
-        if 'facts' in job_info: del(job_info['facts'])
+        if 'facts' in job_info:
+            del(job_info['facts'])
         job_url = job_info.get('job_url', None)
         ret = {
             'job_info': json.dumps(job_info, indent=2, sort_keys=True),

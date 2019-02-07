@@ -1,4 +1,7 @@
-import pika, traceback, json, logging
+import pika
+import traceback
+import json
+import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('pika')
@@ -14,22 +17,25 @@ def processError(queue_name, body, error, traceback):
         "error": error,
         "traceback": traceback
     })
-    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters('localhost'))
     channel = connection.channel()
     channel.queue_declare(queue='error_queue', durable=True)
     channel.basic_publish(exchange='',
-                  routing_key='error_queue',
-                  body=body,
-                  properties=pika.BasicProperties(
-                     delivery_mode = 2, # make message persistent
-                  ))
+                          routing_key='error_queue',
+                          body=body,
+                          properties=pika.BasicProperties(
+                              delivery_mode=2,  # make message persistent
+                          ))
     connection.close()
+
 
 def pika_callback(queue_name):
     def wrapped(fn):
         def wrapped_fn(ch, method, properties, body):
             logger.info(" [x] Received message from %s" % queue_name)
-            try: fn(ch, method, properties, body)
+            try:
+                fn(ch, method, properties, body)
             except Exception as e:
                 processError(queue_name, body, str(e), traceback.format_exc())
             logger.info(" [x] Done")

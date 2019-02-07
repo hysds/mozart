@@ -1,4 +1,10 @@
-import os, json, time, re, requests, traceback, cgi
+import os
+import json
+import time
+import re
+import requests
+import traceback
+import cgi
 from flask import jsonify, Blueprint, request, Response
 from flask_login import login_required
 from datetime import datetime, timedelta
@@ -32,10 +38,11 @@ def job_count():
     }
     es_url = app.config['ES_URL']
     index = app.config['JOB_STATUS_INDEX']
-    r = requests.post('%s/%s/job/_search' % (es_url, index), data=json.dumps(query))
+    r = requests.post('%s/%s/job/_search' %
+                      (es_url, index), data=json.dumps(query))
     r.raise_for_status()
     result = r.json()
-    counts = { 'total': result['facets']['status']['total'] }
+    counts = {'total': result['facets']['status']['total']}
     for terms in result['facets']['status']['terms']:
         counts[terms['term']] = terms['count']
 
@@ -59,7 +66,8 @@ def get_text():
         })
 
     # read contents
-    try: r = requests.get(url_file, verify=False)
+    try:
+        r = requests.get(url_file, verify=False)
     except Exception as e:
         return jsonify({
             'success': False,
@@ -75,8 +83,9 @@ def get_text():
         content += "If WebDAV is up and running on the worker node, then this job's<br/>"
         content += 'work directory may have been cleaned out by verdi to free up<br/>'
         content += 'disk space to run new jobs.'
-    else: content = cgi.escape(r.text)
- 
+    else:
+        content = cgi.escape(r.text)
+
     return jsonify({
         'success': success,
         'content': content
@@ -89,13 +98,15 @@ def stop_running(index=None):
     ''' Stops tasks '''
     return purge(index, False)
 
+
 @mod.route('/task/purge/<index>', methods=['GET'])
 @login_required
 def purge_complete(index=None):
     ''' Purges non-active tasks '''
-    return purge(index,True)
+    return purge(index, True)
 
-def purge(index,purge):
+
+def purge(index, purge):
     """Purge job."""
 
     # get callback, source, and job status index
@@ -112,7 +123,8 @@ def purge(index,purge):
         }), 500
     # query
     es_url = app.config['ES_URL']
-    r = requests.post('%s/%s/_search?search_type=scan&scroll=10m&size=100' % (es_url, index), data=source)
+    r = requests.post('%s/%s/_search?search_type=scan&scroll=10m&size=100' %
+                      (es_url, index), data=source)
     if r.status_code != 200:
         app.logger.debug("Failed to query ES. Got status code %d:\n%s" %
                          (r.status_code, json.dumps(result, indent=2)))
@@ -126,10 +138,12 @@ def purge(index,purge):
     # get list of results
     results = []
     while True:
-        r = requests.post('%s/_search/scroll?scroll=10m' % es_url, data=scroll_id)
+        r = requests.post('%s/_search/scroll?scroll=10m' %
+                          es_url, data=scroll_id)
         res = r.json()
         scroll_id = res['_scroll_id']
-        if len(res['hits']['hits']) == 0: break
+        if len(res['hits']['hits']) == 0:
+            break
         for hit in res['hits']['hits']:
             results.append(hit['_source'])
 
@@ -141,30 +155,31 @@ def purge(index,purge):
             uuid = res['uuid']
             payload_id = res['payload_id']
             doctype = res['type']
-            #Always grab latest state (not state from query result)
+            # Always grab latest state (not state from query result)
             task = celapp.AsyncResult(uuid)
             state = task.state
-            #Active states may only revoke
+            # Active states may only revoke
             yield "Job state: %s\n" % state
-            if state in ["RETRY","STARTED"] or (state == "PENDING" and not purge):
+            if state in ["RETRY", "STARTED"] or (state == "PENDING" and not purge):
                 if not purge:
                     yield 'Revoking %s\n' % (uuid)
-                    celapp.control.revoke(uuid,terminate=True)
+                    celapp.control.revoke(uuid, terminate=True)
                 else:
                     yield 'Cannot remove active job %s\n' % (uuid)
                 continue
             elif not purge:
                 yield 'Cannot stop inactive job: %s\n' % (uuid)
                 continue
-            #Saftey net to revoke job if in PENDING state
+            # Saftey net to revoke job if in PENDING state
             if state == "PENDING":
                 yield 'Revoking %s\n' % (uuid)
-                celapp.control.revoke(uuid,terminate=True)
-            #Inactive states remove from ES, WebDav etc.
+                celapp.control.revoke(uuid, terminate=True)
+            # Inactive states remove from ES, WebDav etc.
             if doctype == "job":
-                url = res.get('job', {}).get('job_info', {}).get('job_url', None)
+                url = res.get('job', {}).get(
+                    'job_info', {}).get('job_url', None)
                 yield 'Purging %s (%s)...' % (uuid, url)
-                #Delete from WebDAV
+                # Delete from WebDAV
                 if not url is None:
                     yield 'Removing WebDAV directory...'
                     try:
@@ -173,8 +188,9 @@ def purge(index,purge):
                     except Exception as e:
                         yield 'failed (%s).\n' % str(e)
             # Both associated task and job from ES
-            yield 'Removing ES for %s:%s' % (doctype,payload_id)
-            r = requests.delete("%s/%s/%s/_query?q=_id:%s" % (es_url, index, doctype, payload_id))
+            yield 'Removing ES for %s:%s' % (doctype, payload_id)
+            r = requests.delete("%s/%s/%s/_query?q=_id:%s" %
+                                (es_url, index, doctype, payload_id))
             r.raise_for_status()
             res = r.json()
             yield 'done.\n'

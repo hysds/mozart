@@ -1,3 +1,13 @@
+from mozart.services.api_v02 import services as api_v02Services
+from mozart.services.api_v01 import services as api_v01Services
+from mozart.services.user_tags import mod as userTagsModule
+from mozart.services.user_rules import mod as userRulesModule
+from mozart.services.stats import mod as statsModule
+from mozart.services.es import mod as esModule
+from mozart.services.admin import mod as adminModule
+from mozart.services.jobs import mod as jobsModule
+from mozart.services.main import mod as mainModule
+from mozart.views.main import mod as viewsModule
 import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -43,6 +53,7 @@ class ReverseProxied(object):
 
     :param app: the WSGI application
     '''
+
     def __init__(self, app):
         self.app = app
 
@@ -69,7 +80,8 @@ app.config.from_pyfile('../settings.cfg')
 
 # set database config
 dbdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(dbdir, 'app.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + \
+    os.path.join(dbdir, 'app.db')
 db = SQLAlchemy(app)
 
 # set user auth config
@@ -78,27 +90,17 @@ lm.init_app(app)
 lm.login_view = 'views/main.login'
 
 # views blueprints
-from mozart.views.main import mod as viewsModule
 app.register_blueprint(viewsModule)
 
 # services blueprints
-from mozart.services.main import mod as mainModule
 app.register_blueprint(mainModule)
-from mozart.services.jobs import mod as jobsModule
 app.register_blueprint(jobsModule)
-from mozart.services.admin import mod as adminModule
 app.register_blueprint(adminModule)
-from mozart.services.es import mod as esModule
 app.register_blueprint(esModule)
-from mozart.services.stats import mod as statsModule
 app.register_blueprint(statsModule)
-from mozart.services.user_rules import mod as userRulesModule
 app.register_blueprint(userRulesModule)
-from mozart.services.user_tags import mod as userTagsModule
 app.register_blueprint(userTagsModule)
 
 # rest API blueprints
-from mozart.services.api_v01 import services as api_v01Services
 app.register_blueprint(api_v01Services)
-from mozart.services.api_v02 import services as api_v02Services
 app.register_blueprint(api_v02Services)

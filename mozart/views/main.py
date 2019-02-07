@@ -1,5 +1,6 @@
 from datetime import datetime
-import hashlib, simpleldap
+import hashlib
+import simpleldap
 from flask import render_template, Blueprint, g, redirect, session, request, url_for, flash, abort
 from flask_login import login_required, login_user, logout_user, current_user
 
@@ -56,7 +57,7 @@ def login():
         return redirect(url_for('views/main.index'))
     form = LoginForm()
     if form.validate_on_submit():
-        #session['remember_me'] = form.remember_me.data 
+        #session['remember_me'] = form.remember_me.data
         username = form.username.data
         password = form.password.data
         # authenticate ops user account
@@ -64,7 +65,8 @@ def login():
             ops_passwd_hex = hashlib.sha224(password).hexdigest()
             if app.config['OPS_PASSWORD_HASH'] == ops_passwd_hex:
                 ldap_info = {}
-            else: ldap_info = None 
+            else:
+                ldap_info = None
         else:
             # for everyone else authenticate via LDAP
             ldap_info = ldap_user_verified(username, password)

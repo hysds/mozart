@@ -1,5 +1,13 @@
 #!/usr/bin/env python
-import os, sys, re, json, logging, time, socket, uuid, pprint
+import os
+import sys
+import re
+import json
+import logging
+import time
+import socket
+import uuid
+import pprint
 from datetime import datetime
 import pika
 
@@ -20,12 +28,12 @@ def getTimestamp(fraction=True):
     (year, month, day, hh, mm, ss, wd, y, z) = time.gmtime()
     d = datetime.utcnow()
     if fraction:
-        s = "%04d%02d%02dT%02d%02d%02d.%dZ" % (d.year, d.month, d.day, 
-                                                   d.hour, d.minute, 
-                                                   d.second, d.microsecond)
+        s = "%04d%02d%02dT%02d%02d%02d.%dZ" % (d.year, d.month, d.day,
+                                               d.hour, d.minute,
+                                               d.second, d.microsecond)
     else:
-        s = "%04d%02d%02dT%02d%02d%02dZ" % (d.year, d.month, d.day, 
-                                                d.hour, d.minute, d.second)
+        s = "%04d%02d%02dT%02d%02d%02dZ" % (d.year, d.month, d.day,
+                                            d.hour, d.minute, d.second)
     return s
 
 
@@ -34,8 +42,8 @@ def getFunction(funcStr, addToSysPath=None):
     and return a pointer to the function.  Define addToSysPath to prepend a
     path to the modules path."""
 
-    #check if we have to import a module
-    libmatch = re.match(r'^((?:\w|\.)+)\.\w+\(?.*$',funcStr)
+    # check if we have to import a module
+    libmatch = re.match(r'^((?:\w|\.)+)\.\w+\(?.*$', funcStr)
     if libmatch:
         importLib = libmatch.group(1)
         if addToSysPath:
@@ -43,7 +51,7 @@ def getFunction(funcStr, addToSysPath=None):
         exec("import %s" % importLib)
         exec("reload(%s)" % importLib)
 
-    #check there are args
+    # check there are args
     argsMatch = re.search(r'\((\w+)\..+\)$', funcStr)
     if argsMatch:
         importLib2 = argsMatch.group(1)
@@ -52,7 +60,7 @@ def getFunction(funcStr, addToSysPath=None):
         exec("import %s" % importLib2)
         exec("reload(%s)" % importLib2)
 
-    #return function
+    # return function
     return eval(funcStr)
 
 
@@ -76,7 +84,8 @@ class OrchestratorClient(object):
         # get descriptive job name
         if 'name' in self._job_json:
             self._job_name = self._job_json['name']
-        else: self._job_name = job_name
+        else:
+            self._job_name = job_name
 
         logger.info("config: %s" % self._config)
 
@@ -88,21 +97,24 @@ class OrchestratorClient(object):
 
         if self._corr_id == props.correlation_id:
             self._response = json.loads(body)
-            logger.info("set self._response to: %s" % pprint.pformat(self._response))
+            logger.info("set self._response to: %s" %
+                        pprint.pformat(self._response))
             if self._response['status'] in ('job-completed', 'job-failed'):
                 # move to completed or error queue
                 if self._response['status'] == 'job-completed':
                     routing_key = self._config['job_completed_queue']
-                else: routing_key = self._config['job_error_queue']
+                else:
+                    routing_key = self._config['job_error_queue']
                 self._channel.basic_publish(exchange='',
-                    routing_key=routing_key,
-                    body=body,
-                    properties=pika.BasicProperties(
-                       delivery_mode = 2 # make message persistent
-                    )
-                )
+                                            routing_key=routing_key,
+                                            body=body,
+                                            properties=pika.BasicProperties(
+                                                delivery_mode=2  # make message persistent
+                                            )
+                                            )
                 self._channel.close()
-                logger.info("closed channel to temp queue: %s" % self._callback_queue)
+                logger.info("closed channel to temp queue: %s" %
+                            self._callback_queue)
 
     def on_queue_declared(self, frame):
         """Set response handler then submit the job."""
@@ -130,32 +142,32 @@ class OrchestratorClient(object):
         self._response['job_id'] = self._job_json['job_id']
         self._corr_id = self._job_json['job_id']
         self._channel.basic_publish(exchange='',
-                    routing_key=self._queue_name,
-                    body=body,
-                    properties=pika.BasicProperties(
-                       reply_to = self._callback_queue,
-                       correlation_id = self._corr_id,
-                       delivery_mode = 2, # make message persistent
-                    ))
+                                    routing_key=self._queue_name,
+                                    body=body,
+                                    properties=pika.BasicProperties(
+                                        reply_to=self._callback_queue,
+                                        correlation_id=self._corr_id,
+                                        delivery_mode=2,  # make message persistent
+                                    ))
 
         # set status
         self._channel.basic_publish(exchange=self._config['job_status_exchange'],
-                    routing_key='',
-                    body=json.dumps({'job_id': self._job_json['job_id'],
-                                     'status': 'job-queued',
-                                     'timestamp': datetime.utcnow().isoformat() + 'Z',
-                                     'job': self._job_json}),
-                    properties=pika.BasicProperties(
-                        reply_to = self._callback_queue,
-                        correlation_id = self._corr_id,
-                        delivery_mode = 2, # make message persistent
-                    ))
+                                    routing_key='',
+                                    body=json.dumps({'job_id': self._job_json['job_id'],
+                                                     'status': 'job-queued',
+                                                     'timestamp': datetime.utcnow().isoformat() + 'Z',
+                                                     'job': self._job_json}),
+                                    properties=pika.BasicProperties(
+            reply_to=self._callback_queue,
+            correlation_id=self._corr_id,
+            delivery_mode=2,  # make message persistent
+        ))
 
     def on_channel_open(self, channel):
         """Declare temporary anonymous queue for worker response."""
-        
+
         self._channel = channel
-        self._channel.queue_declare(self.on_jobqueue_declared, 
+        self._channel.queue_declare(self.on_jobqueue_declared,
                                     self._queue_name,
                                     durable=True)
 
@@ -187,7 +199,7 @@ class Orchestrator(object):
         """
         self._url = amqp_url
         self._config_file = config_file
-        self._config = json.loads(open(self._config_file).read()) 
+        self._config = json.loads(open(self._config_file).read())
         self._exchange = self._config['job_status_exchange']
         self._exchange_type = 'fanout'
         self._job_status_queues = ['job_status_response', 'job_status_log']
@@ -206,16 +218,16 @@ class Orchestrator(object):
 
         # append job_creators dir
         self._job_creators_dir = os.path.normpath(
-                                     os.path.join(app.root_path, '..',
-                                                  'scripts', 'job_creators'
-                                     )
-                                 )
+            os.path.join(app.root_path, '..',
+                         'scripts', 'job_creators'
+                         )
+        )
         logger.info("Job creators directory: %s." % self._job_creators_dir)
 
     def create_job_callback(self, channel, method, properties, body):
         """Callback to handle job creation."""
 
-        #self.acknowledge_message(method.delivery_tag)
+        # self.acknowledge_message(method.delivery_tag)
 
         logger.info('Received message # %s from %s: %s',
                     method.delivery_tag, properties.app_id, body)
@@ -230,15 +242,17 @@ class Orchestrator(object):
         payload = j['payload']
         logger.info("got job_type: %s" % job_type)
         logger.info("payload: %s" % payload)
-    
+
         # check that we know handle to handle this job type
         if job_type not in self._job_config_dict:
             logger.info("No job configuration info for '%s'." % job_type)
-            raise RuntimeError("No job configuration info for '%s'." % job_type)
-    
+            raise RuntimeError(
+                "No job configuration info for '%s'." % job_type)
+
         # get job json and add to queues
         for jc in self._job_config_dict[job_type]:
-            func = getFunction(jc['function'], addToSysPath=self._job_creators_dir)
+            func = getFunction(
+                jc['function'], addToSysPath=self._job_creators_dir)
             job = func(payload)
             logger.info("job_json: %s" % job)
             for queue in jc['job_queues']:
@@ -247,7 +261,8 @@ class Orchestrator(object):
     def queue_job(self, job_name, job, queue):
         """Queue job."""
 
-        orc_client = OrchestratorClient(self._connection, self._config, job_name, job, queue)
+        orc_client = OrchestratorClient(
+            self._connection, self._config, job_name, job, queue)
         orc_client.queue()
         logger.info("added job_json to %s" % queue)
 
@@ -318,7 +333,6 @@ class Orchestrator(object):
             # There is now a new connection, needs a new ioloop to run
             self._connection.ioloop.start()
 
-
     def add_on_channel_close_callback(self):
         """This method tells pika to call the on_channel_closed method if
         RabbitMQ unexpectedly closes the channel.
@@ -364,7 +378,8 @@ class Orchestrator(object):
         :param str|unicode exchange_name: The name of the exchange to declare
 
         """
-        logger.info('Declaring exchange %s of type %s', exchange_name, exchange_type)
+        logger.info('Declaring exchange %s of type %s',
+                    exchange_name, exchange_type)
         self._channel.exchange_declare(self.on_exchange_declareok,
                                        exchange_name,
                                        exchange_type,
@@ -459,7 +474,8 @@ class Orchestrator(object):
         """
         logger.info('Consumer was cancelled remotely, shutting down: %r',
                     frame)
-        if self._channel: self._channel.close()
+        if self._channel:
+            self._channel.close()
 
     def acknowledge_message(self, delivery_tag):
         """Acknowledge the message delivery from RabbitMQ by sending a
@@ -490,7 +506,8 @@ class Orchestrator(object):
         if self._channel:
             logger.info('Sending a Basic.Cancel RPC command to RabbitMQ')
             for queue in self._consumer_tags:
-                self._channel.basic_cancel(self.on_cancelok, self._consumer_tags[queue])
+                self._channel.basic_cancel(
+                    self.on_cancelok, self._consumer_tags[queue])
 
     def start_consuming(self, queue):
         """This method sets up the consumer by first calling

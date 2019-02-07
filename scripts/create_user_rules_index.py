@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-import os, json, requests, sys
+import os
+import json
+import requests
+import sys
 from elasticsearch import Elasticsearch
 
 from mozart import app

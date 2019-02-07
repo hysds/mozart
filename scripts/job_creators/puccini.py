@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 from pprint import pprint, pformat
 
 from mozart import app
@@ -7,7 +8,7 @@ from mozart import app
 def createJob(info):
     """
     Create job json for puccini product ingest.
-    
+
     Example:
 
     job = {
@@ -44,11 +45,11 @@ def createJob(info):
     params['product_processed_queue'] = info['product_processed_queue']
     params['staged_work_url'] = info['staged_work_url']
     job = {
-            'type': 'product_ingest',
-            'name': os.path.basename(info['staged_prod_dir']),
-            'params': params,
-            'localize_urls': []
-          }
+        'type': 'product_ingest',
+        'name': os.path.basename(info['staged_prod_dir']),
+        'params': params,
+        'localize_urls': []
+    }
 
     pprint(job, indent=2)
     return job

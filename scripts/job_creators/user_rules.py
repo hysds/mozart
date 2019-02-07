@@ -6,7 +6,7 @@ from mozart import app
 def createJob(info):
     """
     Create job json for user rules processing.
-    
+
     Example:
 
     job = {
@@ -23,11 +23,11 @@ def createJob(info):
     params = {}
     params['id'] = info['objectid']
     job = {
-            'type': 'user_rules_processor',
-            'name': 'user_rules_processor-%s' % info['objectid'],
-            'params': params,
-            'localize_urls': []
-          }
+        'type': 'user_rules_processor',
+        'name': 'user_rules_processor-%s' % info['objectid'],
+        'params': params,
+        'localize_urls': []
+    }
 
     pprint(job, indent=2)
     return job
