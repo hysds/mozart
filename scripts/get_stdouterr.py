@@ -1,5 +1,13 @@
 #!/usr/bin/env python
-import sys, json, time
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+import sys
+import json
+import time
 from datetime import datetime
 import dateutil.parser
 from pymongo import MongoClient, ASCENDING, DESCENDING
@@ -20,11 +28,12 @@ def main():
     # get all job id's stdouterr chunks
     recs = col.find({'id': sys.argv[1]},
                     {'chunk': True, 'datetime': True}
-                   ).sort("datetime")
+                    ).sort("datetime")
 
     # print chunks
     for rec in recs:
-        print(rec['chunk'].strip())
-    
+        print((rec['chunk'].strip()))
+
+
 if __name__ == "__main__":
     main()

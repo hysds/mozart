@@ -1,10 +1,22 @@
-import os, sys, json, time, pprint, subprocess
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+import os
+import sys
+import json
+import time
+import pprint
+import subprocess
 from flask import jsonify, Blueprint
 
 
 from mozart import app
 
 mod = Blueprint('services/admin', __name__)
+
 
 @mod.route('/services/admin/clean', methods=['GET'])
 def clean():
@@ -16,12 +28,12 @@ def clean():
 
     # clean mozart
     clean_script = os.path.normpath(
-                       os.path.join(
-                           os.path.dirname(os.path.abspath(__file__)),
-                           '..', '..', 'scripts', 'demo', 
-                           'clean_mozart.sh'
-                       )
-                   )
+        os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            '..', '..', 'scripts', 'demo',
+            'clean_mozart.sh'
+        )
+    )
     app.logger.debug("clean mozart: %s" % clean_script)
     subprocess.call([clean_script], shell=True)
 
@@ -30,12 +42,12 @@ def clean():
 
     # queue cleaning puccini
     clean_script = os.path.normpath(
-                       os.path.join(
-                           os.path.dirname(os.path.abspath(__file__)),
-                           '..', '..', 'scripts', 'demo', 
-                           'queue_clean_puccini.py'
-                       )
-                   )
+        os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            '..', '..', 'scripts', 'demo',
+            'queue_clean_puccini.py'
+        )
+    )
     app.logger.debug("clean puccini: %s" % clean_script)
     subprocess.call([clean_script], shell=True)
 

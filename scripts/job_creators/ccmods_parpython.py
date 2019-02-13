@@ -1,5 +1,14 @@
-import os, sys, ftplib
-from urlparse import urlsplit
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import division
+from __future__ import absolute_import
+from builtins import int
+from future import standard_library
+standard_library.install_aliases()
+import os
+import sys
+import ftplib
+from urllib.parse import urlsplit
 from pprint import pprint, pformat
 
 from mozart import app
@@ -8,7 +17,7 @@ from mozart import app
 def get_agg_file(info):
     """
     Create map job json for generating agg file.
-    
+
     Example:
 
     job = {
@@ -22,57 +31,60 @@ def get_agg_file(info):
           }
     """
 
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     # build params
     job = {
-            'type': 'get_agg_file',
-            'name': 'get_agg_file-%04d-%02d' % (int(info['year']), int(info['month'])),
-            'params': info,
-            'localize_urls': []
-          }
+        'type': 'get_agg_file',
+        'name': 'get_agg_file-%04d-%02d' % (int(info['year']), int(info['month'])),
+        'params': info,
+        'localize_urls': []
+    }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job
+
 
 def generate_merged_file(info):
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     # build parrams
     job = {
-            'type': 'generate_merged_file',
-            'name': 'generate_merged_file',
-            'params': info,
-            'localize_urls': info['agg_urls']
-          }
+        'type': 'generate_merged_file',
+        'name': 'generate_merged_file',
+        'params': info,
+        'localize_urls': info['agg_urls']
+    }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job
+
 
 def generate_pdf_plots(info):
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     # build parrams
     job = {
-            'type': 'generate_pdf_plots',
-            'name': 'generate_pdf_plots',
-            'params': info,
-            'localize_urls': [info['merge_url']]
-          }
+        'type': 'generate_pdf_plots',
+        'name': 'generate_pdf_plots',
+        'params': info,
+        'localize_urls': [info['merge_url']]
+    }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job
+
 
 def wvcc_generate_matchup(info):
     """
     Create map job json for running WVCC matchup.
-    
+
     Example:
 
     job = {
@@ -85,19 +97,19 @@ def wvcc_generate_matchup(info):
           }
     """
 
-    print "Info:"
+    print("Info:")
     pprint(info, indent=2)
 
     airs_id = os.path.basename(info['dap_url'])[5:19]
 
     # build params
     job = {
-            'type': 'wvcc_generate_matchup',
-            'name': 'wvcc_generate_matchup-%s' % airs_id,
-            'params': info,
-            'localize_urls': []
-          }
+        'type': 'wvcc_generate_matchup',
+        'name': 'wvcc_generate_matchup-%s' % airs_id,
+        'params': info,
+        'localize_urls': []
+    }
 
-    print "Job:"
+    print("Job:")
     pprint(job, indent=2)
     return job

@@ -1,3 +1,10 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from builtins import str
+from future import standard_library
+standard_library.install_aliases()
 from mozart import db
 
 
@@ -8,7 +15,7 @@ ROLE_ADMIN = 1
 class User(db.Model):
     id = db.Column(db.String(64), primary_key=True)
     ldap_info = db.Column(db.PickleType)
-    role = db.Column(db.SmallInteger, default = ROLE_USER)
+    role = db.Column(db.SmallInteger, default=ROLE_USER)
 
     def is_authenticated(self):
         return True
@@ -20,7 +27,7 @@ class User(db.Model):
         return False
 
     def get_id(self):
-        return unicode(self.id)
+        return str(self.id)
 
     def __repr__(self):
         return '<User %r>' % (self.id)

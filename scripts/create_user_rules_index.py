@@ -1,5 +1,15 @@
 #!/usr/bin/env python
-import os, json, requests, sys
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from builtins import open
+from future import standard_library
+standard_library.install_aliases()
+import os
+import json
+import requests
+import sys
 from elasticsearch import Elasticsearch
 
 from mozart import app

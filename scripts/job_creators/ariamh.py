@@ -1,5 +1,13 @@
-import os, sys, ftplib
-from urlparse import urlsplit
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+import os
+import sys
+import ftplib
+from urllib.parse import urlsplit
 from pprint import pprint, pformat
 
 from mozart import app
@@ -8,7 +16,7 @@ from mozart import app
 def createJob(info):
     """
     Create job json for NS/CI sciflo execution.
-    
+
     Example:
 
     job = {
@@ -27,19 +35,20 @@ def createJob(info):
     params['id'] = info['objectid']
     params['output_name'] = '%s.interferogram.json' % info['objectid']
     job = {
-            'type': 'sciflo-create_interferograms',
-            'name': 'sciflo-create_interferograms-%s' % info['objectid'],
-            'params': params,
-            'localize_urls': []
-          }
+        'type': 'sciflo-create_interferograms',
+        'name': 'sciflo-create_interferograms-%s' % info['objectid'],
+        'params': params,
+        'localize_urls': []
+    }
 
     pprint(job, indent=2)
     return job
 
+
 def createDatastagerJob(info):
     """
     Create job json for CSK datastager.
-    
+
     Example:
 
     job = {
@@ -55,19 +64,20 @@ def createDatastagerJob(info):
 
     # build params
     job = {
-            'type': 'datastager',
-            'name': 'datastager-%s' % info['id'],
-            'params': info,
-            'localize_urls': [],
-          }
+        'type': 'datastager',
+        'name': 'datastager-%s' % info['id'],
+        'params': info,
+        'localize_urls': [],
+    }
 
     pprint(job, indent=2)
     return job
 
+
 def createDatastagerJobHigh(info):
     """
     Create job json for CSK datastager.
-    
+
     Example:
 
     job = {
@@ -83,11 +93,11 @@ def createDatastagerJobHigh(info):
 
     # build params
     job = {
-            'type': 'datastager-high',
-            'name': 'datastager-high-%s' % info['id'],
-            'params': info,
-            'localize_urls': [],
-          }
+        'type': 'datastager-high',
+        'name': 'datastager-high-%s' % info['id'],
+        'params': info,
+        'localize_urls': [],
+    }
 
     pprint(job, indent=2)
     return job

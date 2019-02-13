@@ -1,10 +1,20 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from builtins import map
+from future import standard_library
+standard_library.install_aliases()
+import time as _time
 from datetime import tzinfo, timedelta, datetime
-import re, time
+import re
+import time
 
 ZERO = timedelta(0)
 HOUR = timedelta(hours=1)
 
 # A UTC class.
+
 
 class UTC(tzinfo):
     """UTC"""
@@ -18,17 +28,19 @@ class UTC(tzinfo):
     def dst(self, dt):
         return ZERO
 
+
 utc = UTC()
 
 # A class building tzinfo objects for fixed-offset time zones.
 # Note that FixedOffset(0, "UTC") is a different way to build a
 # UTC tzinfo object.
 
+
 class FixedOffset(tzinfo):
     """Fixed offset in minutes east from UTC."""
 
     def __init__(self, offset, name):
-        self.__offset = timedelta(minutes = offset)
+        self.__offset = timedelta(minutes=offset)
         self.__name = name
 
     def utcoffset(self, dt):
@@ -42,15 +54,15 @@ class FixedOffset(tzinfo):
 
 # A class capturing the platform's idea of local time.
 
-import time as _time
 
-STDOFFSET = timedelta(seconds = -_time.timezone)
+STDOFFSET = timedelta(seconds=-_time.timezone)
 if _time.daylight:
-    DSTOFFSET = timedelta(seconds = -_time.altzone)
+    DSTOFFSET = timedelta(seconds=-_time.altzone)
 else:
     DSTOFFSET = STDOFFSET
 
 DSTDIFF = DSTOFFSET - STDOFFSET
+
 
 class LocalTimezone(tzinfo):
 
@@ -76,6 +88,7 @@ class LocalTimezone(tzinfo):
         stamp = _time.mktime(tt)
         tt = _time.localtime(stamp)
         return tt.tm_isdst > 0
+
 
 Local = LocalTimezone()
 
@@ -113,6 +126,7 @@ DSTEND_1987_2006 = datetime(1, 10, 25, 1)
 # on or after Oct 25.
 DSTSTART_1967_1986 = datetime(1, 4, 24, 2)
 DSTEND_1967_1986 = DSTEND_1987_2006
+
 
 class USTimeZone(tzinfo):
 
@@ -164,44 +178,53 @@ class USTimeZone(tzinfo):
         else:
             return ZERO
 
-Eastern  = USTimeZone(-5, "Eastern",  "EST", "EDT")
-Central  = USTimeZone(-6, "Central",  "CST", "CDT")
+
+Eastern = USTimeZone(-5, "Eastern",  "EST", "EDT")
+Central = USTimeZone(-6, "Central",  "CST", "CDT")
 Mountain = USTimeZone(-7, "Mountain", "MST", "MDT")
-Pacific  = USTimeZone(-8, "Pacific",  "PST", "PDT")
+Pacific = USTimeZone(-8, "Pacific",  "PST", "PDT")
+
 
 def getFormattedDate(dt):
     """Return formatted date string."""
-    
+
     return dt.strftime("%A, %B %d %Y %I:%M%p")
+
 
 def getPSTFromUTC(dt):
     """Return PST datetime object from unaware UTC datetime object."""
-    
+
     return dt.replace(tzinfo=utc).astimezone(Pacific)
+
 
 def getMDY(t):
     """Return MMM DD, YYYY."""
-    
+
     tm = time.strptime(t, "%Y-%m-%d %H:%M:%S")
     return time.strftime("%b %d, %Y", tm)
 
-def getTimeElementsFromString(dtStr):
-	"""Return tuple of (year,month,day,hour,minute,second) from date time string."""
 
-	match = re.match(r'^(\d{4})[/-](\d{2})[/-](\d{2})[\s*T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z?$',dtStr)
-	if match: (year,month,day,hour,minute,second) = map(int,match.groups())
-	else:
-		match = re.match(r'^(\d{4})[/-](\d{2})[/-](\d{2})$',dtStr)
-		if match:
-			(year,month,day) = map(int,match.groups())
-			(hour,minute,second) = (0,0,0)
-		else: raise RuntimeError, "Failed to recognize date format: %s" % dtStr
-	return (year,month,day,hour,minute,second)
+def getTimeElementsFromString(dtStr):
+    """Return tuple of (year,month,day,hour,minute,second) from date time string."""
+
+    match = re.match(
+        r'^(\d{4})[/-](\d{2})[/-](\d{2})[\s*T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z?$', dtStr)
+    if match:
+        (year, month, day, hour, minute, second) = list(map(int, match.groups()))
+    else:
+        match = re.match(r'^(\d{4})[/-](\d{2})[/-](\d{2})$', dtStr)
+        if match:
+            (year, month, day) = list(map(int, match.groups()))
+            (hour, minute, second) = (0, 0, 0)
+        else:
+            raise RuntimeError("Failed to recognize date format: %s" % dtStr)
+    return (year, month, day, hour, minute, second)
+
 
 def getDatetimeFromString(dtStr, dayOnly=False):
     """Return datetime object from date time string."""
-    
-    (year,month,day,hour,minute,second) = getTimeElementsFromString(dtStr)
+
+    (year, month, day, hour, minute, second) = getTimeElementsFromString(dtStr)
     if dayOnly:
         return datetime(year=year, month=month, day=day)
     else:
