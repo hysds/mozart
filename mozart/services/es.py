@@ -47,13 +47,13 @@ def query(index=None):
         if "type" in hit['fields'] and hit['fields']['type'] == "job":
             job_info = hit['fields'].get('job', {}).get('job_info', {})
             job_info['time_queued'] = parse(job_info['time_queued']).isoformat(
-                ' ').split('.')[0] if 'time_queued' in job_info else ''
+                str(' ')).split('.')[0] if 'time_queued' in job_info else ''
             job_info['time_start'] = parse(job_info['time_start']).isoformat(
-                ' ').split('.')[0] if 'time_start' in job_info else ''
+                str(' ')).split('.')[0] if 'time_start' in job_info else ''
             job_info['time_end'] = parse(job_info['time_end']).isoformat(
-                ' ').split('.')[0] if 'time_end' in job_info else ''
+                str(' ')).split('.')[0] if 'time_end' in job_info else ''
         hit['fields']['@timestamp'] = parse(hit['fields']['@timestamp']).isoformat(
-            ' ').split('.')[0] if '@timestamp' in hit['fields'] else ''
+            str(' ')).split('.')[0] if '@timestamp' in hit['fields'] else ''
 
     # return JSONP
     return Response('%s(%s)' % (callback, json.dumps(result)),
