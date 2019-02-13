@@ -542,8 +542,8 @@ class GetContainerAdd(Resource):
         '''
         try:
             # get job id
-            print(request.form)
-            print(request.args)
+            print((request.form))
+            print((request.args))
             name = request.form.get('name', request.args.get('name', None))
             url = request.form.get('url', request.args.get('url', None))
             version = request.form.get(

@@ -53,7 +53,7 @@ if __name__ == '__main__':
     try:
         sts = pop.wait()  # wait for child to terminate and get status
     except Exception as e:
-        print(str(e))
+        print((str(e)))
     status = pop.returncode
     # print "returncode is:",status
     stdOut = pop.stdout.read()
@@ -62,7 +62,7 @@ if __name__ == '__main__':
         if line.startswith("error_queue"):
             COUNT = int(line.split()[1])
             break
-    print("Total number of messages in error_queue:", COUNT)
+    print(("Total number of messages in error_queue:", COUNT))
     if COUNT == 0:
         sys.exit()
 
