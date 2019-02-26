@@ -69,7 +69,7 @@ def login():
         password = form.password.data
         # authenticate ops user account
         if username == app.config['OPS_USER']:
-            ops_passwd_hex = hashlib.sha224(password).hexdigest()
+            ops_passwd_hex = hashlib.sha224(password.encode()).hexdigest()
             if app.config['OPS_PASSWORD_HASH'] == ops_passwd_hex:
                 ldap_info = {}
             else:
