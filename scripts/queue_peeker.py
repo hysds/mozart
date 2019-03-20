@@ -1,5 +1,17 @@
 #!/usr/bin/env python
-import sys, pprint, os, json
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import division
+from __future__ import absolute_import
+from builtins import int
+from builtins import str
+from builtins import input
+from future import standard_library
+standard_library.install_aliases()
+import sys
+import pprint
+import os
+import json
 from subprocess import Popen, PIPE
 
 from pika import BasicProperties
@@ -14,9 +26,10 @@ QUEUE_NAME = None
 def usage():
     """Print usage."""
 
-    print "Usage: %s <host> <queue_name>" % sys.argv[0]
-    print "e.g. %s localhost product_queue" % sys.argv[0]
+    print(("Usage: %s <host> <queue_name>" % sys.argv[0]))
+    print(("e.g. %s localhost product_queue" % sys.argv[0]))
     sys.exit(1)
+
 
 def handle_delivery(channel, method_frame, header_frame, body):
     global COUNT, QUEUE_NAME
@@ -25,23 +38,25 @@ def handle_delivery(channel, method_frame, header_frame, body):
     try:
         j = json.loads(body)
         body = json.dumps(j, indent=2)
-    except: pass
- 
-    print "#" * 80
-    print "queue: %s" % queue_name
-    print "delivery-tag: %i" % method_frame.delivery_tag
-    print "-" * 80
-    print "body: %s" % body
+    except:
+        pass
 
-    #ask for an action
+    print(("#" * 80))
+    print(("queue: %s" % queue_name))
+    print(("delivery-tag: %i" % method_frame.delivery_tag))
+    print(("-" * 80))
+    print(("body: %s" % body))
+
+    # ask for an action
     while COUNT > 0:
-        print "Please select an action:"
-        print "1. Print body of message"
-        print "2. Remove message from %s queue" % queue_name
-        print "3. Leave message on %s queue" % queue_name
-        print "\nPress CTRL-C to quit."
-        option = raw_input("Select [1,2,3] ")
-        if option == '1': print "body: %s" % body
+        print("Please select an action:")
+        print("1. Print body of message")
+        print(("2. Remove message from %s queue" % queue_name))
+        print(("3. Leave message on %s queue" % queue_name))
+        print("\nPress CTRL-C to quit.")
+        option = eval(input("Select [1,2,3] "))
+        if option == '1':
+            print(("body: %s" % body))
         elif option == '2':
             # Acknowledge the message
             channel.basic_ack(delivery_tag=method_frame.delivery_tag)
@@ -51,11 +66,12 @@ def handle_delivery(channel, method_frame, header_frame, body):
             COUNT -= 1
             break
 
-    #quit if no more
+    # quit if no more
     if COUNT == 0:
         channel.stop_consuming()
         CONNECTION.close()
         sys.exit()
+
 
 if __name__ == '__main__':
 
@@ -63,23 +79,27 @@ if __name__ == '__main__':
     try:
         host = sys.argv[1]
         QUEUE_NAME = sys.argv[2]
-    except: usage()
+    except:
+        usage()
 
     # get message count on queue
-    pop = Popen(["sudo", "rabbitmqctl", "list_queues"], 
+    pop = Popen(["sudo", "rabbitmqctl", "list_queues"],
                 stdin=PIPE, stdout=PIPE, stderr=PIPE, env=os.environ)
-    try: sts = pop.wait()  #wait for child to terminate and get status
-    except Exception, e: print str(e)
+    try:
+        sts = pop.wait()  # wait for child to terminate and get status
+    except Exception as e:
+        print((str(e)))
     status = pop.returncode
-    #print "returncode is:",status
+    # print "returncode is:",status
     stdOut = pop.stdout.read()
     stdErr = pop.stderr.read()
     for line in stdOut.split('\n'):
         if line.startswith(QUEUE_NAME):
             COUNT = int(line.split()[1])
             break
-    print "Total number of messages in %s: %d" % (QUEUE_NAME, COUNT)
-    if COUNT == 0: sys.exit()
+    print(("Total number of messages in %s: %d" % (QUEUE_NAME, COUNT)))
+    if COUNT == 0:
+        sys.exit()
 
     # Connect to RabbitMQ
     CONNECTION = BlockingConnection(ConnectionParameters(host))
@@ -99,7 +119,7 @@ if __name__ == '__main__':
     # Start consuming, block until keyboard interrupt
     try:
         channel.start_consuming()
-        print "Press CTRL-C to quit."
+        print("Press CTRL-C to quit.")
     except KeyboardInterrupt:
 
         # Someone pressed CTRL-C, stop consuming and close

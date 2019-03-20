@@ -1,5 +1,13 @@
 #!/usr/bin/env python
-import pika, json
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from builtins import super
+from future import standard_library
+standard_library.install_aliases()
+import pika
+import json
 from pymongo import MongoClient
 
 from leopold.consumer import Consumer, logger
@@ -9,8 +17,8 @@ class StdouterrConsumer(Consumer):
     def __init__(self, amqp_url, exchange, exchange_type, queue, routing_key,
                  mongodb_url, mongodb_name):
         super(StdouterrConsumer, self).__init__(amqp_url, exchange,
-                                                     exchange_type,
-                                                     queue, routing_key)
+                                                exchange_type,
+                                                queue, routing_key)
         self._mongodb_url = mongodb_url
         self._mongodb_name = mongodb_name
         self._client = MongoClient(self._mongodb_url)
@@ -32,7 +40,7 @@ if __name__ == "__main__":
     exchange = ""
     exchange_type = "direct"
     queue = "stdouterr"
-    routing_key = "stdouterr" 
+    routing_key = "stdouterr"
     mongodb_url = "mongodb://localhost/"
     mongodb_name = "mozart"
     status_worker = StdouterrConsumer(amqp_url, exchange, exchange_type,

@@ -1,4 +1,13 @@
-import os, json, requests, traceback
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+import os
+import json
+import requests
+import traceback
 
 from hysds_commons.queue_utils import get_all_queues
 from hysds_commons.job_spec_utils import get_job_spec
@@ -14,12 +23,12 @@ def get_queue_names(ident):
     @return: list of queues
     '''
 
-    #Non-celery queues set
+    # Non-celery queues set
     queues = set(get_all_queues(app.config["RABBITMQ_ADMIN_API"]))
     #app.logger.info("queues: %s" % queues)
     protected = set(app.config["PROTECTED_QUEUES"])
     #app.logger.info("protected: %s" % protected)
-    #Visible generic queues
+    # Visible generic queues
     visible = queues - protected
     #app.logger.info("visible: %s" % visible)
     #app.logger.info("ident: %s" % ident)
@@ -27,12 +36,15 @@ def get_queue_names(ident):
     try:
         spec = get_job_spec(app.config['ES_URL'], ident)
     except Exception as e:
-        app.logger.warn("Failed to get job-spec: {0} proceeding without it. {1}:{2}".format(ident,type(e),e))
+        app.logger.warn(
+            "Failed to get job-spec: {0} proceeding without it. {1}:{2}".format(ident, type(e), e))
     #app.logger.info("spec: %s" % spec)
-    #adding backwards compatibility to queues
-    required = set(spec.get("required-queues", spec.get("required_queues",[])))
-    recommended = set(spec.get("recommended-queues",spec.get("recommended_queues",[])))
-    queue_config = { 
+    # adding backwards compatibility to queues
+    required = set(spec.get("required-queues",
+                            spec.get("required_queues", [])))
+    recommended = set(spec.get("recommended-queues",
+                               spec.get("recommended_queues", [])))
+    queue_config = {
         "queues": sorted(visible | required | recommended),
         "recommended": sorted(required | recommended)
     }

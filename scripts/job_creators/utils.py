@@ -1,3 +1,9 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
 import json
 from pprint import pprint, pformat
 
@@ -7,7 +13,7 @@ from mozart import app
 def notify_by_email(info):
     """
     Create job json for email notification.
-    
+
     Example:
 
     job = {
@@ -31,14 +37,16 @@ def notify_by_email(info):
     params['emails'] = kwargs['email_addresses']
     rule_hit = info['rule_hit']
     urls = rule_hit['_source']['urls']
-    if len(urls) > 0: params['url'] = urls[0]
-    else: params['url'] = None
+    if len(urls) > 0:
+        params['url'] = urls[0]
+    else:
+        params['url'] = None
     job = {
-            'type': 'notify_by_email',
-            'name': 'action-notify_by_email-%s' % info['objectid'],
-            'params': params,
-            'localize_urls': []
-          }
+        'type': 'notify_by_email',
+        'name': 'action-notify_by_email-%s' % info['objectid'],
+        'params': params,
+        'localize_urls': []
+    }
 
     pprint(job, indent=2)
     return job
@@ -47,7 +55,7 @@ def notify_by_email(info):
 def ftp_push(info):
     """
     Create job json for FTP push.
-    
+
     Example:
 
     job = {
@@ -73,14 +81,16 @@ def ftp_push(info):
     params['emails'] = kwargs['email_addresses']
     rule_hit = info['rule_hit']
     urls = rule_hit['_source']['urls']
-    if len(urls) > 0: params['url'] = urls[0]
-    else: params['url'] = None
+    if len(urls) > 0:
+        params['url'] = urls[0]
+    else:
+        params['url'] = None
     job = {
-            'type': 'ftp_push',
-            'name': 'action-ftp_push-%s' % info['objectid'],
-            'params': params,
-            'localize_urls': []
-          }
+        'type': 'ftp_push',
+        'name': 'action-ftp_push-%s' % info['objectid'],
+        'params': params,
+        'localize_urls': []
+    }
 
     pprint(job, indent=2)
     return job

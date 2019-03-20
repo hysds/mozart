@@ -1,5 +1,12 @@
 #!/usr/bin/env python
-import json, logging
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+import json
+import logging
 from pika import BasicProperties
 from pika.adapters import BlockingConnection
 from pika.connection import ConnectionParameters
@@ -25,4 +32,5 @@ def main():
     conn.close()
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()
