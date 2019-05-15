@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+"""
+RabbitMQ queue peeker.
+"""
+
 from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import division
@@ -12,34 +16,30 @@ import sys
 import pprint
 import os
 import json
+import re
+import msgpack
+import argparse
 from subprocess import Popen, PIPE
 
 from pika import BasicProperties
 from pika.adapters import BlockingConnection
-from pika.connection import ConnectionParameters
+from pika.connection import URLParameters
 
+from hysds.celery import app
+
+
+DEF_HOST = re.compile(r'^(.*/)/$')
 CONNECTION = None
 COUNT = 0
 QUEUE_NAME = None
-
-
-def usage():
-    """Print usage."""
-
-    print(("Usage: %s <host> <queue_name>" % sys.argv[0]))
-    print(("e.g. %s localhost product_queue" % sys.argv[0]))
-    sys.exit(1)
 
 
 def handle_delivery(channel, method_frame, header_frame, body):
     global COUNT, QUEUE_NAME
     queue_name = QUEUE_NAME
 
-    try:
-        j = json.loads(body)
-        body = json.dumps(j, indent=2)
-    except:
-        pass
+    j = msgpack.loads(body, encoding="utf-8")
+    body = json.dumps(j, indent=2)
 
     print(("#" * 80))
     print(("queue: %s" % queue_name))
@@ -74,13 +74,12 @@ def handle_delivery(channel, method_frame, header_frame, body):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("queue", help="queue name")
+    args = parser.parse_args()
 
-    # gst host and queue name
-    try:
-        host = sys.argv[1]
-        QUEUE_NAME = sys.argv[2]
-    except:
-        usage()
+    # get queue name
+    QUEUE_NAME = args.queue
 
     # get message count on queue
     pop = Popen(["sudo", "rabbitmqctl", "list_queues"],
@@ -91,8 +90,8 @@ if __name__ == '__main__':
         print((str(e)))
     status = pop.returncode
     # print "returncode is:",status
-    stdOut = pop.stdout.read()
-    stdErr = pop.stderr.read()
+    stdOut = pop.stdout.read().decode()
+    stdErr = pop.stderr.read().decode()
     for line in stdOut.split('\n'):
         if line.startswith(QUEUE_NAME):
             COUNT = int(line.split()[1])
@@ -102,7 +101,10 @@ if __name__ == '__main__':
         sys.exit()
 
     # Connect to RabbitMQ
-    CONNECTION = BlockingConnection(ConnectionParameters(host))
+    match = DEF_HOST.search(app.conf['BROKER_URL'])
+    broker_url = "{}%2F".format(match.group(1)) if match else app.conf['BROKER_URL']
+    print("broker_url: {}".format(broker_url))
+    CONNECTION = BlockingConnection(URLParameters(broker_url))
 
     # Open the channel
     channel = CONNECTION.channel()
@@ -111,7 +113,8 @@ if __name__ == '__main__':
     channel.queue_declare(queue=QUEUE_NAME,
                           durable=True,
                           exclusive=False,
-                          auto_delete=False)
+                          auto_delete=False,
+                          arguments={ 'x-max-priority': 10 })
 
     # Add a queue to consume
     channel.basic_consume(handle_delivery, queue=QUEUE_NAME)
