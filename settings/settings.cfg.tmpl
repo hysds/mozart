@@ -40,9 +40,9 @@ PUCCINI_HOST = "{{ PUCCINI_FQDN }}"
 PUCCINI_USER = "{{ OPS_USER }}"
 
 # Kibana URL
-KIBANA_JOB_METRICS_URL = "http://{{ METRICS_FQDN }}/metrics/#/dashboard/elasticsearch/Job%20Metrics"
-KIBANA_PROV_METRICS_URL = "http://{{ METRICS_FQDN }}/metrics/#/dashboard/elasticsearch/Provenance%20Metrics"
-KIBANA_INSTANCE_STATS_URL = "http://{{ METRICS_FQDN }}/metrics/#/dashboard/elasticsearch/Worker%20Metrics"
+KIBANA_JOB_METRICS_URL = "https://{{ METRICS_FQDN }}/metrics/#/dashboard/elasticsearch/Job%20Metrics"
+KIBANA_PROV_METRICS_URL = "https://{{ METRICS_FQDN }}/metrics/#/dashboard/elasticsearch/Provenance%20Metrics"
+KIBANA_INSTANCE_STATS_URL = "https://{{ METRICS_FQDN }}/metrics/#/dashboard/elasticsearch/Worker%20Metrics"
 
 # Flower URL
 FLOWER_URL = "http://{{ MOZART_FQDN }}:5555"
