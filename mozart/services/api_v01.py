@@ -65,8 +65,7 @@ def swagger_ui():
 
 
 @job_spec_ns.route('/list', endpoint='job_spec-list')
-@api.doc(responses={200: "Success",
-                    500: "Query execution failed"},
+@api.doc(responses={200: "Success", 500: "Query execution failed"},
          description="Get list of registered job types and return as JSON.")
 class GetJobTypes(Resource):
     """Get list of registered job types and return as JSON."""
@@ -74,19 +73,17 @@ class GetJobTypes(Resource):
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
-        'result':  fields.List(fields.String, required=True,
-                               description="list of job types")
+        'message': fields.String(required=True, description="message describing " + "success or failure"),
+        'result':  fields.List(fields.String, required=True, description="list of job types")
     })
+
     @api.marshal_with(resp_model_job_types)
     def get(self):
         '''
         Gets a list of Job Type specifications
         '''
         try:
-            ids = hysds_commons.job_spec_utils.get_job_spec_types(
-                app.config['ES_URL'], logger=app.logger)
+            ids = hysds_commons.job_spec_utils.get_job_spec_types(app.config['ES_URL'], logger=app.logger)
         except Exception as e:
             message = "Failed to query ES for Job types. {0}:{1}".format(
                 type(e), str(e))
@@ -124,8 +121,7 @@ class GetJobSpecType(Resource):
         '''
         try:
             ident = request.form.get('id', request.args.get('id', None))
-            spec = hysds_commons.job_spec_utils.get_job_spec(
-                app.config['ES_URL'], ident, logger=app.logger)
+            spec = hysds_commons.job_spec_utils.get_job_spec(app.config['ES_URL'], ident, logger=app.logger)
         except Exception as e:
             message = "Failed to query ES for Job spec. {0}:{1}".format(
                 type(e), str(e))
@@ -167,8 +163,7 @@ class AddJobSpecType(Resource):
             if spec is None:
                 raise Exception("'spec' must be supplied")
             obj = json.loads(spec)
-            ident = hysds_commons.job_spec_utils.add_job_spec(
-                app.config['ES_URL'], obj, logger=app.logger)
+            ident = hysds_commons.job_spec_utils.add_job_spec(app.config['ES_URL'], obj, logger=app.logger)
         except Exception as e:
             message = "Failed to add ES for Job spec. {0}:{1}".format(
                 type(e), str(e))
@@ -206,8 +201,7 @@ class RemoveJobSpecType(Resource):
         '''
         try:
             ident = request.form.get('id', request.args.get('id', None))
-            hysds_commons.job_spec_utils.remove_job_spec(
-                app.config['ES_URL'], ident, logger=app.logger)
+            hysds_commons.job_spec_utils.remove_job_spec(app.config['ES_URL'], ident, logger=app.logger)
         except Exception as e:
             message = "Failed to add ES for Job spec. {0}:{1}".format(
                 type(e), str(e))
