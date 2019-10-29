@@ -527,10 +527,10 @@ class GetContainerAdd(Resource):
         '''
         try:
             # get job id
-            name = request.form.get('name', request.args.get('name', request.json.get('name', None)))
-            url = request.form.get('url', request.args.get('url', request.json.get('url', None)))
-            version = request.form.get('version', request.args.get('version', requests.json.get('version', None)))
-            digest = request.form.get('digest', request.args.get('digest', requests.json.get('digest', None)))
+            name = request.form.get('name', request.args.get('name', None))
+            url = request.form.get('url', request.args.get('url', None))
+            version = request.form.get('version', request.args.get('version', None))
+            digest = request.form.get('digest', request.args.get('digest', None))
             if name is None:
                 raise Exception("'name' must be supplied")
             if url is None:
