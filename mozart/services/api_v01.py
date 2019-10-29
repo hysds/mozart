@@ -527,12 +527,10 @@ class GetContainerAdd(Resource):
         '''
         try:
             # get job id
-            # app.logger.info('request.form: {}'.format(request.form))
-            # app.logger.info('request.args: {}'.format(request.args))
-            name = request.form.get('name', request.args.get('name', None))
-            url = request.form.get('url', request.args.get('url', None))
-            version = request.form.get('version', request.args.get('version', None))
-            digest = request.form.get('digest', request.args.get('digest', None))
+            name = request.form.get('name', request.args.get('name', request.json.get('name', None)))
+            url = request.form.get('url', request.args.get('url', request.json.get('url', None)))
+            version = request.form.get('version', request.args.get('version', requests.json.get('version', None)))
+            digest = request.form.get('digest', request.args.get('digest', requests.json.get('digest', None)))
             if name is None:
                 raise Exception("'name' must be supplied")
             if url is None:
@@ -544,8 +542,7 @@ class GetContainerAdd(Resource):
             ident = hysds_commons.container_utils.add_container(app.config['ES_URL'], name, url, version, digest,
                                                                 logger=app.logger)
         except Exception as e:
-            message = "Failed to add container {2}. {0}:{1}".format(
-                type(e), str(e), name)
+            message = "Failed to add container {2}. {0}:{1}".format(type(e), str(e), name)
             app.logger.warning(message)
             app.logger.warning(traceback.format_exc(e))
             return {'success': False, 'message': message}, 500
