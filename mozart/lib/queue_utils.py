@@ -33,17 +33,17 @@ def get_queue_names(ident):
     #app.logger.info("visible: %s" % visible)
     #app.logger.info("ident: %s" % ident)
     spec = {}
+
     try:
         spec = get_job_spec(app.config['ES_URL'], ident)
     except Exception as e:
         app.logger.warn(
             "Failed to get job-spec: {0} proceeding without it. {1}:{2}".format(ident, type(e), e))
+
     #app.logger.info("spec: %s" % spec)
     # adding backwards compatibility to queues
-    required = set(spec.get("required-queues",
-                            spec.get("required_queues", [])))
-    recommended = set(spec.get("recommended-queues",
-                               spec.get("recommended_queues", [])))
+    required = set(spec.get("required-queues", spec.get("required_queues", [])))
+    recommended = set(spec.get("recommended-queues", spec.get("recommended_queues", [])))
     queue_config = {
         "queues": sorted(visible | required | recommended),
         "recommended": sorted(required | recommended)

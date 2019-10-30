@@ -85,8 +85,7 @@ class GetJobTypes(Resource):
         Gets a list of Job Type specifications
         '''
         try:
-            ids = hysds_commons.job_spec_utils.get_job_spec_types(
-                app.config['ES_URL'], logger=app.logger)
+            ids = hysds_commons.job_spec_utils.get_job_spec_types(app.config['ES_URL'], logger=app.logger)
         except Exception as e:
             message = "Failed to query ES for Job types. {0}:{1}".format(
                 type(e), str(e))
@@ -124,8 +123,7 @@ class GetJobSpecType(Resource):
         '''
         try:
             ident = request.form.get('id', request.args.get('id', None))
-            spec = hysds_commons.job_spec_utils.get_job_spec(
-                app.config['ES_URL'], ident, logger=app.logger)
+            spec = hysds_commons.job_spec_utils.get_job_spec(app.config['ES_URL'], ident, logger=app.logger)
         except Exception as e:
             message = "Failed to query ES for Job spec. {0}:{1}".format(
                 type(e), str(e))
@@ -167,8 +165,7 @@ class AddJobSpecType(Resource):
             if spec is None:
                 raise Exception("'spec' must be supplied")
             obj = json.loads(spec)
-            ident = hysds_commons.job_spec_utils.add_job_spec(
-                app.config['ES_URL'], obj, logger=app.logger)
+            ident = hysds_commons.job_spec_utils.add_job_spec(app.config['ES_URL'], obj, logger=app.logger)
         except Exception as e:
             message = "Failed to add ES for Job spec. {0}:{1}".format(
                 type(e), str(e))
@@ -206,8 +203,7 @@ class RemoveJobSpecType(Resource):
         '''
         try:
             ident = request.form.get('id', request.args.get('id', None))
-            hysds_commons.job_spec_utils.remove_job_spec(
-                app.config['ES_URL'], ident, logger=app.logger)
+            hysds_commons.job_spec_utils.remove_job_spec(app.config['ES_URL'], ident, logger=app.logger)
         except Exception as e:
             message = "Failed to add ES for Job spec. {0}:{1}".format(
                 type(e), str(e))
@@ -550,14 +546,12 @@ class GetContainerAdd(Resource):
         '''
         try:
             # get job id
-            print((request.form))
-            print((request.args))
+            # app.logger.info('request.form: {}'.format(request.form))
+            # app.logger.info('request.args: {}'.format(request.args))
             name = request.form.get('name', request.args.get('name', None))
             url = request.form.get('url', request.args.get('url', None))
-            version = request.form.get(
-                'version', request.args.get('version', None))
-            digest = request.form.get(
-                'digest', request.args.get('digest', None))
+            version = request.form.get('version', request.args.get('version', None))
+            digest = request.form.get('digest', request.args.get('digest', None))
             if name is None:
                 raise Exception("'name' must be supplied")
             if url is None:
@@ -566,9 +560,8 @@ class GetContainerAdd(Resource):
                 raise Exception("'version' must be supplied")
             if digest is None:
                 raise Exception("'digest' must be supplied")
-            ident = hysds_commons.container_utils.add_container(app.config['ES_URL'],
-                                                                name, url, version,
-                                                                digest, logger=app.logger)
+            ident = hysds_commons.container_utils.add_container(app.config['ES_URL'], name, url, version, digest,
+                                                                logger=app.logger)
         except Exception as e:
             message = "Failed to add container {2}. {0}:{1}".format(
                 type(e), str(e), name)
@@ -606,8 +599,7 @@ class GetContainerRemove(Resource):
         try:
             # get job id
             ident = request.form.get('id', request.args.get('id', None))
-            hysds_commons.container_utils.remove_container(
-                app.config['ES_URL'], ident, logger=app.logger)
+            hysds_commons.container_utils.remove_container(app.config['ES_URL'], ident, logger=app.logger)
         except Exception as e:
             message = "Failed to remove container {2}. {0}:{1}".format(
                 type(e), str(e), ident)
@@ -645,8 +637,7 @@ class GetContainerInfo(Resource):
         try:
             # get job id
             ident = request.form.get('id', request.args.get('id', None))
-            info = hysds_commons.container_utils.get_container(
-                app.config['ES_URL'], ident, logger=app.logger)
+            info = hysds_commons.container_utils.get_container(app.config['ES_URL'], ident, logger=app.logger)
         except Exception as e:
             message = "Failed to get info for container {2}. {0}:{1}".format(
                 type(e), str(e), ident)
