@@ -284,6 +284,8 @@ class SubmitJob(Resource):
                         help='Job priority in the range of 0 to 9')
     parser.add_argument('tags', required=False, type=str,
                         help='JSON list of tags, e.g. ["dumby", "test_job"]')
+    parser.add_argument('name', required=False,
+                        type=str, help='base job name override; defaults to job type')
     parser.add_argument('payload_hash', required=False,
                         type=str, help='user-generated payload hash')
     parser.add_argument('enable_dedup', required=False,
@@ -315,6 +317,8 @@ class SubmitJob(Resource):
             priority = int(request.form.get(
                 'priority', request.args.get('priority', 0)))
             tags = request.form.get('tags', request.args.get('tags', None))
+            job_name = request.form.get(
+                'name', request.args.get('name', None))
             payload_hash = request.form.get(
                 'payload_hash', request.args.get('payload_hash', None))
             enable_dedup = str(request.form.get(
@@ -345,6 +349,7 @@ class SubmitJob(Resource):
             app.logger.warning(job_queue)
             job_json = hysds_commons.job_utils.resolve_hysds_job(job_type, job_queue, priority,
                                                                  tags, params,
+                                                                 job_name=job_name,
                                                                  payload_hash=payload_hash,
                                                                  enable_dedup=enable_dedup)
             ident = hysds_commons.job_utils.submit_hysds_job(job_json)
