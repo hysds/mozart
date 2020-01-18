@@ -19,6 +19,6 @@ setup(
                       'Flask-Login>=0.3.2', 'simpleldap>=0.8',
                       'simplekml>=1.2.3', 'tornado>=4.0.2', 'pika>=0.9.14',
                       'pymongo>=2.7.2', 'boto>=2.38.0', 'python-dateutil',
-                      'elasticsearch>=1.0.0,<2.0.0', 'pytz', 'numpy',
+                      'elasticsearch>=7.0.0,<8.0.0', 'elasticsearch-dsl>=7.0.0,<8.0.0', 'pytz', 'numpy',
                       'flask-restplus>=0.9.2', 'future>=0.17.1']
 )
