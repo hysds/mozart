@@ -885,3 +885,51 @@ class AddLogEvent(Resource):
         return {'success': True,
                 'message': '',
                 'result': uuid}
+
+
+@ns.route('/on-demand', endpoint='on-demand')
+@api.doc(responses={200: "Success",
+                    500: "Execution failed"},
+         description="Retrieve on demand jobs")
+class OnDemandJobs(Resource):
+    """On Demand Jobs API."""
+
+    resp_model = api.model('JsonResponse', {
+        'success': fields.Boolean(required=True, description="if 'false', " +
+                                  "encountered exception; otherwise no errors " +
+                                  "occurred"),
+        'message': fields.String(required=True, description="message describing " +
+                                 "success or failure"),
+        'objectid': fields.String(required=True, description="ID of indexed dataset"),
+        'index': fields.String(required=True, description="dataset index name"),
+    })
+
+    parser = api.parser()
+    # parser.add_argument('dataset_info', required=True, type=str,
+    #                     location='form',  help="HySDS dataset info JSON")
+
+    # @api.marshal_with(resp_model)
+    def get(self):
+        """List available on demand jobs"""
+        query = {
+            "_source": ["id", "job-specification", "label", "job-version"],
+            "sort": [{"label.keyword": {"order": "asc"}}],
+            "query": {
+                "exists": {
+                    "field": "job-specification"
+                }
+            }
+        }
+
+        documents = get_es_scrolled_data(ES_URL, 'hysds_ios', query)
+        documents = [{
+            'hysds_io': row['_source']['id'],
+            'job_spec': row['_source']['job-specification'],
+            'version': row['_source']['job-version'],
+            'label': row['_source']['label']
+        } for row in documents]
+
+        return {
+            'success': True,
+            'result': documents
+        }

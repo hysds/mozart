@@ -4,8 +4,7 @@
       "analyzer": {
         "default": {
           "filter": [
-            "standard", 
-            "lowercase", 
+            "lowercase",
             "word_delimiter"
           ], 
           "tokenizer": "keyword"
