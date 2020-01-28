@@ -18,14 +18,18 @@ from flask import jsonify, Blueprint, request, Response, render_template, make_r
 from flask_restplus import Api, apidoc, Resource, fields
 from flask_login import login_required
 
+from hysds.celery import app as celery_app
+from hysds.task_worker import do_submit_task
+
 import hysds_commons.container_utils
 import hysds_commons.hysds_io_utils
 import hysds_commons.job_spec_utils
 import hysds_commons.job_utils
+from hysds_commons.action_utils import check_passthrough_query
 
 from hysds.log_utils import log_custom_event
 
-from mozart import app
+from mozart import app, mozart_es
 
 # Library backend imports
 import mozart.lib.job_utils
@@ -58,6 +62,9 @@ hysds_io_ns = api.namespace(HYSDS_IO_NS, description="HySDS IO operations")
 EVENT_NS = "event"
 event_ns = api.namespace(EVENT_NS, description="HySDS event stream operations")
 
+ON_DEMAND_NS = "on-demand"
+on_demand_ns = api.namespace(ON_DEMAND_NS, description="For retrieving and submitting on-demand jobs for mozart")
+
 
 @services.route('/doc/', endpoint='api_doc')
 def swagger_ui():
@@ -79,9 +86,9 @@ class GetJobTypes(Resource):
 
     @api.marshal_with(resp_model_job_types)
     def get(self):
-        '''
+        """
         Gets a list of Job Type specifications
-        '''
+        """
         try:
             ids = hysds_commons.job_spec_utils.get_job_spec_types(app.config['ES_URL'], logger=app.logger)
         except Exception as e:
@@ -116,9 +123,9 @@ class GetJobSpecType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Gets a Job Type specification object for the given ID.
-        '''
+        """
         try:
             ident = request.form.get('id', request.args.get('id', None))
             spec = hysds_commons.job_spec_utils.get_job_spec(app.config['ES_URL'], ident, logger=app.logger)
@@ -155,9 +162,9 @@ class AddJobSpecType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def post(self):
-        '''
+        """
         Add a Job Type specification JSON object.
-        '''
+        """
         try:
             spec = request.form.get('spec', request.args.get('spec', None))
             if spec is None:
@@ -196,9 +203,9 @@ class RemoveJobSpecType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Remove Job Type specification for the given ID.
-        '''
+        """
         try:
             ident = request.form.get('id', request.args.get('id', None))
             hysds_commons.job_spec_utils.remove_job_spec(app.config['ES_URL'], ident, logger=app.logger)
@@ -234,9 +241,7 @@ class GetQueueNames(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
-        Gets a listing of non-celery queues handling jobs.
-        '''
+        """Gets a listing of non-celery queues handling jobs."""
         try:
             ident = request.form.get('id', request.args.get('id', None))
             queues = mozart.lib.queue_utils.get_queue_names(ident)
@@ -300,9 +305,7 @@ class SubmitJob(Resource):
     @api.marshal_with(resp_model)
     @api.expect(parser, validate=True)
     def post(self):
-        '''
-        Submits a job to run inside HySDS
-        '''
+        """Submits a job to run inside HySDS"""
         try:
             app.logger.warning(request.form)
             job_type = request.form.get('type', request.args.get('type', None))
@@ -330,8 +333,7 @@ class SubmitJob(Resource):
             except Exception as e:
                 raise Exception(
                     "Failed to parse input tags. '{0}' is malformed".format(tags))
-            params = request.form.get(
-                'params', request.args.get('params', "{}"))
+            params = request.form.get('params', request.args.get('params', "{}"))
             app.logger.warning(params)
             try:
                 if not params is None:
@@ -382,9 +384,9 @@ class GetJobStatus(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Gets the status of a submitted job based on job id
-        '''
+        """
         try:
             # get job id
             ident = request.form.get('id', request.args.get('id', None))
@@ -426,9 +428,9 @@ class GetJobs(Resource):
 
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Paginated list submitted jobs 
-        '''
+        """
         try:
             page_size = request.form.get(
                 'page_size', request.args.get('page_size', 100))
@@ -466,9 +468,9 @@ class GetJobInfo(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Get complete infor on submitted job based on id
-        '''
+        """
         try:
             # get job id
             ident = request.form.get('id', request.args.get('id', None))
@@ -501,9 +503,9 @@ class GetContainerTypes(Resource):
     })
     @api.marshal_with(resp_model_job_types)
     def get(self):
-        '''
+        """
         Get a list of containers managed by Mozart
-        '''
+        """
         try:
             ids = hysds_commons.container_utils.get_container_types(
                 app.config['ES_URL'], logger=app.logger)
@@ -544,9 +546,9 @@ class GetContainerAdd(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def post(self):
-        '''
+        """
         Add a container specification to Mozart
-        '''
+        """
         try:
             # get job id
             name = request.form.get('name', request.args.get('name', None))
@@ -593,9 +595,9 @@ class GetContainerRemove(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Remove container based on ID
-        '''
+        """
         try:
             # get job id
             ident = request.form.get('id', request.args.get('id', None))
@@ -631,9 +633,9 @@ class GetContainerInfo(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Get information on container by ID
-        '''
+        """
         try:
             # get job id
             ident = request.form.get('id', request.args.get('id', None))
@@ -666,9 +668,9 @@ class GetHySDSIOTypes(Resource):
     })
     @api.marshal_with(resp_model_job_types)
     def get(self):
-        '''
+        """
         List HySDS IO specifications
-        '''
+        """
         try:
             ids = hysds_commons.hysds_io_utils.get_hysds_io_types(
                 app.config["ES_URL"], logger=app.logger)
@@ -704,9 +706,9 @@ class GetHySDSIOType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Gets a HySDS-IO specification by ID
-        '''
+        """
         try:
             ident = request.form.get('id', request.args.get('id', None))
             spec = hysds_commons.hysds_io_utils.get_hysds_io(
@@ -744,9 +746,7 @@ class AddHySDSIOType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def post(self):
-        '''
-        Add a HySDS IO specification
-        '''
+        """Add a HySDS IO specification"""
         try:
             spec = request.form.get('spec', request.args.get('spec', None))
             if spec is None:
@@ -785,9 +785,7 @@ class RemoveHySDSIOType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
-        Remove HySDS IO for the given ID
-        '''
+        """Remove HySDS IO for the given ID"""
         try:
             ident = request.form.get('id', request.args.get('id', None))
             hysds_commons.hysds_io_utils.remove_hysds_io(
@@ -887,7 +885,7 @@ class AddLogEvent(Resource):
                 'result': uuid}
 
 
-@ns.route('/on-demand', endpoint='on-demand')
+@on_demand_ns.route('', endpoint='on-demand')
 @api.doc(responses={200: "Success",
                     500: "Execution failed"},
          description="Retrieve on demand jobs")
@@ -921,7 +919,7 @@ class OnDemandJobs(Resource):
             }
         }
 
-        documents = get_es_scrolled_data(ES_URL, 'hysds_ios', query)
+        documents = mozart_es.query('hysds_ios', query)
         documents = [{
             'hysds_io': row['_source']['id'],
             'job_spec': row['_source']['job-specification'],
@@ -932,4 +930,123 @@ class OnDemandJobs(Resource):
         return {
             'success': True,
             'result': documents
+        }
+
+
+@on_demand_ns.route('/job-params', endpoint='job-params')
+@api.doc(responses={200: "Success",
+                    500: "Execution failed"},
+         description="Retrieve on job params for specific jobs")
+class JobParams(Resource):
+    """Job Params API."""
+
+    resp_model = api.model('JsonResponse', {
+        'success': fields.Boolean(required=True, description="if 'false', " +
+                                  "encountered exception; otherwise no errors " +
+                                  "occurred"),
+        'message': fields.String(required=True, description="message describing " +
+                                 "success or failure"),
+        'objectid': fields.String(required=True, description="ID of indexed dataset"),
+        'index': fields.String(required=True, description="dataset index name"),
+    })
+
+    parser = api.parser()
+    # parser.add_argument('dataset_info', required=True, type=str,
+    #                     location='form',  help="HySDS dataset info JSON")
+
+    # @api.marshal_with(resp_model)
+    def get(self):
+        job_type = request.args.get('job_type')
+        if not job_type:
+            return {'success': False, 'message': 'job_type not provided'}, 400
+
+        query = {
+            "query": {
+                # "term": {"_id": job_type}
+                "term": {"job-specification.keyword": job_type}
+            }
+        }
+        documents = mozart_es.search(index='hysds_ios', query=query)
+
+        if documents['hits']['total']['value'] == 0:
+            error_message = '%s not found' % job_type
+            return {'success': False, 'message': error_message}, 404
+
+        job_type = documents['hits']['hits'][0]
+        job_params = job_type['_source']['params']
+        job_params = list(filter(lambda x: x['from'] == 'submitter', job_params))
+
+        return {
+            'success': True,
+            'submission_type': job_type['_source'].get('submission_type'),
+            'hysds_io': job_type['_source']['id'],
+            'params': job_params
+        }
+
+    def post(self):
+        """
+        submits on demand job
+        :return: submit job id
+        """
+        # TODO: add user auth and permissions
+        request_data = request.json
+        if not request_data:
+            request_data = request.form
+
+        tag = request_data.get('tags', None)
+        job_type = request_data.get('job_type', None)
+        hysds_io = request_data.get('hysds_io', None)
+        queue = request_data.get('queue', None)
+        priority = int(request_data.get('priority', 0))
+        query_string = request_data.get('query', None)
+        kwargs = request_data.get('kwargs', None)
+
+        query = json.loads(query_string)
+        query_string = json.dumps(query)
+
+        if tag is None or job_type is None or hysds_io is None or queue is None or query_string is None:
+            return {
+                'success': False,
+                'message': 'missing field: [tags, job_type, hysds_io, queue, query]'
+            }, 400
+
+        doc = mozart_es.get_by_id('hysds_ios', hysds_io, safe=True)
+        if doc is False:
+            app.logger.error('failed to fetch %s, not found in hysds_ios' % hysds_io)
+            return {
+                'success': False,
+                'message': '%s not found' % hysds_io
+            }, 404
+
+
+        params = doc['_source']['params']
+        is_passthrough_query = check_passthrough_query(params)
+
+        rule = {
+            'username': 'example_user',
+            'workflow': hysds_io,
+            'priority': priority,
+            'enabled': True,
+            'job_type': job_type,
+            'rule_name': tag,
+            'kwargs': kwargs,
+            'query_string': query_string,
+            'query': query,
+            'passthru_query': is_passthrough_query,
+            'query_all': False,
+            'queue': queue
+        }
+
+        payload = {
+            'type': 'job_iterator',
+            'function': 'hysds_commons.job_iterator.iterate',
+            'args': ["tosca", rule],
+        }
+
+        on_demand_job_queue = celery_app.conf['ON_DEMAND_JOB_QUEUE']
+        celery_task = do_submit_task(payload, on_demand_job_queue)
+
+        return {
+            'success': True,
+            'result': celery_task.id
         }
