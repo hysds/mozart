@@ -932,6 +932,73 @@ class OnDemandJobs(Resource):
             'result': documents
         }
 
+    def post(self):
+        """
+        submits on demand job
+        :return: submit job id
+        """
+        # TODO: add user auth and permissions
+        request_data = request.json
+        if not request_data:
+            request_data = request.form
+
+        tag = request_data.get('tags', None)
+        job_type = request_data.get('job_type', None)
+        hysds_io = request_data.get('hysds_io', None)
+        queue = request_data.get('queue', None)
+        priority = int(request_data.get('priority', 0))
+        query_string = request_data.get('query', None)
+        kwargs = request_data.get('kwargs', '{}')
+
+        query = json.loads(query_string)
+        query_string = json.dumps(query)
+
+        if tag is None or job_type is None or hysds_io is None or queue is None or query_string is None:
+            return {
+                'success': False,
+                'message': 'missing field: [tags, job_type, hysds_io, queue, query]'
+            }, 400
+
+        doc = mozart_es.get_by_id('hysds_ios', hysds_io, safe=True)
+        if doc is False:
+            app.logger.error('failed to fetch %s, not found in hysds_ios' % hysds_io)
+            return {
+                'success': False,
+                'message': '%s not found' % hysds_io
+            }, 404
+
+        params = doc['_source']['params']
+        is_passthrough_query = check_passthrough_query(params)
+
+        rule = {
+            'username': 'example_user',
+            'workflow': hysds_io,
+            'priority': priority,
+            'enabled': True,
+            'job_type': job_type,
+            'rule_name': tag,
+            'kwargs': kwargs,
+            'query_string': query_string,
+            'query': query,
+            'passthru_query': is_passthrough_query,
+            'query_all': False,
+            'queue': queue
+        }
+
+        payload = {
+            'type': 'job_iterator',
+            'function': 'hysds_commons.job_iterator.iterate',
+            'args': ["tosca", rule],
+        }
+
+        on_demand_job_queue = celery_app.conf['ON_DEMAND_JOB_QUEUE']
+        celery_task = do_submit_task(payload, on_demand_job_queue)
+
+        return {
+            'success': True,
+            'result': celery_task.id
+        }
+
 
 @on_demand_ns.route('/job-params', endpoint='job-params')
 @api.doc(responses={200: "Success",
@@ -981,72 +1048,4 @@ class JobParams(Resource):
             'submission_type': job_type['_source'].get('submission_type'),
             'hysds_io': job_type['_source']['id'],
             'params': job_params
-        }
-
-    def post(self):
-        """
-        submits on demand job
-        :return: submit job id
-        """
-        # TODO: add user auth and permissions
-        request_data = request.json
-        if not request_data:
-            request_data = request.form
-
-        tag = request_data.get('tags', None)
-        job_type = request_data.get('job_type', None)
-        hysds_io = request_data.get('hysds_io', None)
-        queue = request_data.get('queue', None)
-        priority = int(request_data.get('priority', 0))
-        query_string = request_data.get('query', None)
-        kwargs = request_data.get('kwargs', None)
-
-        query = json.loads(query_string)
-        query_string = json.dumps(query)
-
-        if tag is None or job_type is None or hysds_io is None or queue is None or query_string is None:
-            return {
-                'success': False,
-                'message': 'missing field: [tags, job_type, hysds_io, queue, query]'
-            }, 400
-
-        doc = mozart_es.get_by_id('hysds_ios', hysds_io, safe=True)
-        if doc is False:
-            app.logger.error('failed to fetch %s, not found in hysds_ios' % hysds_io)
-            return {
-                'success': False,
-                'message': '%s not found' % hysds_io
-            }, 404
-
-
-        params = doc['_source']['params']
-        is_passthrough_query = check_passthrough_query(params)
-
-        rule = {
-            'username': 'example_user',
-            'workflow': hysds_io,
-            'priority': priority,
-            'enabled': True,
-            'job_type': job_type,
-            'rule_name': tag,
-            'kwargs': kwargs,
-            'query_string': query_string,
-            'query': query,
-            'passthru_query': is_passthrough_query,
-            'query_all': False,
-            'queue': queue
-        }
-
-        payload = {
-            'type': 'job_iterator',
-            'function': 'hysds_commons.job_iterator.iterate',
-            'args': ["tosca", rule],
-        }
-
-        on_demand_job_queue = celery_app.conf['ON_DEMAND_JOB_QUEUE']
-        celery_task = do_submit_task(payload, on_demand_job_queue)
-
-        return {
-            'success': True,
-            'result': celery_task.id
         }
