@@ -988,7 +988,7 @@ class OnDemandJobs(Resource):
         payload = {
             'type': 'job_iterator',
             'function': 'hysds_commons.job_iterator.iterate',
-            'args': ["tosca", rule],
+            'args': ["figaro", rule],
         }
 
         on_demand_job_queue = celery_app.conf['ON_DEMAND_JOB_QUEUE']
