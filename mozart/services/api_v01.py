@@ -13,6 +13,7 @@ import requests
 import types
 import re
 import traceback
+from datetime import datetime
 
 from flask import jsonify, Blueprint, request, Response, render_template, make_response
 from flask_restplus import Api, apidoc, Resource, fields
@@ -37,24 +38,20 @@ import mozart.lib.queue_utils
 
 
 services = Blueprint('api_v0-1', __name__, url_prefix='/api/v0.1')
-api = Api(services, ui=False, version="0.1", title="Mozart API",
-          description="API for HySDS job submission and query.")
-
+api = Api(services, ui=False, version="0.1", title="Mozart API", description="API for HySDS job submission and query.")
 
 # Namespace declarations
 QUEUE_NS = "queue"
 queue_ns = api.namespace(QUEUE_NS, description="Mozart queue operations")
 
 JOBSPEC_NS = "job_spec"
-job_spec_ns = api.namespace(
-    JOBSPEC_NS, description="Mozart job-specification operations")
+job_spec_ns = api.namespace(JOBSPEC_NS, description="Mozart job-specification operations")
 
 JOB_NS = "job"
 job_ns = api.namespace(JOB_NS, description="Mozart job operations")
 
 CONTAINER_NS = "container"
-container_ns = api.namespace(
-    CONTAINER_NS, description="Mozart container operations")
+container_ns = api.namespace(CONTAINER_NS, description="Mozart container operations")
 
 HYSDS_IO_NS = "hysds_io"
 hysds_io_ns = api.namespace(HYSDS_IO_NS, description="HySDS IO operations")
@@ -64,6 +61,9 @@ event_ns = api.namespace(EVENT_NS, description="HySDS event stream operations")
 
 ON_DEMAND_NS = "on-demand"
 on_demand_ns = api.namespace(ON_DEMAND_NS, description="For retrieving and submitting on-demand jobs for mozart")
+
+USER_RULE_NS = "user-rules"
+user_rule_ns = api.namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user rules")
 
 
 @services.route('/doc/', endpoint='api_doc')
@@ -1048,4 +1048,248 @@ class JobParams(Resource):
             'submission_type': job_type['_source'].get('submission_type'),
             'hysds_io': job_type['_source']['id'],
             'params': job_params
+        }
+
+
+@user_rule_ns.route('', endpoint='user-rules')
+@api.doc(responses={200: "Success",
+                    500: "Execution failed"},
+         description="Retrieve on job params for specific jobs")
+class UserRules(Resource):
+    """User Rules API"""
+
+    def get(self):
+        # TODO: add user role and permissions
+        _id = request.args.get('id')
+        user_rules_index = app.config['USER_RULES_INDEX']
+
+        if _id:
+            rule = mozart_es.get_by_id(user_rules_index, _id, safe=True)
+            if rule['found'] is True:
+                rule = {**rule, **rule['_source']}
+                return {
+                    'success': True,
+                    'rule': rule
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': rule['message']
+                }, 500
+
+        query = {"query": {"match_all": {}}}
+        user_rules = mozart_es.query(user_rules_index, query)
+
+        parsed_user_rules = []
+        for rule in user_rules:
+            rule_copy = rule.copy()
+            rule_temp = {**rule_copy, **rule['_source']}
+            rule_temp.pop('_source')
+            parsed_user_rules.append(rule_temp)
+
+        return {
+            'success': True,
+            'rules': parsed_user_rules
+        }
+
+    def post(self):
+        user_rules_index = app.config['USER_RULES_INDEX']
+
+        request_data = request.json or request.form
+        rule_name = request_data.get('rule_name')
+        hysds_io = request_data.get('workflow')
+        job_spec = request_data.get('job_spec')
+        priority = int(request_data.get('priority', 0))
+        query_string = request_data.get('query_string')
+        kwargs = request_data.get('kwargs', '{}')
+        queue = request_data.get('queue')
+
+        username = "ops"  # TODO: add user role and permissions, hard coded to "ops" for now
+
+        if not rule_name or not hysds_io or not job_spec or not query_string or not queue:
+            missing_params = []
+            if not rule_name:
+                missing_params.append('rule_name')
+            if not hysds_io:
+                missing_params.append('workflow')
+            if not job_spec:
+                missing_params.append('job_spec')
+            if not query_string:
+                missing_params.append('query_string')
+            if not queue:
+                missing_params.append('queue')
+            return {
+                'success': False,
+                'message': 'Params not specified: %s' % ', '.join(missing_params),
+                'result': None,
+            }, 400
+
+        try:
+            parsed_query = json.loads(query_string)
+            query_string = json.dumps(parsed_query)
+        except (ValueError, TypeError) as e:
+            app.logger.error(e)
+            return {
+                'success': False,
+                'message': 'invalid elasticsearch query JSON'
+            }, 400
+
+        # check if rule name already exists
+        rule_exists_query = {
+            "query": {
+                "term": {
+                    "rule_name": rule_name
+                }
+            }
+        }
+        # existing_rules = es.count(index=user_rules_index, body=rule_exists_query)
+        existing_rules_count = mozart_es.get_count(user_rules_index, rule_exists_query)
+        if existing_rules_count > 0:
+            return {
+                'success': False,
+                'message': 'user rule already exists: %s' % rule_name
+            }, 409
+
+        # check if job_type (hysds_io) exists in elasticsearch
+        job_type = mozart_es.get_by_id('hysds_ios', hysds_io, safe=True)
+        if not job_type['found']:
+            return {
+                'success': False,
+                'message': '%s not found' % hysds_io
+            }, 400
+
+        params = job_type['_source']['params']
+        is_passthrough_query = check_passthrough_query(params)
+
+        now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        new_doc = {
+            "workflow": hysds_io,
+            "job_spec": job_spec,
+            "priority": priority,
+            "rule_name": rule_name,
+            "username": username,
+            "query_string": query_string,
+            "kwargs": kwargs,
+            "hysds_io": hysds_io,
+            "job_type": hysds_io,
+            "enabled": True,
+            "query": json.loads(query_string),
+            "passthru_query": is_passthrough_query,
+            "query_all": False,
+            "queue": queue,
+            "modified_time": now,
+            "creation_time": now,
+        }
+
+        result = mozart_es.index_document(user_rules_index, new_doc, refresh=True)
+        return {
+            'success': True,
+            'message': 'rule created',
+            'result': result
+        }
+
+    def put(self):  # TODO: add user role and permissions
+        request_data = request.json or request.form
+
+        _id = request_data.get('id')
+        if not _id:
+            return {
+                'result': False,
+                'message': 'id not included'
+            }, 400
+
+        user_rules_index = app.config['USER_RULES_INDEX']
+
+        rule_name = request_data.get('rule_name')
+        hysds_io = request_data.get('workflow')
+        job_spec = request_data.get('job_spec')
+        priority = request_data.get('priority')
+        query_string = request_data.get('query_string')
+        kwargs = request_data.get('kwargs')
+        queue = request_data.get('queue')
+        enabled = request_data.get('enabled')
+
+        # check if job_type (hysds_io) exists in elasticsearch (only if we're updating job_type)
+        if hysds_io:
+            # job_type = get_by_id(ES_URL, 'hysds_ios', '_doc', hysds_io, safe=True, logger=app.logger)
+            job_type = mozart_es.get_by_id('hysds_ios', hysds_io, safe=True)
+            if not job_type['found']:
+                return {
+                    'success': False,
+                    'message': 'job_type not found: %s' % hysds_io
+                }, 400
+
+        app.logger.info('finding existing user rule: %s' % _id)
+        # es.get(index=user_rules_index, doc_type='_doc', id=_id)
+        existing_rule = mozart_es.get_by_id(user_rules_index, _id, safe=True)
+        if not existing_rule['found']:
+            app.logger.info('rule not found %s' % _id)
+            return {
+                'result': False,
+                'message': 'user rule not found: %s' % _id
+            }, 404
+
+        update_doc = {}
+        if rule_name:
+            update_doc['rule_name'] = rule_name
+        if hysds_io:
+            update_doc['hysds_io'] = hysds_io
+            update_doc['job_type'] = hysds_io
+        if job_spec:
+            update_doc['job_spec'] = job_spec
+        if priority:
+            update_doc['priority'] = int(priority)
+        if query_string:
+            update_doc['query_string'] = query_string
+            update_doc['query'] = json.loads(query_string)
+        if kwargs:
+            try:
+                json.loads(kwargs)
+            except (ValueError, TypeError) as e:
+                app.logger.error(e)
+                return {
+                    'success': False,
+                    'message': 'invalid JSON: kwargs'
+                }, 400
+
+            update_doc['kwargs'] = kwargs
+        if queue:
+            update_doc['queue'] = queue
+        if enabled is not None:
+            update_doc['enabled'] = enabled
+        update_doc['modified_time'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        app.logger.info('editing document id %s in user_rule index' % _id)
+        result = mozart_es.update_document(user_rules_index, _id, update_doc, refresh=True)
+        app.logger.info(result)
+        app.logger.info('document updated: %s' % _id)
+        return {
+            'success': True,
+            'id': _id,
+            'updated': update_doc
+        }
+
+    def delete(self):
+        # TODO: need to add user rules and permissions
+        user_rules_index = app.config['USER_RULES_INDEX']
+        _id = request.args.get('id')
+        if not _id:
+            return {
+                'result': False,
+                'message': 'id not included'
+            }, 400
+
+        result = mozart_es.delete_by_id(user_rules_index, _id, safe=True)
+        if result['result'] == 'not_found':
+            app.logger.error('failed to delete %s from user_rules index' % _id)
+            return {
+                'success': False,
+                'message': 'user rule not found: %s' % _id
+            }, 404
+
+        app.logger.info('user rule deleted: %s' % _id)
+        return {
+            'success': True,
+            'message': 'user rule deleted',
+            'id': _id
         }
