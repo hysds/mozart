@@ -715,22 +715,24 @@ class GetHySDSIOType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        """
-        Gets a HySDS-IO specification by ID
-        """
-        try:
-            ident = request.form.get('id', request.args.get('id', None))
-            spec = hysds_commons.hysds_io_utils.get_hysds_io(
-                app.config["ES_URL"], ident, logger=app.logger)
-        except Exception as e:
-            message = "Failed to query ES for HySDS IO object. {0}:{1}".format(
-                type(e), str(e))
-            app.logger.warning(message)
-            app.logger.warning(traceback.format_exc(e))
-            return {'success': False, 'message': message}, 500
-        return {'success': True,
-                'message': "",
-                'result': spec}
+        """Gets a HySDS-IO specification by ID"""
+
+        ident = request.form.get('id', request.args.get('id', None))
+        if ident is None:
+            return {
+                'success': False,
+                'message': 'missing parameter: id'
+            }, 400
+
+        hysds_io = mozart_es.get_by_id('hysds_io_mozart', ident, safe=True)
+        if not hysds_io:
+            return {'success': False, 'message': ""}, 404
+
+        return {
+            'success': True,
+            'message': "",
+            'result': hysds_io['_source']
+        }
 
 
 @hysds_io_ns.route('/add', endpoint='hysds_io-add')
