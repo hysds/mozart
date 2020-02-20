@@ -65,6 +65,8 @@ on_demand_ns = api.namespace(ON_DEMAND_NS, description="For retrieving and submi
 USER_RULE_NS = "user-rules"
 user_rule_ns = api.namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user rules")
 
+HYSDS_IOS_MOZART = 'hysds_ios-mozart'
+
 
 @services.route('/doc/', endpoint='api_doc')
 def swagger_ui():
@@ -163,9 +165,7 @@ class AddJobSpecType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def post(self):
-        """
-        Add a Job Type specification JSON object.
-        """
+        """Add a Job Type specification JSON object."""
         try:
             spec = request.form.get('spec', request.args.get('spec', None))
             if spec is None:
@@ -660,6 +660,7 @@ class GetContainerInfo(Resource):
                 'result': info}
 
 
+# TODO: NEED TO REFACTOR THIS
 @hysds_io_ns.route('/list', endpoint='hysds_io-list')
 @api.doc(responses={200: "Success",
                     500: "Query execution failed"},
@@ -675,6 +676,7 @@ class GetHySDSIOTypes(Resource):
         'result':  fields.List(fields.String, required=True,
                                description="list of hysds-io types")
     })
+
     @api.marshal_with(resp_model_job_types)
     def get(self):
         """
@@ -724,8 +726,8 @@ class GetHySDSIOType(Resource):
                 'message': 'missing parameter: id'
             }, 400
 
-        hysds_io = mozart_es.get_by_id('hysds_io_mozart', ident, safe=True)
-        if not hysds_io:
+        hysds_io = mozart_es.get_by_id(HYSDS_IOS_MOZART, ident, safe=True)
+        if hysds_io['found'] is False:
             return {'success': False, 'message': ""}, 404
 
         return {
@@ -757,25 +759,24 @@ class AddHySDSIOType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def post(self):
-        """
-        Add a HySDS IO specification
-        """
+        """Add a HySDS IO specification"""
+        spec = request.form.get('spec', request.args.get('spec', None))
+        if spec is None:
+            app.logger.error("spec not specified")
+            raise Exception("'spec' must be supplied")
+
         try:
-            spec = request.form.get('spec', request.args.get('spec', None))
-            if spec is None:
-                raise Exception("'spec' must be supplied")
             obj = json.loads(spec)
-            ident = hysds_commons.hysds_io_utils.add_hysds_io(
-                app.config["ES_URL"], obj, logger=app.logger)
-        except Exception as e:
-            message = "Failed to add ES for HySDS IO. {0}:{1}".format(
-                type(e), str(e))
-            app.logger.warning(message)
-            app.logger.warning(traceback.format_exc(e))
-            return {'success': False, 'message': message}, 500
-        return {'success': True,
-                'message': "",
-                'result': ident}
+            _id = obj['id']
+        except (ValueError, KeyError, json.decoder.JSONDecodeError, Exception) as e:
+            return {'success': False, 'message': e}, 400
+
+        mozart_es.index_document(HYSDS_IOS_MOZART, obj, _id)
+        return {
+            'success': True,
+            'message': "%s added to index %s" % (_id, HYSDS_IOS_MOZART),
+            'result': _id
+        }
 
 
 @hysds_io_ns.route('/remove', endpoint='hysds_io-remove')
