@@ -72,8 +72,8 @@ JOB_STATUS_INDEX = 'job_status-current'
 CONTAINERS_INDEX = 'containers'
 
 
-# TODO: NEED TO REFACTOR GetJobInfo REST APIs
-# TODO: NEED TO REFACTOR CONTAINER REST APIs (in progress)
+# TODO: NEED TO REFACTOR GetJobInfo REST APIs (in progress)
+# TODO: NEED TO REFACTOR CONTAINER REST APIs (completed)
 # TODO: REFACTOR JOB_SPEC REST APIs (completed)
 # TODO: REFACTOR HYSDS_IOS REST APIs (completed)
 
@@ -400,22 +400,22 @@ class GetJobStatus(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        """
-        Gets the status of a submitted job based on job id
-        """
-        try:  # get job id
-            ident = request.form.get('id', request.args.get('id', None))
-            status = mozart.lib.job_utils.get_job_status(ident)
-        except Exception as e:
-            message = "Failed to get job status for {2}. {0}:{1}".format(type(e), str(e), ident)
-            app.logger.warning(message)
-            app.logger.warning(traceback.format_exc(e))
-            return {'success': False, 'message': message}, 500
+        """Gets the status of a submitted job based on job id"""
+        _id = request.form.get('id', request.args.get('id', None))
+        if _id is None:
+            return {'success': False, 'message': 'id not supplied'}, 400
+
+        job_status = mozart_es.get_by_id(JOB_STATUS_INDEX, _id, safe=True)
+        if job_status['found'] is False:
+            return {
+                'success': False,
+                'message': 'job status not found: %s' % _id
+            }, 404
 
         return {
             'success': True,
             'message': "",
-            'status': status
+            'status': job_status['_source']['status']
         }
 
 
@@ -445,20 +445,20 @@ class GetJobs(Resource):
     @api.marshal_with(resp_model)
     def get(self):
         """Paginated list submitted jobs"""
-        try:
-            page_size = request.form.get('page_size', request.args.get('page_size', 100))
-            offset = request.form.get('offset', request.args.get('id', 0))
-            jobs = mozart.lib.job_utils.get_job_list(page_size, offset)
-        except Exception as e:
-            message = "Failed to get job listing(page: {2}, offset: {3}). {0}:{1}".format(type(e), str(e), page_size,
-                                                                                          offset)
-            app.logger.warning(message)
-            app.logger.warning(traceback.format_exc(e))
-            return {'success': False, 'message': message}, 500
+        query = {
+            "_source": {
+                "exclude": ["*"]
+            },
+            "query": {
+                "match_all": {}
+            }
+        }
+
+        jobs = mozart_es.query(JOB_STATUS_INDEX, query)
         return {
             'success': True,
             'message': "",
-            'result': jobs
+            'result': sorted([job["_id"] for job in jobs])
         }
 
 
@@ -483,20 +483,22 @@ class GetJobInfo(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        """Get complete infor on submitted job based on id"""
-        try:  # get job id
-            ident = request.form.get('id', request.args.get('id', None))
-            info = mozart.lib.job_utils.get_job_info(ident)
-        except Exception as e:
-            message = "Failed to get job info for {2}. {0}:{1}".format(type(e), str(e), ident)
-            app.logger.warning(message)
-            app.logger.warning(traceback.format_exc(e))
-            return {'success': False, 'message': message}, 500
+        """Get complete info for submitted job based on id"""
+        _id = request.form.get('id', request.args.get('id', None))
+        if _id is None:
+            return {'success': False, 'message': 'id must be supplied'}, 400
+
+        info = mozart_es.get_by_id(JOB_STATUS_INDEX, _id, safe=True)
+        if info['found'] is False:
+            return {
+                'success': False,
+                'message': 'job info not found: %s' % _id
+            }, 404
 
         return {
             'success': True,
             'message': "",
-            'result': info
+            'result': info['_source']
         }
 
 
