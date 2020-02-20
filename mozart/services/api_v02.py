@@ -13,19 +13,24 @@ import requests
 import types
 import re
 import traceback
+from datetime import datetime
 
 from flask import jsonify, Blueprint, request, Response, render_template, make_response
 from flask_restplus import Api, apidoc, Resource, fields
 from flask_login import login_required
 
+from hysds.celery import app as celery_app
+from hysds.task_worker import do_submit_task
+
 import hysds_commons.container_utils
 import hysds_commons.hysds_io_utils
 import hysds_commons.job_spec_utils
 import hysds_commons.job_utils
+from hysds_commons.action_utils import check_passthrough_query
 
 from hysds.log_utils import log_custom_event
 
-from mozart import app
+from mozart import app, mozart_es
 
 # Library backend imports
 import mozart.lib.job_utils
@@ -33,30 +38,32 @@ import mozart.lib.queue_utils
 
 
 services = Blueprint('api_v0-2', __name__, url_prefix='/api/v0.2')
-api = Api(services, ui=False, version="0.2", title="Mozart API",
-          description="API for HySDS job submission and query.")
-
+api = Api(services, ui=False, version="0.2", title="Mozart API", description="API for HySDS job submission and query.")
 
 # Namespace declarations
 QUEUE_NS = "queue"
 queue_ns = api.namespace(QUEUE_NS, description="Mozart queue operations")
 
 JOBSPEC_NS = "job_spec"
-job_spec_ns = api.namespace(
-    JOBSPEC_NS, description="Mozart job-specification operations")
+job_spec_ns = api.namespace(JOBSPEC_NS, description="Mozart job-specification operations")
 
 JOB_NS = "job"
 job_ns = api.namespace(JOB_NS, description="Mozart job operations")
 
 CONTAINER_NS = "container"
-container_ns = api.namespace(
-    CONTAINER_NS, description="Mozart container operations")
+container_ns = api.namespace(CONTAINER_NS, description="Mozart container operations")
 
 HYSDS_IO_NS = "hysds_io"
 hysds_io_ns = api.namespace(HYSDS_IO_NS, description="HySDS IO operations")
 
 EVENT_NS = "event"
 event_ns = api.namespace(EVENT_NS, description="HySDS event stream operations")
+
+ON_DEMAND_NS = "on-demand"
+on_demand_ns = api.namespace(ON_DEMAND_NS, description="For retrieving and submitting on-demand jobs for mozart")
+
+USER_RULE_NS = "user-rules"
+user_rule_ns = api.namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user rules")
 
 
 @services.route('/doc/', endpoint='api_doc')
@@ -65,8 +72,7 @@ def swagger_ui():
 
 
 @job_spec_ns.route('/list', endpoint='job_spec-list')
-@api.doc(responses={200: "Success",
-                    500: "Query execution failed"},
+@api.doc(responses={200: "Success", 500: "Query execution failed"},
          description="Get list of registered job types and return as JSON.")
 class GetJobTypes(Resource):
     """Get list of registered job types and return as JSON."""
@@ -81,9 +87,9 @@ class GetJobTypes(Resource):
     })
     @api.marshal_with(resp_model_job_types)
     def get(self):
-        '''
+        """
         Gets a list of Job Type specifications
-        '''
+        """
         try:
             ids = hysds_commons.job_spec_utils.get_job_spec_types(app.config['ES_URL'], logger=app.logger)
         except Exception as e:
@@ -118,9 +124,9 @@ class GetJobSpecType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Gets a Job Type specification object for the given ID.
-        '''
+        """
         try:
             ident = request.form.get('id', request.args.get('id', None))
             spec = hysds_commons.job_spec_utils.get_job_spec(app.config['ES_URL'], ident, logger=app.logger)
@@ -157,9 +163,9 @@ class AddJobSpecType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def post(self):
-        '''
+        """
         Add a Job Type specification JSON object.
-        '''
+        """
         try:
             spec = request.form.get('spec', request.args.get('spec', None))
             if spec is None:
@@ -198,9 +204,9 @@ class RemoveJobSpecType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Remove Job Type specification for the given ID.
-        '''
+        """
         try:
             ident = request.form.get('id', request.args.get('id', None))
             hysds_commons.job_spec_utils.remove_job_spec(app.config['ES_URL'], ident, logger=app.logger)
@@ -236,9 +242,9 @@ class GetQueueNames(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Gets a listing of non-celery queues handling jobs.
-        '''
+        """
         try:
             ident = request.form.get('id', request.args.get('id', None))
             queues = mozart.lib.queue_utils.get_queue_names(ident)
@@ -302,9 +308,9 @@ class SubmitJob(Resource):
     @api.marshal_with(resp_model)
     @api.expect(parser, validate=True)
     def post(self):
-        '''
+        """
         Submits a job to run inside HySDS
-        '''
+        """
         try:
             app.logger.warning(request.form)
             job_type = request.form.get('type', request.args.get('type', None))
@@ -384,9 +390,9 @@ class GetJobStatus(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Gets the status of a submitted job based on job id
-        '''
+        """
         try:
             # get job id
             ident = request.form.get('id', request.args.get('id', None))
@@ -428,9 +434,9 @@ class GetJobs(Resource):
 
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Paginated list submitted jobs 
-        '''
+        """
         try:
             page_size = request.form.get(
                 'page_size', request.args.get('page_size', 100))
@@ -468,9 +474,9 @@ class GetJobInfo(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Get complete infor on submitted job based on id
-        '''
+        """
         try:
             # get job id
             ident = request.form.get('id', request.args.get('id', None))
@@ -503,9 +509,9 @@ class GetContainerTypes(Resource):
     })
     @api.marshal_with(resp_model_job_types)
     def get(self):
-        '''
+        """
         Get a list of containers managed by Mozart
-        '''
+        """
         try:
             ids = hysds_commons.container_utils.get_container_types(
                 app.config['ES_URL'], logger=app.logger)
@@ -546,9 +552,9 @@ class GetContainerAdd(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def post(self):
-        '''
+        """
         Add a container specification to Mozart
-        '''
+        """
         try:
             # get job id
             # app.logger.info('request.form: {}'.format(request.form))
@@ -598,9 +604,9 @@ class GetContainerRemove(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Remove container based on ID
-        '''
+        """
         try:
             # get job id
             ident = request.form.get('id', request.args.get('id', None))
@@ -636,9 +642,9 @@ class GetContainerInfo(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Get information on container by ID
-        '''
+        """
         try:
             # get job id
             ident = request.form.get('id', request.args.get('id', None))
@@ -671,9 +677,9 @@ class GetHySDSIOTypes(Resource):
     })
     @api.marshal_with(resp_model_job_types)
     def get(self):
-        '''
+        """
         List HySDS IO specifications
-        '''
+        """
         try:
             ids = hysds_commons.hysds_io_utils.get_hysds_io_types(
                 app.config["ES_URL"], logger=app.logger)
@@ -709,9 +715,9 @@ class GetHySDSIOType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Gets a HySDS-IO specification by ID
-        '''
+        """
         try:
             ident = request.form.get('id', request.args.get('id', None))
             spec = hysds_commons.hysds_io_utils.get_hysds_io(
@@ -749,9 +755,9 @@ class AddHySDSIOType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def post(self):
-        '''
+        """
         Add a HySDS IO specification
-        '''
+        """
         try:
             spec = request.form.get('spec', request.args.get('spec', None))
             if spec is None:
@@ -790,9 +796,9 @@ class RemoveHySDSIOType(Resource):
     @api.expect(parser)
     @api.marshal_with(resp_model)
     def get(self):
-        '''
+        """
         Remove HySDS IO for the given ID
-        '''
+        """
         try:
             ident = request.form.get('id', request.args.get('id', None))
             hysds_commons.hysds_io_utils.remove_hysds_io(
@@ -890,3 +896,413 @@ class AddLogEvent(Resource):
         return {'success': True,
                 'message': '',
                 'result': uuid}
+
+
+@on_demand_ns.route('', endpoint='on-demand')
+@api.doc(responses={200: "Success",
+                    500: "Execution failed"},
+         description="Retrieve on demand jobs")
+class OnDemandJobs(Resource):
+    """On Demand Jobs API."""
+
+    resp_model = api.model('JsonResponse', {
+        'success': fields.Boolean(required=True, description="if 'false', " +
+                                  "encountered exception; otherwise no errors " +
+                                  "occurred"),
+        'message': fields.String(required=True, description="message describing " +
+                                 "success or failure"),
+        'objectid': fields.String(required=True, description="ID of indexed dataset"),
+        'index': fields.String(required=True, description="dataset index name"),
+    })
+
+    parser = api.parser()
+    # parser.add_argument('dataset_info', required=True, type=str,
+    #                     location='form',  help="HySDS dataset info JSON")
+
+    # @api.marshal_with(resp_model)
+    def get(self):
+        """List available on demand jobs"""
+        query = {
+            "_source": ["id", "job-specification", "label", "job-version"],
+            "sort": [{"label.keyword": {"order": "asc"}}],
+            "query": {
+                "exists": {
+                    "field": "job-specification"
+                }
+            }
+        }
+
+        documents = mozart_es.query('hysds_ios', query)
+        documents = [{
+            'hysds_io': row['_source']['id'],
+            'job_spec': row['_source']['job-specification'],
+            'version': row['_source']['job-version'],
+            'label': row['_source']['label']
+        } for row in documents]
+
+        return {
+            'success': True,
+            'result': documents
+        }
+
+    def post(self):
+        """
+        submits on demand job
+        :return: submit job id
+        """
+        # TODO: add user auth and permissions
+        request_data = request.json
+        if not request_data:
+            request_data = request.form
+
+        tag = request_data.get('tags', None)
+        job_type = request_data.get('job_type', None)
+        hysds_io = request_data.get('hysds_io', None)
+        queue = request_data.get('queue', None)
+        priority = int(request_data.get('priority', 0))
+        query_string = request_data.get('query', None)
+        kwargs = request_data.get('kwargs', '{}')
+
+        query = json.loads(query_string)
+        query_string = json.dumps(query)
+
+        if tag is None or job_type is None or hysds_io is None or queue is None or query_string is None:
+            return {
+                'success': False,
+                'message': 'missing field: [tags, job_type, hysds_io, queue, query]'
+            }, 400
+
+        doc = mozart_es.get_by_id('hysds_ios', hysds_io, safe=True)
+        if doc is False:
+            app.logger.error('failed to fetch %s, not found in hysds_ios' % hysds_io)
+            return {
+                'success': False,
+                'message': '%s not found' % hysds_io
+            }, 404
+
+        params = doc['_source']['params']
+        is_passthrough_query = check_passthrough_query(params)
+
+        rule = {
+            'username': 'example_user',
+            'workflow': hysds_io,
+            'priority': priority,
+            'enabled': True,
+            'job_type': job_type,
+            'rule_name': tag,
+            'kwargs': kwargs,
+            'query_string': query_string,
+            'query': query,
+            'passthru_query': is_passthrough_query,
+            'query_all': False,
+            'queue': queue
+        }
+
+        payload = {
+            'type': 'job_iterator',
+            'function': 'hysds_commons.job_iterator.iterate',
+            'args': ["figaro", rule],
+        }
+
+        on_demand_job_queue = celery_app.conf['ON_DEMAND_JOB_QUEUE']
+        celery_task = do_submit_task(payload, on_demand_job_queue)
+
+        return {
+            'success': True,
+            'result': celery_task.id
+        }
+
+
+@on_demand_ns.route('/job-params', endpoint='job-params')
+@api.doc(responses={200: "Success",
+                    500: "Execution failed"},
+         description="Retrieve on job params for specific jobs")
+class JobParams(Resource):
+    """Job Params API."""
+
+    resp_model = api.model('JsonResponse', {
+        'success': fields.Boolean(required=True, description="if 'false', " +
+                                  "encountered exception; otherwise no errors " +
+                                  "occurred"),
+        'message': fields.String(required=True, description="message describing " +
+                                 "success or failure"),
+        'objectid': fields.String(required=True, description="ID of indexed dataset"),
+        'index': fields.String(required=True, description="dataset index name"),
+    })
+
+    parser = api.parser()
+    # parser.add_argument('dataset_info', required=True, type=str,
+    #                     location='form',  help="HySDS dataset info JSON")
+
+    # @api.marshal_with(resp_model)
+    def get(self):
+        job_type = request.args.get('job_type')
+        if not job_type:
+            return {'success': False, 'message': 'job_type not provided'}, 400
+
+        query = {
+            "query": {
+                # "term": {"_id": job_type}
+                "term": {"job-specification.keyword": job_type}
+            }
+        }
+        documents = mozart_es.search(index='hysds_ios', query=query)
+
+        if documents['hits']['total']['value'] == 0:
+            error_message = '%s not found' % job_type
+            return {'success': False, 'message': error_message}, 404
+
+        job_type = documents['hits']['hits'][0]
+        job_params = job_type['_source']['params']
+        job_params = list(filter(lambda x: x['from'] == 'submitter', job_params))
+
+        return {
+            'success': True,
+            'submission_type': job_type['_source'].get('submission_type'),
+            'hysds_io': job_type['_source']['id'],
+            'params': job_params
+        }
+
+
+@user_rule_ns.route('', endpoint='user-rules')
+@api.doc(responses={200: "Success",
+                    500: "Execution failed"},
+         description="Retrieve on job params for specific jobs")
+class UserRules(Resource):
+    """User Rules API"""
+
+    def get(self):
+        # TODO: add user role and permissions
+        _id = request.args.get('id')
+        user_rules_index = app.config['USER_RULES_INDEX']
+
+        if _id:
+            rule = mozart_es.get_by_id(user_rules_index, _id, safe=True)
+            if rule['found'] is True:
+                rule = {**rule, **rule['_source']}
+                return {
+                    'success': True,
+                    'rule': rule
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': rule['message']
+                }, 500
+
+        query = {"query": {"match_all": {}}}
+        user_rules = mozart_es.query(user_rules_index, query)
+
+        parsed_user_rules = []
+        for rule in user_rules:
+            rule_copy = rule.copy()
+            rule_temp = {**rule_copy, **rule['_source']}
+            rule_temp.pop('_source')
+            parsed_user_rules.append(rule_temp)
+
+        return {
+            'success': True,
+            'rules': parsed_user_rules
+        }
+
+    def post(self):
+        user_rules_index = app.config['USER_RULES_INDEX']
+
+        request_data = request.json or request.form
+        rule_name = request_data.get('rule_name')
+        hysds_io = request_data.get('workflow')
+        job_spec = request_data.get('job_spec')
+        priority = int(request_data.get('priority', 0))
+        query_string = request_data.get('query_string')
+        kwargs = request_data.get('kwargs', '{}')
+        queue = request_data.get('queue')
+
+        username = "ops"  # TODO: add user role and permissions, hard coded to "ops" for now
+
+        if not rule_name or not hysds_io or not job_spec or not query_string or not queue:
+            missing_params = []
+            if not rule_name:
+                missing_params.append('rule_name')
+            if not hysds_io:
+                missing_params.append('workflow')
+            if not job_spec:
+                missing_params.append('job_spec')
+            if not query_string:
+                missing_params.append('query_string')
+            if not queue:
+                missing_params.append('queue')
+            return {
+                'success': False,
+                'message': 'Params not specified: %s' % ', '.join(missing_params),
+                'result': None,
+            }, 400
+
+        try:
+            parsed_query = json.loads(query_string)
+            query_string = json.dumps(parsed_query)
+        except (ValueError, TypeError) as e:
+            app.logger.error(e)
+            return {
+                'success': False,
+                'message': 'invalid elasticsearch query JSON'
+            }, 400
+
+        # check if rule name already exists
+        rule_exists_query = {
+            "query": {
+                "term": {
+                    "rule_name": rule_name
+                }
+            }
+        }
+        # existing_rules = es.count(index=user_rules_index, body=rule_exists_query)
+        existing_rules_count = mozart_es.get_count(user_rules_index, rule_exists_query)
+        if existing_rules_count > 0:
+            return {
+                'success': False,
+                'message': 'user rule already exists: %s' % rule_name
+            }, 409
+
+        # check if job_type (hysds_io) exists in elasticsearch
+        job_type = mozart_es.get_by_id('hysds_ios', hysds_io, safe=True)
+        if not job_type['found']:
+            return {
+                'success': False,
+                'message': '%s not found' % hysds_io
+            }, 400
+
+        params = job_type['_source']['params']
+        is_passthrough_query = check_passthrough_query(params)
+
+        now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        new_doc = {
+            "workflow": hysds_io,
+            "job_spec": job_spec,
+            "priority": priority,
+            "rule_name": rule_name,
+            "username": username,
+            "query_string": query_string,
+            "kwargs": kwargs,
+            "hysds_io": hysds_io,
+            "job_type": hysds_io,
+            "enabled": True,
+            "query": json.loads(query_string),
+            "passthru_query": is_passthrough_query,
+            "query_all": False,
+            "queue": queue,
+            "modified_time": now,
+            "creation_time": now,
+        }
+
+        result = mozart_es.index_document(user_rules_index, new_doc, refresh=True)
+        return {
+            'success': True,
+            'message': 'rule created',
+            'result': result
+        }
+
+    def put(self):  # TODO: add user role and permissions
+        request_data = request.json or request.form
+
+        _id = request_data.get('id')
+        if not _id:
+            return {
+                'result': False,
+                'message': 'id not included'
+            }, 400
+
+        user_rules_index = app.config['USER_RULES_INDEX']
+
+        rule_name = request_data.get('rule_name')
+        hysds_io = request_data.get('workflow')
+        job_spec = request_data.get('job_spec')
+        priority = request_data.get('priority')
+        query_string = request_data.get('query_string')
+        kwargs = request_data.get('kwargs')
+        queue = request_data.get('queue')
+        enabled = request_data.get('enabled')
+
+        # check if job_type (hysds_io) exists in elasticsearch (only if we're updating job_type)
+        if hysds_io:
+            # job_type = get_by_id(ES_URL, 'hysds_ios', '_doc', hysds_io, safe=True, logger=app.logger)
+            job_type = mozart_es.get_by_id('hysds_ios', hysds_io, safe=True)
+            if not job_type['found']:
+                return {
+                    'success': False,
+                    'message': 'job_type not found: %s' % hysds_io
+                }, 400
+
+        app.logger.info('finding existing user rule: %s' % _id)
+        # es.get(index=user_rules_index, doc_type='_doc', id=_id)
+        existing_rule = mozart_es.get_by_id(user_rules_index, _id, safe=True)
+        if not existing_rule['found']:
+            app.logger.info('rule not found %s' % _id)
+            return {
+                'result': False,
+                'message': 'user rule not found: %s' % _id
+            }, 404
+
+        update_doc = {}
+        if rule_name:
+            update_doc['rule_name'] = rule_name
+        if hysds_io:
+            update_doc['hysds_io'] = hysds_io
+            update_doc['job_type'] = hysds_io
+        if job_spec:
+            update_doc['job_spec'] = job_spec
+        if priority:
+            update_doc['priority'] = int(priority)
+        if query_string:
+            update_doc['query_string'] = query_string
+            update_doc['query'] = json.loads(query_string)
+        if kwargs:
+            try:
+                json.loads(kwargs)
+            except (ValueError, TypeError) as e:
+                app.logger.error(e)
+                return {
+                    'success': False,
+                    'message': 'invalid JSON: kwargs'
+                }, 400
+
+            update_doc['kwargs'] = kwargs
+        if queue:
+            update_doc['queue'] = queue
+        if enabled is not None:
+            update_doc['enabled'] = enabled
+        update_doc['modified_time'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        app.logger.info('editing document id %s in user_rule index' % _id)
+        result = mozart_es.update_document(user_rules_index, _id, update_doc, refresh=True)
+        app.logger.info(result)
+        app.logger.info('document updated: %s' % _id)
+        return {
+            'success': True,
+            'id': _id,
+            'updated': update_doc
+        }
+
+    def delete(self):
+        # TODO: need to add user rules and permissions
+        user_rules_index = app.config['USER_RULES_INDEX']
+        _id = request.args.get('id')
+        if not _id:
+            return {
+                'result': False,
+                'message': 'id not included'
+            }, 400
+
+        result = mozart_es.delete_by_id(user_rules_index, _id, safe=True)
+        if result['result'] == 'not_found':
+            app.logger.error('failed to delete %s from user_rules index' % _id)
+            return {
+                'success': False,
+                'message': 'user rule not found: %s' % _id
+            }, 404
+
+        app.logger.info('user rule deleted: %s' % _id)
+        return {
+            'success': True,
+            'message': 'user rule deleted',
+            'id': _id
+        }

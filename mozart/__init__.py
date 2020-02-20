@@ -9,6 +9,8 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 
+from hysds_commons.elasticsearch_utils import ElasticsearchUtility
+
 
 class ReverseProxied(object):
     '''Wrap the application in this middleware and configure the 
@@ -85,6 +87,8 @@ lm = LoginManager()
 lm.init_app(app)
 lm.login_view = 'views/main.login'
 
+# Mozart's connection to Elasticsearch
+mozart_es = ElasticsearchUtility(app.config['ES_URL'], app.logger)
 
 # views blueprints
 from mozart.views.main import mod as viewsModule
