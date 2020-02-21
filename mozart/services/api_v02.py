@@ -13,7 +13,7 @@ from datetime import datetime
 
 from flask import jsonify, Blueprint, request, Response, render_template, make_response
 from flask_restplus import Api, apidoc, Resource, fields
-from flask_login import login_required
+# from flask_login import login_required
 
 from hysds.celery import app as celery_app
 from hysds.task_worker import do_submit_task
@@ -61,10 +61,10 @@ on_demand_ns = api.namespace(ON_DEMAND_NS, description="For retrieving and submi
 USER_RULE_NS = "user-rules"
 user_rule_ns = api.namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user rules")
 
-HYSDS_IOS_MOZART_INDEX = 'hysds_ios-mozart'
-JOB_SPECS_INDEX = 'job_specs'
-JOB_STATUS_INDEX = 'job_status-current'
-CONTAINERS_INDEX = 'containers'
+HYSDS_IOS_INDEX = app.conf['HYSDS_IOS_INDEX']
+JOB_SPECS_INDEX = app.conf['JOB_SPECS_INDEX']
+JOB_STATUS_INDEX = app.conf['JOB_STATUS_INDEX']
+CONTAINERS_INDEX = app.conf['CONTAINERS_INDEX']
 
 
 @services.route('/doc/', endpoint='api_doc')
@@ -158,7 +158,7 @@ class JobSpecs(Resource):
         mozart_es.index_document(JOB_SPECS_INDEX, obj, _id)
         return {
             'success': True,
-            'message': "%s added to index %s" % (_id, HYSDS_IOS_MOZART_INDEX),
+            'message': "%s added to index %s" % (_id, HYSDS_IOS_INDEX),
             'result': _id
         }
 
@@ -567,7 +567,7 @@ class HySDSIOTypes(Resource):
                 "match_all": {}
             }
         }
-        hysds_ios = mozart_es.query(HYSDS_IOS_MOZART_INDEX, query)
+        hysds_ios = mozart_es.query(HYSDS_IOS_INDEX, query)
         ids = [hysds_io['_id'] for hysds_io in hysds_ios]
         return {
             'success': True,
@@ -600,7 +600,7 @@ class HySDSio(Resource):
         if _id is None:
             return {'success': False, 'message': 'missing parameter: id'}, 400
 
-        hysds_io = mozart_es.get_by_id(HYSDS_IOS_MOZART_INDEX, _id, safe=True)
+        hysds_io = mozart_es.get_by_id(HYSDS_IOS_INDEX, _id, safe=True)
         if hysds_io['found'] is False:
             return {'success': False, 'message': ""}, 404
 
@@ -625,10 +625,10 @@ class HySDSio(Resource):
         except (ValueError, KeyError, json.decoder.JSONDecodeError, Exception) as e:
             return {'success': False, 'message': e}, 400
 
-        mozart_es.index_document(HYSDS_IOS_MOZART_INDEX, obj, _id)
+        mozart_es.index_document(HYSDS_IOS_INDEX, obj, _id)
         return {
             'success': True,
-            'message': "%s added to index %s" % (_id, HYSDS_IOS_MOZART_INDEX),
+            'message': "%s added to index %s" % (_id, HYSDS_IOS_INDEX),
             'result': _id
         }
 
@@ -638,13 +638,10 @@ class HySDSio(Resource):
         """Remove HySDS IO for the given ID"""
         _id = request.form.get('id', request.args.get('id', None))
         if _id is None:
-            return {
-                'success': False,
-                'message': 'id parameter not included'
-            }, 400
+            return {'success': False, 'message': 'id parameter not included'}, 400
 
-        mozart_es.delete_by_id(HYSDS_IOS_MOZART_INDEX, _id)
-        app.logger.error('Unable to delete %s from index: %s' % (_id, HYSDS_IOS_MOZART_INDEX))
+        mozart_es.delete_by_id(HYSDS_IOS_INDEX, _id)
+        app.logger.error('deleted %s from index: %s' % (_id, HYSDS_IOS_INDEX))
         return {
             'success': True,
             'message': ""
@@ -1062,7 +1059,6 @@ class UserRules(Resource):
 
         # check if job_type (hysds_io) exists in elasticsearch (only if we're updating job_type)
         if hysds_io:
-            # job_type = get_by_id(ES_URL, 'hysds_ios', '_doc', hysds_io, safe=True, logger=app.logger)
             job_type = mozart_es.get_by_id('hysds_ios', hysds_io, safe=True)
             if not job_type['found']:
                 return {
