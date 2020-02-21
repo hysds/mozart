@@ -6,12 +6,8 @@ from builtins import int
 from builtins import str
 from future import standard_library
 standard_library.install_aliases()
-import os
-import sys
+
 import json
-import requests
-import types
-import re
 import traceback
 from datetime import datetime
 
@@ -65,17 +61,10 @@ on_demand_ns = api.namespace(ON_DEMAND_NS, description="For retrieving and submi
 USER_RULE_NS = "user-rules"
 user_rule_ns = api.namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user rules")
 
-
 HYSDS_IOS_MOZART_INDEX = 'hysds_ios-mozart'
 JOB_SPECS_INDEX = 'job_specs'
 JOB_STATUS_INDEX = 'job_status-current'
 CONTAINERS_INDEX = 'containers'
-
-
-# TODO: NEED TO REFACTOR GetJobInfo REST APIs (in progress)
-# TODO: NEED TO REFACTOR CONTAINER REST APIs (completed)
-# TODO: REFACTOR JOB_SPEC REST APIs (completed)
-# TODO: REFACTOR HYSDS_IOS REST APIs (completed)
 
 
 @services.route('/doc/', endpoint='api_doc')
@@ -170,8 +159,7 @@ class AddJobSpecType(Resource):
         'result':  fields.String(required=True, description="Job Type Specification ID")
     })
     parser = api.parser()
-    parser.add_argument('spec', required=True, type=str,
-                        help="Job Type Specification JSON Object")
+    parser.add_argument('spec', required=True, type=str, help="Job Type Specification JSON Object")
 
     @api.expect(parser)
     @api.marshal_with(resp_model)
@@ -220,7 +208,7 @@ class RemoveJobSpecType(Resource):
         if _id is None:
             return {
                 'success': False,
-                'messsage': 'id parameter not included'
+                'message': 'id parameter not included'
             }, 400
 
         mozart_es.delete_by_id(JOB_SPECS_INDEX, _id)
@@ -257,7 +245,7 @@ class GetQueueNames(Resource):
         try:
             ident = request.form.get('id', request.args.get('id', None))
             queues = mozart.lib.queue_utils.get_queue_names(ident)
-            app.logger.warn("Queues:"+str(queues))
+            app.logger.warn("Queues: " + str(queues))
         except Exception as e:
             message = "Failed to list job queues. {0}:{1}".format(type(e), str(e))
             app.logger.warning(message)
@@ -554,10 +542,8 @@ class GetContainerAdd(Resource):
     parser = api.parser()
     parser.add_argument('name', required=True, type=str, help="Container Name")
     parser.add_argument('url', required=True, type=str, help="Container URL")
-    parser.add_argument('version', required=True,
-                        type=str, help="Container Version")
-    parser.add_argument('digest', required=True,
-                        type=str, help="Container Digest")
+    parser.add_argument('version', required=True, type=str, help="Container Version")
+    parser.add_argument('digest', required=True, type=str, help="Container Digest")
 
     @api.expect(parser)
     @api.marshal_with(resp_model)
@@ -590,9 +576,7 @@ class GetContainerAdd(Resource):
 
 
 @container_ns.route('/remove', endpoint='container-remove')
-@api.doc(responses={200: "Success",
-                    500: "Query execution failed"},
-         description="Remove a container.")
+@api.doc(responses={200: "Success", 500: "Query execution failed"}, description="Remove a container.")
 class GetContainerRemove(Resource):
     """Remove a container"""
 
@@ -746,8 +730,7 @@ class AddHySDSIOType(Resource):
         'result':  fields.String(required=True, description="HySDS IO ID")
     })
     parser = api.parser()
-    parser.add_argument('spec', required=True, type=str,
-                        help="HySDS IO JSON Object")
+    parser.add_argument('spec', required=True, type=str, help="HySDS IO JSON Object")
 
     @api.expect(parser)
     @api.marshal_with(resp_model)
@@ -797,7 +780,7 @@ class RemoveHySDSIOType(Resource):
         if _id is None:
             return {
                 'success': False,
-                'messsage': 'id parameter not included'
+                'message': 'id parameter not included'
             }, 400
 
         mozart_es.delete_by_id(HYSDS_IOS_MOZART_INDEX, _id)
