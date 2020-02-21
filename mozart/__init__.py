@@ -78,8 +78,7 @@ app.config.from_pyfile('../settings.cfg')
 
 # set database config
 dbdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + \
-    os.path.join(dbdir, 'app.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(dbdir, 'app.db')
 db = SQLAlchemy(app)
 
 # set user auth config
