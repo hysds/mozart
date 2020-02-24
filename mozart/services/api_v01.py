@@ -61,10 +61,10 @@ on_demand_ns = api.namespace(ON_DEMAND_NS, description="For retrieving and submi
 USER_RULE_NS = "user-rules"
 user_rule_ns = api.namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user rules")
 
-HYSDS_IOS_INDEX = app.conf['HYSDS_IOS_INDEX']
-JOB_SPECS_INDEX = app.conf['JOB_SPECS_INDEX']
-JOB_STATUS_INDEX = app.conf['JOB_STATUS_INDEX']
-CONTAINERS_INDEX = app.conf['CONTAINERS_INDEX']
+HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
+JOB_SPECS_INDEX = app.config['JOB_SPECS_INDEX']
+JOB_STATUS_INDEX = app.config['JOB_STATUS_INDEX']
+CONTAINERS_INDEX = app.config['CONTAINERS_INDEX']
 
 
 @services.route('/doc/', endpoint='api_doc')

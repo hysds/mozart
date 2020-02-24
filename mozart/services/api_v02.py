@@ -61,10 +61,10 @@ on_demand_ns = api.namespace(ON_DEMAND_NS, description="For retrieving and submi
 USER_RULE_NS = "user-rules"
 user_rule_ns = api.namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user rules")
 
-HYSDS_IOS_INDEX = app.conf['HYSDS_IOS_INDEX']
-JOB_SPECS_INDEX = app.conf['JOB_SPECS_INDEX']
-JOB_STATUS_INDEX = app.conf['JOB_STATUS_INDEX']
-CONTAINERS_INDEX = app.conf['CONTAINERS_INDEX']
+HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
+JOB_SPECS_INDEX = app.config['JOB_SPECS_INDEX']
+JOB_STATUS_INDEX = app.config['JOB_STATUS_INDEX']
+CONTAINERS_INDEX = app.config['CONTAINERS_INDEX']
 
 
 @services.route('/doc/', endpoint='api_doc')
@@ -100,7 +100,7 @@ class GetJobTypes(Resource):
         }
 
 
-@job_spec_ns.route('', endpoint='job_specs')
+@job_spec_ns.route('', endpoint='job_spec')
 @api.doc(responses={200: "Success", 500: "Query execution failed"},
          description="Get list of registered job types and return as JSON.")
 class JobSpecs(Resource):
@@ -462,7 +462,7 @@ class ContainerTypes(Resource):
         }
 
 
-@container_ns.route('', endpoint='containers')
+@container_ns.route('', endpoint='container')
 @api.doc(responses={200: "Success", 500: "Query execution failed"}, description="Containers endpoint")
 class Containers(Resource):
     """Container Rest APIs (GET, POST, DELETE)"""
@@ -576,7 +576,7 @@ class HySDSIOTypes(Resource):
         }
 
 
-@hysds_io_ns.route('', endpoint='hysds_ios')
+@hysds_io_ns.route('', endpoint='hysds_io')
 @api.doc(responses={200: "Success", 500: "Query execution failed"},
          description="Gets list of registered hysds-io specifications and return as JSON.")
 class HySDSio(Resource):
