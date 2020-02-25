@@ -6,31 +6,28 @@ from __future__ import absolute_import
 from builtins import open
 from future import standard_library
 standard_library.install_aliases()
+
 import os
 import json
-import requests
-import sys
-from elasticsearch import Elasticsearch
-
-from mozart import app
+from mozart import app, mozart_es
 
 
 # get destination index and doctype
-dest = app.config['USER_RULES_INDEX']
-doctype = '.percolator'
+USER_RULES_INDEX = app.config['USER_RULES_INDEX']
+
+body = {}
 
 # get settings
-body = {}
 path = os.path.join(app.root_path, '..', 'configs', 'es_settings.json')
 with open(path) as f:
-    body.update(json.load(f))
+    settings_object = json.load(f)
+    body = {**body, **settings_object}
 
-# get doctype mapping
+# get doc type mapping
 path = os.path.join(app.root_path, '..', 'configs', 'user_rules_job.mapping')
 with open(path) as f:
-    body.update(json.load(f))
+    user_rules_mapping = json.load(f)
+    body = {**body, **user_rules_mapping}
 
-# get connection and create destination index
-es_url = app.config['ES_URL']
-es = Elasticsearch(hosts=[es_url])
-es.indices.create(dest, body, ignore=400)
+# create destination index
+mozart_es.es.indices.create(USER_RULES_INDEX, body, ignore=400)
