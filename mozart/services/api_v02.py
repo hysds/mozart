@@ -174,7 +174,7 @@ class JobSpecs(Resource):
             }, 400
 
         mozart_es.delete_by_id(JOB_SPECS_INDEX, _id)
-        app.logger.error('Unable to delete %s from index: %s' % (_id, JOB_SPECS_INDEX))
+        app.logger.info('Deleted job_spec %s from index: %s' % (_id, JOB_SPECS_INDEX))
         return {
             'success': True,
             'message': "job spec deleted: %s" % _id,
@@ -539,7 +539,7 @@ class Containers(Resource):
             }, 400
 
         mozart_es.delete_by_id(CONTAINERS_INDEX, _id)
-        app.logger.error('Unable to delete %s from index: %s' % (_id, CONTAINERS_INDEX))
+        app.logger.info('Deleted container %s from index: %s' % (_id, CONTAINERS_INDEX))
         return {
             'success': True,
             'message': "container deleted: %s" % _id,
@@ -641,7 +641,7 @@ class HySDSio(Resource):
             return {'success': False, 'message': 'id parameter not included'}, 400
 
         mozart_es.delete_by_id(HYSDS_IOS_INDEX, _id)
-        app.logger.error('deleted %s from index: %s' % (_id, HYSDS_IOS_INDEX))
+        app.logger.info('deleted %s from index: %s' % (_id, HYSDS_IOS_INDEX))
         return {
             'success': True,
             'message': ""
