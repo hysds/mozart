@@ -912,7 +912,7 @@ class OnDemandJobs(Resource):
             }
         }
 
-        documents = mozart_es.query('hysds_ios', query)
+        documents = mozart_es.query(HYSDS_IOS_INDEX, query)
         documents = [{
             'hysds_io': row['_source']['id'],
             'job_spec': row['_source']['job-specification'],
@@ -952,7 +952,7 @@ class OnDemandJobs(Resource):
                 'message': 'missing field: [tags, job_type, hysds_io, queue, query]'
             }, 400
 
-        doc = mozart_es.get_by_id('hysds_ios', hysds_io, safe=True)
+        doc = mozart_es.get_by_id(HYSDS_IOS_INDEX, hysds_io, safe=True)
         if doc is False:
             app.logger.error('failed to fetch %s, not found in hysds_ios' % hysds_io)
             return {
@@ -1026,7 +1026,7 @@ class JobParams(Resource):
                 "term": {"job-specification.keyword": job_type}
             }
         }
-        documents = mozart_es.search(index='hysds_ios', query=query)
+        documents = mozart_es.search(index=HYSDS_IOS_INDEX, query=query)
 
         if documents['hits']['total']['value'] == 0:
             error_message = '%s not found' % job_type
@@ -1144,7 +1144,7 @@ class UserRules(Resource):
             }, 409
 
         # check if job_type (hysds_io) exists in elasticsearch
-        job_type = mozart_es.get_by_id('hysds_ios', hysds_io, safe=True)
+        job_type = mozart_es.get_by_id(HYSDS_IOS_INDEX, hysds_io, safe=True)
         if not job_type['found']:
             return {
                 'success': False,
@@ -1204,7 +1204,7 @@ class UserRules(Resource):
 
         # check if job_type (hysds_io) exists in elasticsearch (only if we're updating job_type)
         if hysds_io:
-            job_type = mozart_es.get_by_id('hysds_ios', hysds_io, safe=True)
+            job_type = mozart_es.get_by_id(HYSDS_IOS_INDEX, hysds_io, safe=True)
             if not job_type['found']:
                 return {
                     'success': False,
