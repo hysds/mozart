@@ -20,5 +20,10 @@ setup(
                       'simplekml>=1.2.3', 'tornado>=4.0.2', 'pika>=0.9.14',
                       'pymongo>=2.7.2', 'boto>=2.38.0', 'python-dateutil',
                       'elasticsearch>=1.0.0,<2.0.0', 'pytz', 'numpy',
-                      'flask-restplus>=0.9.2', 'future>=0.17.1']
+                      # TODO: remove installation of master branch after new release of
+                      # flask-restx includes the fix referred to here:
+                      # https://github.com/python-restx/flask-restx/issues/85
+                      #'flask-restx>0.1.1',
+                      'flask-restx @ git+https://git@github.com/python-restx/flask-restx',
+                      'future>=0.17.1']
 )
