@@ -42,6 +42,18 @@
         "enabled": {
           "type": "boolean",
           "null_value": true
+        },
+        "resource": {
+          "index": "not_analyzed",
+          "type": "string"
+        },
+        "status": {
+          "index": "not_analyzed",
+          "type": "string"
+        },
+        "type": {
+          "index": "not_analyzed",
+          "type": "string"
         }
       }
     }
