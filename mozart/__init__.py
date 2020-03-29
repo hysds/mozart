@@ -8,6 +8,7 @@ import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
+from flask_cors import CORS  # TODO: will remove this once we figure out the proper host for the UI
 
 from hysds_commons.elasticsearch_utils import ElasticsearchUtility
 
@@ -75,6 +76,9 @@ class ReverseProxied(object):
 app = Flask(__name__)
 app.wsgi_app = ReverseProxied(app.wsgi_app)
 app.config.from_pyfile('../settings.cfg')
+
+# TODO: will remove this when ready for actual release, need to figure out the right host
+CORS(app)
 
 # set database config
 dbdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
