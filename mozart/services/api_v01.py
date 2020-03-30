@@ -1162,7 +1162,6 @@ class UserRules(Resource):
             "username": username,
             "query_string": query_string,
             "kwargs": kwargs,
-            "hysds_io": hysds_io,
             "job_type": hysds_io,
             "enabled": True,
             "query": json.loads(query_string),
@@ -1224,7 +1223,7 @@ class UserRules(Resource):
         if rule_name:
             update_doc['rule_name'] = rule_name
         if hysds_io:
-            update_doc['hysds_io'] = hysds_io
+            update_doc['workflow'] = hysds_io
             update_doc['job_type'] = hysds_io
         if job_spec:
             update_doc['job_spec'] = job_spec
