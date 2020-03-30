@@ -47,6 +47,9 @@
       },
       "workflow": {
         "type": "keyword"
+      },
+      "job_spec": {
+        "type": "keyword"
       }
     }
   }
