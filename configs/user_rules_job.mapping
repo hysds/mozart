@@ -12,7 +12,7 @@
         "type": "keyword"
       },
       "kwargs": {
-        "type": "keyword"
+        "type": "text"
       },
       "modification_time": {
         "type": "date"
@@ -46,6 +46,15 @@
         "type": "keyword"
       },
       "workflow": {
+        "type": "keyword"
+      },
+      "resource": {
+        "type": "keyword"
+      },
+      "status": {
+        "type": "keyword"
+      },
+      "type": {
         "type": "keyword"
       },
       "job_spec": {

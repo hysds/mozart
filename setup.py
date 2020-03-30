@@ -8,7 +8,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='mozart',
-    version='1.1.4',
+    version='1.1.5',
     long_description='HySDS job orchestration/worker web interface',
     packages=find_packages(),
     include_package_data=True,
@@ -34,10 +34,6 @@ setup(
         'elasticsearch-dsl>=7.0.0,<8.0.0',
         'pytz',
         'numpy',
-        # TODO: remove installation of master branch after new release of
-        # flask-restx includes the fix referred to here:
-        # https://github.com/python-restx/flask-restx/issues/85
-        # 'flask-restx>0.1.1',
-        'flask-restx @ git+https://git@github.com/python-restx/flask-restx',
+        'flask-restx>=0.2.0',
         'future>=0.17.1']
 )
