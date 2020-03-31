@@ -4,16 +4,13 @@ from __future__ import division
 from __future__ import absolute_import
 from future import standard_library
 standard_library.install_aliases()
+
 import json
 import requests
-import types
-import re
 from flask import jsonify, Blueprint, request, Response, render_template, make_response
 from flask_login import login_required
-from pprint import pformat
 
 from mozart import app
-
 
 mod = Blueprint('services/user_tags', __name__)
 
@@ -34,15 +31,13 @@ def add_user_tag():
 
     app.logger.debug("Adding tag '%s' to id '%s'." % (tag, id))
 
-    # query
     es_url = app.config['ES_URL']
-    es_index = "%s-current" % app.config['JOB_STATUS_INDEX']
+    es_index = app.config['JOB_STATUS_INDEX']
     query = {
         "fields": ["user_tags"],
         "query": {"term": {"_id": id}}
     }
-    r = requests.post('%s/%s/_search' %
-                      (es_url, es_index), data=json.dumps(query))
+    r = requests.post('%s/%s/_search' % (es_url, es_index), data=json.dumps(query))
     result = r.json()
     if r.status_code != 200:
         app.logger.debug("Failed to query ES. Got status code %d:\n%s" %
@@ -70,8 +65,7 @@ def add_user_tag():
         "doc": {"user_tags": user_tags},
         "doc_as_upsert": True
     }
-    r = requests.post('%s/%s/%s/%s/_update' %
-                      (es_url, actual_index, doctype, id), data=json.dumps(new_doc))
+    r = requests.post('%s/%s/%s/%s/_update' % (es_url, actual_index, doctype, id), data=json.dumps(new_doc))
     result = r.json()
     if r.status_code != 200:
         app.logger.debug("Failed to update user_tags for %s. Got status code %d:\n%s" %
@@ -89,7 +83,6 @@ def add_user_tag():
 def remove_user_tag():
     """Remove a user tag."""
 
-    # get tag
     id = request.form['id']
     tag = request.form['tag']
     if id is None:
@@ -102,13 +95,12 @@ def remove_user_tag():
 
     # query
     es_url = app.config['ES_URL']
-    es_index = "%s-current" % app.config['JOB_STATUS_INDEX']
+    es_index = app.config['JOB_STATUS_INDEX']
     query = {
         "fields": ["user_tags"],
         "query": {"term": {"_id": id}}
     }
-    r = requests.post('%s/%s/_search' %
-                      (es_url, es_index), data=json.dumps(query))
+    r = requests.post('%s/%s/_search' % (es_url, es_index), data=json.dumps(query))
     result = r.json()
     if r.status_code != 200:
         app.logger.debug("Failed to query ES. Got status code %d:\n%s" %
@@ -124,8 +116,7 @@ def remove_user_tag():
     # get actual index (no aliases), doctype and user tags
     actual_index = result['hits']['hits'][0]['_index']
     doctype = result['hits']['hits'][0]['_type']
-    user_tags = result['hits']['hits'][0].get(
-        'fields', {}).get('user_tags', [])
+    user_tags = result['hits']['hits'][0].get('fields', {}).get('user_tags', [])
 
     # add tag if not already there
     if tag in user_tags:

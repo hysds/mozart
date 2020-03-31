@@ -1,60 +1,64 @@
 {
   "mappings": {
-    ".percolator": {
-      "_id": {
-        "type": "string", 
-        "store": "yes", 
-        "index": "not_analyzed"
-      }, 
-      "_timestamp": {
-        "enabled": true, 
-        "store": "yes"
+    "properties": {
+      "creation_time": {
+        "type": "date"
       },
-      "properties": {
-        "query": {
-          "enabled": false,
-          "type": "object"
-        },
-        "workflow": {
-          "index": "not_analyzed", 
-          "type": "string"
-        }, 
-        "job_type": {
-          "index": "not_analyzed", 
-          "type": "string"
-        }, 
-        "rule_name": {
-          "index": "not_analyzed", 
-          "type": "string"
-        }, 
-        "username": {
-          "index": "not_analyzed", 
-          "type": "string"
-        }, 
-        "query_string": {
-          "index": "not_analyzed", 
-          "type": "string"
-        },
-        "kwargs": {
-          "index": "not_analyzed", 
-          "type": "string"
-        },
-        "enabled": {
-          "type": "boolean",
-          "null_value": true
-        },
-        "resource": {
-          "index": "not_analyzed",
-          "type": "string"
-        },
-        "status": {
-          "index": "not_analyzed",
-          "type": "string"
-        },
-        "type": {
-          "index": "not_analyzed",
-          "type": "string"
-        }
+      "enabled": {
+        "type": "boolean",
+        "null_value": true
+      },
+      "job_type": {
+        "type": "keyword"
+      },
+      "kwargs": {
+        "type": "text"
+      },
+      "modification_time": {
+        "type": "date"
+      },
+      "modified_time": {
+        "type": "date"
+      },
+      "passthru_query": {
+        "type": "boolean"
+      },
+      "priority": {
+        "type": "long"
+      },
+      "query": {
+        "type": "object",
+        "enabled": false
+      },
+      "query_all": {
+        "type": "boolean"
+      },
+      "query_string": {
+        "type": "text"
+      },
+      "queue": {
+        "type": "text"
+      },
+      "rule_name": {
+        "type": "keyword"
+      },
+      "username": {
+        "type": "keyword"
+      },
+      "workflow": {
+        "type": "keyword"
+      },
+      "resource": {
+        "type": "keyword"
+      },
+      "status": {
+        "type": "keyword"
+      },
+      "type": {
+        "type": "keyword"
+      },
+      "job_spec": {
+        "type": "keyword"
       }
     }
   }
