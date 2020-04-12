@@ -942,8 +942,15 @@ class OnDemandJobs(Resource):
         query_string = request_data.get('query', None)
         kwargs = request_data.get('kwargs', '{}')
 
-        query = json.loads(query_string)
-        query_string = json.dumps(query)
+        try:
+            query = json.loads(query_string)
+            query_string = json.dumps(query)
+        except (ValueError, TypeError, Exception) as e:
+            app.logger.error(e)
+            return {
+                'success': False,
+                'message': 'invalid JSON query'
+            }, 400
 
         if tag is None or job_type is None or hysds_io is None or queue is None or query_string is None:
             return {
