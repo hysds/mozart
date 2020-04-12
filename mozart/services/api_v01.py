@@ -1117,13 +1117,21 @@ class UserRules(Resource):
             }, 400
 
         try:
-            parsed_query = json.loads(query_string)
-            query_string = json.dumps(parsed_query)
+            json.loads(query_string)
         except (ValueError, TypeError) as e:
             app.logger.error(e)
             return {
                 'success': False,
                 'message': 'invalid elasticsearch query JSON'
+            }, 400
+
+        try:
+            json.loads(kwargs)
+        except (ValueError, TypeError) as e:
+            app.logger.error(e)
+            return {
+                'success': False,
+                'message': 'invalid JSON: kwargs'
             }, 400
 
         # check if rule name already exists
@@ -1164,7 +1172,6 @@ class UserRules(Resource):
             "kwargs": kwargs,
             "job_type": hysds_io,
             "enabled": True,
-            "query": json.loads(query_string),
             "passthru_query": is_passthrough_query,
             "query_all": False,
             "queue": queue,
@@ -1231,8 +1238,16 @@ class UserRules(Resource):
             update_doc['priority'] = int(priority)
         if query_string:
             update_doc['query_string'] = query_string
-            update_doc['query'] = json.loads(query_string)
+            try:
+                json.loads(query_string)
+            except (ValueError, TypeError) as e:
+                app.logger.error(e)
+                return {
+                    'success': False,
+                    'message': 'invalid elasticsearch query JSON'
+                }, 400
         if kwargs:
+            update_doc['kwargs'] = kwargs
             try:
                 json.loads(kwargs)
             except (ValueError, TypeError) as e:
@@ -1241,8 +1256,6 @@ class UserRules(Resource):
                     'success': False,
                     'message': 'invalid JSON: kwargs'
                 }, 400
-
-            update_doc['kwargs'] = kwargs
         if queue:
             update_doc['queue'] = queue
         if enabled is not None:

@@ -26,10 +26,6 @@
       "priority": {
         "type": "long"
       },
-      "query": {
-        "type": "object",
-        "enabled": false
-      },
       "query_all": {
         "type": "boolean"
       },
