@@ -60,6 +60,9 @@ on_demand_ns = api.namespace(ON_DEMAND_NS, description="For retrieving and submi
 USER_RULE_NS = "user-rules"
 user_rule_ns = api.namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user rules")
 
+USER_TAGS_NS = "user-tags"
+user_tags_ns = api.namespace(USER_TAGS_NS, description="user tags for Mozart jobs")
+
 HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
 JOB_SPECS_INDEX = app.config['JOB_SPECS_INDEX']
 JOB_STATUS_INDEX = app.config['JOB_STATUS_INDEX']
@@ -1302,4 +1305,99 @@ class UserRules(Resource):
             'success': True,
             'message': 'user rule deleted',
             'id': _id
+        }
+
+
+@user_tags_ns.route('', endpoint='user-tags')
+@api.doc(responses={200: "Success", 500: "Execution failed"}, description="User tags for Mozart jobs")
+class UserTags(Resource):
+    def put(self):
+        request_data = request.json or request.form
+        _id = request_data.get('id')
+        _index = request_data.get('index')
+        tag = request_data.get('tag')
+        app.logger.info('_id: %s\n _index: %s\n tag: %s' % (_id, _index, tag))
+
+        if _index != 'job_status-current':
+            app.logger.error('user tags only for index: job_status-current')
+            return {
+                'success': False,
+                'message': 'user tags only for index: job_status-current'
+            }, 400
+
+        if _id is None or _index is None or tag is None:
+            return {
+                'success': False,
+                'message': 'id, index and tag must be supplied'
+            }, 400
+
+        dataset = mozart_es.get_by_id(_index, _id, safe=True)
+        if dataset['found'] is False:
+            return {
+                'success': False,
+                'message': "dataset not found"
+            }, 404
+
+        source = dataset['_source']
+        user_tags = source.get('user_tags', [])
+        app.logger.info('found user tags: %s' % str(user_tags))
+
+        if tag not in user_tags:
+            user_tags.append(tag)
+            app.logger.info('tags after adding: %s' % str(user_tags))
+
+        update_doc = {
+            'user_tags': user_tags
+        }
+        mozart_es.update_document(_index, _id, update_doc, refresh=True)
+
+        return {
+            'success': True,
+            'tags': user_tags
+        }
+
+    def delete(self):
+        _id = request.args.get('id')
+        _index = request.args.get('index')
+        tag = request.args.get('tag')
+        app.logger.info('_id: %s _index: %s tag: %s' % (_id, _index, tag))
+
+        if _index != 'job_status-current':
+            app.logger.error('user tags only for index: job_status-current')
+            return {
+                'success': False,
+                'message': 'user tags only for index: job_status-current'
+            }, 400
+
+        if _id is None or _index is None:
+            return {
+                'success': False,
+                'message': 'id and index must be supplied'
+            }, 400
+
+        dataset = mozart_es.get_by_id(_index, _id, safe=True)
+        if dataset['found'] is False:
+            return {
+                'success': False,
+                'message': "dataset not found"
+            }, 404
+
+        source = dataset['_source']
+        user_tags = source.get('user_tags', [])
+        app.logger.info('found user tags %s' % str(user_tags))
+
+        if tag in user_tags:
+            user_tags.remove(tag)
+            app.logger.info('tags after removing: %s' % str(user_tags))
+        else:
+            app.logger.warning('tag not found: %s' % tag)
+
+        update_doc = {
+            'user_tags': user_tags
+        }
+        mozart_es.update_document(_index, _id, update_doc, refresh=True)
+
+        return {
+            'success': True,
+            'tags': user_tags
         }
