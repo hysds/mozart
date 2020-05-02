@@ -34,7 +34,7 @@ if __name__ == "__main__":
     indices = ("containers", "job_specs", "hysds_ios")
 
     curr_file = os.path.dirname(__file__)
-    tmpl_file = os.path.abspath(os.path.join(curr_file, '..', 'config', 'es_template.json'))
+    tmpl_file = os.path.abspath(os.path.join(curr_file, '..', 'configs', 'es_template.json'))
     tmpl_file = os.path.normpath(tmpl_file)
 
     for index in indices:
