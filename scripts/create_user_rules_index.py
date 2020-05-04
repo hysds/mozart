@@ -9,10 +9,11 @@ standard_library.install_aliases()
 
 import os
 import json
-from mozart import app, mozart_es
 
+from hysds.es_util import get_mozart_es
+from mozart import app
 
-# get destination index and doctype
+mozart_es = get_mozart_es()
 USER_RULES_INDEX = app.config['USER_RULES_INDEX']
 
 body = {}
