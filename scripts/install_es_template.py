@@ -23,7 +23,7 @@ def write_template(index, tmpl_file):
         tmpl = Template(f.read()).render(index=index)
 
     # https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete_template
-    mozart_es.es.indices.delete_template(name=index, ignore=400)
+    mozart_es.es.indices.delete_template(name=index, ignore=[400, 404])
 
     # https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.put_template
     mozart_es.es.indices.put_template(name=index, body=tmpl)
