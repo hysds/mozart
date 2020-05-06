@@ -874,7 +874,7 @@ class JobParams(Resource):
                 "term": {"job-specification.keyword": job_type}
             }
         }
-        documents = mozart_es.search(index=HYSDS_IOS_INDEX, query=query)
+        documents = mozart_es.search(index=HYSDS_IOS_INDEX, body=query)
 
         if documents['hits']['total']['value'] == 0:
             error_message = '%s not found' % job_type
