@@ -93,7 +93,7 @@ class GetJobTypes(Resource):
                 "match_all": {}
             }
         }
-        job_specs = mozart_es.query(JOB_SPECS_INDEX, query)
+        job_specs = mozart_es.query(index=JOB_SPECS_INDEX, body=query)
         ids = [job_spec['_id'] for job_spec in job_specs]
         return {
             'success': True,
@@ -123,13 +123,12 @@ class JobSpecs(Resource):
     @api.marshal_with(resp_model_job_type)
     @api.expect(job_spec_parser)
     def get(self):
-        """Gets a list of Job Type specifications"""
+        """Gets a Job Type specification object for the given ID."""
         _id = request.form.get('id', request.args.get('id', None))
-
         if _id is None:
             return {'success': False, 'message': 'missing parameter: id'}, 400
 
-        job_spec = mozart_es.get_by_id(JOB_SPECS_INDEX, _id, safe=True)
+        job_spec = mozart_es.get_by_id(index=JOB_SPECS_INDEX, id=_id, ignore=404)
         if job_spec['found'] is False:
             app.logger.error('job_spec not found %s' % _id)
             return {
@@ -139,14 +138,14 @@ class JobSpecs(Resource):
 
         return {
             'success': True,
-            'message': "",
+            'message': "job spec for %s" % _id,
             'result': job_spec['_source']
         }
 
     @api.marshal_with(resp_model_job_type)
     @api.expect(post_job_spec_parser)
     def post(self):
-        """Add job spec"""
+        """Add a Job Type specification JSON object."""
         spec = request.form.get('spec', request.args.get('spec', None))
         if spec is None:
             return {'success': False, 'message': 'spec object missing'}, 400
@@ -157,10 +156,10 @@ class JobSpecs(Resource):
         except (ValueError, KeyError, json.decoder.JSONDecodeError, Exception) as e:
             return {'success': False, 'message': e}, 400
 
-        mozart_es.index_document(JOB_SPECS_INDEX, obj, _id)
+        mozart_es.index_document(index=JOB_SPECS_INDEX, body=obj, id=_id)
         return {
             'success': True,
-            'message': "%s added to index %s" % (_id, HYSDS_IOS_INDEX),
+            'message': "job_spec %s added to index %s" % (_id, HYSDS_IOS_INDEX),
             'result': _id
         }
 
@@ -172,15 +171,14 @@ class JobSpecs(Resource):
         if _id is None:
             return {
                 'success': False,
-                'messsage': 'id parameter not included'
+                'message': 'id parameter not included'
             }, 400
 
-        mozart_es.delete_by_id(JOB_SPECS_INDEX, _id)
+        mozart_es.delete_by_id(index=JOB_SPECS_INDEX, id=_id)
         app.logger.info('Deleted job_spec %s from index: %s' % (_id, JOB_SPECS_INDEX))
         return {
             'success': True,
-            'message': "job spec deleted: %s" % _id,
-            'result': _id
+            'message': ""
         }
 
 
@@ -209,8 +207,7 @@ class JobQueues(Resource):
             queues = mozart.lib.queue_utils.get_queue_names(ident)
             app.logger.warn("Queues: " + str(queues))
         except Exception as e:
-            message = "Failed to list job queues. {0}:{1}".format(
-                type(e), str(e))
+            message = "Failed to list job queues. {0}:{1}".format(type(e), str(e))
             app.logger.warning(message)
             app.logger.warning(traceback.format_exc(e))
             return {'success': False, 'message': message}, 500
@@ -350,7 +347,7 @@ class JobStatus(Resource):
         if _id is None:
             return {'success': False, 'message': 'id not supplied'}, 400
 
-        job_status = mozart_es.get_by_id(JOB_STATUS_INDEX, _id, safe=True)
+        job_status = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404)
         if job_status['found'] is False:
             return {
                 'success': False,
@@ -383,16 +380,7 @@ class Jobs(Resource):
     @api.marshal_with(resp_model)
     def get(self):
         """Paginated list submitted jobs"""
-        query = {
-            "_source": {
-                "exclude": ["*"]
-            },
-            "query": {
-                "match_all": {}
-            }
-        }
-
-        jobs = mozart_es.query(JOB_STATUS_INDEX, query)
+        jobs = mozart_es.query(index=JOB_STATUS_INDEX, _source=False)
         return {
             'success': True,
             'message': "",
@@ -421,7 +409,7 @@ class JobInfo(Resource):
         if _id is None:
             return {'success': False, 'message': 'id must be supplied'}, 400
 
-        info = mozart_es.get_by_id(JOB_STATUS_INDEX, _id, safe=True)
+        info = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404)
         if info['found'] is False:
             return {
                 'success': False,
@@ -449,12 +437,7 @@ class ContainerTypes(Resource):
     @api.marshal_with(resp_model_job_types)
     def get(self):
         """Get a list of containers managed by Mozart"""
-        query = {
-            "query": {
-                "match_all": {}
-            }
-        }
-        containers = mozart_es.query(CONTAINERS_INDEX, query)
+        containers = mozart_es.query(index=CONTAINERS_INDEX, _source=False)
         ids = [container['_id'] for container in containers]
 
         return {
@@ -490,9 +473,12 @@ class Containers(Resource):
         """Get information on container by ID"""
         _id = request.form.get('id', request.args.get('id', None))
 
-        container = mozart_es.get_by_id(CONTAINERS_INDEX, _id, safe=True)
+        container = mozart_es.get_by_id(index=CONTAINERS_INDEX, id=_id, ignore=404)
         if container['found'] is False:
-            return {'success': False, 'message': ""}, 404
+            return {
+                'success': False,
+                'message': ""
+            }, 404
 
         return {
             'success': True,
@@ -521,7 +507,7 @@ class Containers(Resource):
             'url': url,
             'version': version
         }
-        mozart_es.index_document(CONTAINERS_INDEX, container_obj, name)
+        mozart_es.index_document(index=CONTAINERS_INDEX, body=container_obj, id=name)
 
         return {
             'success': True,
@@ -540,11 +526,11 @@ class Containers(Resource):
                 'message': 'id must be supplied'
             }, 400
 
-        mozart_es.delete_by_id(CONTAINERS_INDEX, _id)
+        mozart_es.delete_by_id(index=CONTAINERS_INDEX, id=_id)
         app.logger.info('Deleted container %s from index: %s' % (_id, CONTAINERS_INDEX))
         return {
             'success': True,
-            'message': "container deleted: %s" % _id,
+            'message': "job_spec deleted: %s" % _id,
             'result': _id
         }
 
@@ -564,12 +550,7 @@ class HySDSIOTypes(Resource):
     @api.marshal_with(resp_model_job_types)
     def get(self):
         """List HySDS IO specifications"""
-        query = {
-            "query": {
-                "match_all": {}
-            }
-        }
-        hysds_ios = mozart_es.query(HYSDS_IOS_INDEX, query)
+        hysds_ios = mozart_es.query(index=HYSDS_IOS_INDEX, _source=False)
         ids = [hysds_io['_id'] for hysds_io in hysds_ios]
         return {
             'success': True,
@@ -602,7 +583,7 @@ class HySDSio(Resource):
         if _id is None:
             return {'success': False, 'message': 'missing parameter: id'}, 400
 
-        hysds_io = mozart_es.get_by_id(HYSDS_IOS_INDEX, _id, safe=True)
+        hysds_io = mozart_es.get_by_id(index=HYSDS_IOS_INDEX, id=_id, ignore=404)
         if hysds_io['found'] is False:
             return {'success': False, 'message': ""}, 404
 
@@ -625,9 +606,12 @@ class HySDSio(Resource):
             obj = json.loads(spec)
             _id = obj['id']
         except (ValueError, KeyError, json.decoder.JSONDecodeError, Exception) as e:
-            return {'success': False, 'message': e}, 400
+            return {
+                'success': False,
+                'message': e
+            }, 400
 
-        mozart_es.index_document(HYSDS_IOS_INDEX, obj, _id)
+        mozart_es.index_document(index=HYSDS_IOS_INDEX, body=obj, id=_id)
         return {
             'success': True,
             'message': "%s added to index %s" % (_id, HYSDS_IOS_INDEX),
@@ -642,11 +626,12 @@ class HySDSio(Resource):
         if _id is None:
             return {'success': False, 'message': 'id parameter not included'}, 400
 
-        mozart_es.delete_by_id(HYSDS_IOS_INDEX, _id)
+        mozart_es.delete_by_id(index=HYSDS_IOS_INDEX, id=_id)
         app.logger.info('deleted %s from index: %s' % (_id, HYSDS_IOS_INDEX))
+
         return {
             'success': True,
-            'message': ""
+            'message': "deleted hysds_io: %s" % _id
         }
 
 
@@ -769,7 +754,7 @@ class OnDemandJobs(Resource):
             }
         }
 
-        documents = mozart_es.query(HYSDS_IOS_INDEX, query)
+        documents = mozart_es.query(index=HYSDS_IOS_INDEX, body=query)
         documents = [{
             'hysds_io': row['_source']['id'],
             'job_spec': row['_source']['job-specification'],
@@ -816,8 +801,8 @@ class OnDemandJobs(Resource):
                 'message': 'missing field: [tags, job_type, hysds_io, queue, query]'
             }, 400
 
-        doc = mozart_es.get_by_id(HYSDS_IOS_INDEX, hysds_io, safe=True)
-        if doc is False:
+        doc = mozart_es.get_by_id(index=HYSDS_IOS_INDEX, id=hysds_io, ignore=404)
+        if doc['found'] is False:
             app.logger.error('failed to fetch %s, not found in hysds_ios' % hysds_io)
             return {
                 'success': False,
@@ -886,7 +871,6 @@ class JobParams(Resource):
 
         query = {
             "query": {
-                # "term": {"_id": job_type}
                 "term": {"job-specification.keyword": job_type}
             }
         }
@@ -894,7 +878,10 @@ class JobParams(Resource):
 
         if documents['hits']['total']['value'] == 0:
             error_message = '%s not found' % job_type
-            return {'success': False, 'message': error_message}, 404
+            return {
+                'success': False,
+                'message': error_message
+            }, 404
 
         job_type = documents['hits']['hits'][0]
         job_params = job_type['_source']['params']
@@ -921,21 +908,20 @@ class UserRules(Resource):
         user_rules_index = app.config['USER_RULES_INDEX']
 
         if _id:
-            rule = mozart_es.get_by_id(user_rules_index, _id, safe=True)
-            if rule['found'] is True:
+            rule = mozart_es.get_by_id(index=user_rules_index, id=_id, ignore=404)
+            if rule['found'] is False:
+                return {
+                    'success': False,
+                    'message': rule['message']
+                }, 404
+            else:
                 rule = {**rule, **rule['_source']}
                 return {
                     'success': True,
                     'rule': rule
                 }
-            else:
-                return {
-                    'success': False,
-                    'message': rule['message']
-                }, 500
 
-        query = {"query": {"match_all": {}}}
-        user_rules = mozart_es.query(user_rules_index, query)
+        user_rules = mozart_es.query(index=user_rules_index)
 
         parsed_user_rules = []
         for rule in user_rules:
@@ -976,28 +962,28 @@ class UserRules(Resource):
             if not queue:
                 missing_params.append('queue')
             return {
-                'success': False,
-                'message': 'Params not specified: %s' % ', '.join(missing_params),
-                'result': None,
-            }, 400
+                       'success': False,
+                       'message': 'Params not specified: %s' % ', '.join(missing_params),
+                       'result': None,
+                   }, 400
 
         try:
             json.loads(query_string)
         except (ValueError, TypeError) as e:
             app.logger.error(e)
             return {
-                'success': False,
-                'message': 'invalid elasticsearch query JSON'
-            }, 400
+                       'success': False,
+                       'message': 'invalid elasticsearch query JSON'
+                   }, 400
 
         try:
             json.loads(kwargs)
         except (ValueError, TypeError) as e:
             app.logger.error(e)
             return {
-                'success': False,
-                'message': 'invalid JSON: kwargs'
-            }, 400
+                       'success': False,
+                       'message': 'invalid JSON: kwargs'
+                   }, 400
 
         # check if rule name already exists
         rule_exists_query = {
@@ -1007,21 +993,20 @@ class UserRules(Resource):
                 }
             }
         }
-        # existing_rules = es.count(index=user_rules_index, body=rule_exists_query)
-        existing_rules_count = mozart_es.get_count(user_rules_index, rule_exists_query)
+        existing_rules_count = mozart_es.get_count(index=user_rules_index, body=rule_exists_query)
         if existing_rules_count > 0:
             return {
-                'success': False,
-                'message': 'user rule already exists: %s' % rule_name
-            }, 409
+                       'success': False,
+                       'message': 'user rule already exists: %s' % rule_name
+                   }, 409
 
         # check if job_type (hysds_io) exists in elasticsearch
-        job_type = mozart_es.get_by_id(HYSDS_IOS_INDEX, hysds_io, safe=True)
-        if not job_type['found']:
+        job_type = mozart_es.get_by_id(index=HYSDS_IOS_INDEX, id=hysds_io, ignore=404)
+        if job_type['found'] is False:
             return {
-                'success': False,
-                'message': '%s not found' % hysds_io
-            }, 400
+                       'success': False,
+                       'message': '%s not found' % hysds_io
+                   }, 400
 
         params = job_type['_source']['params']
         is_passthrough_query = check_passthrough_query(params)
@@ -1044,7 +1029,7 @@ class UserRules(Resource):
             "creation_time": now,
         }
 
-        result = mozart_es.index_document(user_rules_index, new_doc, refresh=True)
+        result = mozart_es.index_document(index=user_rules_index, body=new_doc, refresh=True)
         return {
             'success': True,
             'message': 'rule created',
@@ -1074,17 +1059,16 @@ class UserRules(Resource):
 
         # check if job_type (hysds_io) exists in elasticsearch (only if we're updating job_type)
         if hysds_io:
-            job_type = mozart_es.get_by_id(HYSDS_IOS_INDEX, hysds_io, safe=True)
-            if not job_type['found']:
+            job_type = mozart_es.get_by_id(index=HYSDS_IOS_INDEX, id=hysds_io, ignore=404)
+            if job_type['found'] is False:
                 return {
                     'success': False,
                     'message': 'job_type not found: %s' % hysds_io
-                }, 400
+                }, 404
 
         app.logger.info('finding existing user rule: %s' % _id)
-        # es.get(index=user_rules_index, doc_type='_doc', id=_id)
-        existing_rule = mozart_es.get_by_id(user_rules_index, _id, safe=True)
-        if not existing_rule['found']:
+        existing_rule = mozart_es.get_by_id(index=user_rules_index, id=_id, ignore=404)
+        if existing_rule['found'] is False:
             app.logger.info('rule not found %s' % _id)
             return {
                 'result': False,
@@ -1128,7 +1112,13 @@ class UserRules(Resource):
         update_doc['modified_time'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
 
         app.logger.info('editing document id %s in user_rule index' % _id)
-        result = mozart_es.update_document(user_rules_index, _id, update_doc, refresh=True)
+
+        doc = {
+            'doc_as_upsert': True,
+            'doc': update_doc
+        }
+
+        result = mozart_es.update_document(index=user_rules_index, id=_id, body=doc, refresh=True)
         app.logger.info(result)
         app.logger.info('document updated: %s' % _id)
         return {
@@ -1147,8 +1137,8 @@ class UserRules(Resource):
                 'message': 'id not included'
             }, 400
 
-        result = mozart_es.delete_by_id(user_rules_index, _id, safe=True)
-        if result['result'] == 'not_found':
+        result = mozart_es.delete_by_id(index=user_rules_index, id=_id, ignore=404)
+        if result['found'] is False:
             app.logger.error('failed to delete %s from user_rules index' % _id)
             return {
                 'success': False,
@@ -1186,7 +1176,7 @@ class UserTags(Resource):
                 'message': 'id, index and tag must be supplied'
             }, 400
 
-        dataset = mozart_es.get_by_id(_index, _id, safe=True)
+        dataset = mozart_es.get_by_id(index=_index, id=_id, ignore=404)
         if dataset['found'] is False:
             return {
                 'success': False,
@@ -1202,9 +1192,12 @@ class UserTags(Resource):
             app.logger.info('tags after adding: %s' % str(user_tags))
 
         update_doc = {
-            'user_tags': user_tags
+            'doc_as_upsert': True,
+            'doc': {
+                'user_tags': user_tags
+            }
         }
-        mozart_es.update_document(_index, _id, update_doc, refresh=True)
+        mozart_es.update_document(index=_index, id=_id, body=update_doc, refresh=True)
 
         return {
             'success': True,
@@ -1230,7 +1223,7 @@ class UserTags(Resource):
                 'message': 'id and index must be supplied'
             }, 400
 
-        dataset = mozart_es.get_by_id(_index, _id, safe=True)
+        dataset = mozart_es.get_by_id(index=_index, id=_id, ignore=404)
         if dataset['found'] is False:
             return {
                 'success': False,
@@ -1248,9 +1241,12 @@ class UserTags(Resource):
             app.logger.warning('tag not found: %s' % tag)
 
         update_doc = {
-            'user_tags': user_tags
+            'doc_as_upsert': True,
+            'doc': {
+                'user_tags': user_tags
+            }
         }
-        mozart_es.update_document(_index, _id, update_doc, refresh=True)
+        mozart_es.update_document(index=_index, id=_id, body=update_doc, refresh=True)
 
         return {
             'success': True,
