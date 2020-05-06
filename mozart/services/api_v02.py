@@ -996,9 +996,9 @@ class UserRules(Resource):
         existing_rules_count = mozart_es.get_count(index=user_rules_index, body=rule_exists_query)
         if existing_rules_count > 0:
             return {
-                       'success': False,
-                       'message': 'user rule already exists: %s' % rule_name
-                   }, 409
+                'success': False,
+                'message': 'user rule already exists: %s' % rule_name
+            }, 409
 
         # check if job_type (hysds_io) exists in elasticsearch
         job_type = mozart_es.get_by_id(index=HYSDS_IOS_INDEX, id=hysds_io, ignore=404)
