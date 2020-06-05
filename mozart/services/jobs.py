@@ -20,7 +20,7 @@ from pprint import pprint, pformat
 from urllib.parse import urlparse
 
 from hysds.celery import app as celapp
-from mozart import app
+from mozart import app, mozart_es
 
 
 mod = Blueprint('services/jobs', __name__)
@@ -33,29 +33,30 @@ JOB_NAME_RE = re.compile(r'^(.+)-\d{8}T\d{6}.*$')
 def job_count():
     """Return total number of jobs and counts by status."""
 
-    query = {
+    body = {
         "size": 0,
-        "facets": {
-            "status": {
+        "aggs": {
+            "result": {
                 "terms": {
                     "field": "status"
                 }
             }
         }
     }
-    es_url = app.config['ES_URL']
-    index = app.config['JOB_STATUS_INDEX']
-    r = requests.post('%s/%s/job/_search' %
-                      (es_url, index), data=json.dumps(query))
-    r.raise_for_status()
-    result = r.json()
-    counts = {'total': result['facets']['status']['total']}
-    for terms in result['facets']['status']['terms']:
-        counts[terms['term']] = terms['count']
+    results = mozart_es.search(index="job_status-*", body=body)
+    app.logger.info(json.dumps(results, indent=2))
+
+    buckets = results['aggregations']['result']['buckets']
+
+    total = 0
+    counts = {}
+    for bucket in buckets:
+        counts[bucket['key']] = bucket['doc_count']
+        total += bucket['doc_count']
+    counts['total'] = total
 
     return jsonify({
         'success': True,
-        'message': '',
         'counts': counts
     })
 
@@ -102,14 +103,14 @@ def get_text():
 @mod.route('/task/stop/<index>', methods=['GET'])
 @login_required
 def stop_running(index=None):
-    ''' Stops tasks '''
+    """ Stops tasks """
     return purge(index, False)
 
 
 @mod.route('/task/purge/<index>', methods=['GET'])
 @login_required
 def purge_complete(index=None):
-    ''' Purges non-active tasks '''
+    """ Purges non-active tasks """
     return purge(index, True)
 
 
