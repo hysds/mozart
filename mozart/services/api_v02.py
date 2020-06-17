@@ -1117,7 +1117,7 @@ class UserRules(Resource):
             update_doc['queue'] = queue
         if enabled is not None:
             update_doc['enabled'] = enabled
-        if tags:
+        if tags is not None:
             if type(tags) == str:
                 tags = [tags]
             update_doc['tags'] = tags
