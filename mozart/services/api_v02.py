@@ -63,6 +63,9 @@ user_rule_ns = api.namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user
 USER_TAGS_NS = "user-tags"
 user_tags_ns = api.namespace(USER_TAGS_NS, description="user tags for Mozart jobs")
 
+USER_RULES_TAGS = "user-rules-tags"
+user_rules_tags_ns = api.namespace(USER_RULES_TAGS, description="user tags for Mozart jobs")
+
 HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
 JOB_SPECS_INDEX = app.config['JOB_SPECS_INDEX']
 JOB_STATUS_INDEX = app.config['JOB_STATUS_INDEX']
