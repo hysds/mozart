@@ -55,6 +55,9 @@
       },
       "job_spec": {
         "type": "keyword"
+      },
+      "tags": {
+        "type": "keyword"
       }
     }
   }

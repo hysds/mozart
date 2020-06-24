@@ -63,6 +63,9 @@ user_rule_ns = api.namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user
 USER_TAGS_NS = "user-tags"
 user_tags_ns = api.namespace(USER_TAGS_NS, description="user tags for Mozart jobs")
 
+USER_RULES_TAGS = "user-rules-tags"
+user_rules_tags_ns = api.namespace(USER_RULES_TAGS, description="user tags for Mozart jobs")
+
 HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
 JOB_SPECS_INDEX = app.config['JOB_SPECS_INDEX']
 JOB_STATUS_INDEX = app.config['JOB_STATUS_INDEX']
@@ -896,8 +899,7 @@ class JobParams(Resource):
 
 
 @user_rule_ns.route('', endpoint='user-rules')
-@api.doc(responses={200: "Success",
-                    500: "Execution failed"},
+@api.doc(responses={200: "Success", 500: "Execution failed"},
          description="Retrieve on job params for specific jobs")
 class UserRules(Resource):
     """User Rules API"""
@@ -946,6 +948,7 @@ class UserRules(Resource):
         query_string = request_data.get('query_string')
         kwargs = request_data.get('kwargs', '{}')
         queue = request_data.get('queue')
+        tags = request_data.get('tags', [])
 
         username = "ops"  # TODO: add user role and permissions, hard coded to "ops" for now
 
@@ -962,28 +965,28 @@ class UserRules(Resource):
             if not queue:
                 missing_params.append('queue')
             return {
-                       'success': False,
-                       'message': 'Params not specified: %s' % ', '.join(missing_params),
-                       'result': None,
-                   }, 400
+                'success': False,
+                'message': 'Params not specified: %s' % ', '.join(missing_params),
+                'result': None,
+            }, 400
 
         try:
             json.loads(query_string)
         except (ValueError, TypeError) as e:
             app.logger.error(e)
             return {
-                       'success': False,
-                       'message': 'invalid elasticsearch query JSON'
-                   }, 400
+                'success': False,
+                'message': 'invalid elasticsearch query JSON'
+            }, 400
 
         try:
             json.loads(kwargs)
         except (ValueError, TypeError) as e:
             app.logger.error(e)
             return {
-                       'success': False,
-                       'message': 'invalid JSON: kwargs'
-                   }, 400
+                'success': False,
+                'message': 'invalid JSON: kwargs'
+            }, 400
 
         # check if rule name already exists
         rule_exists_query = {
@@ -1004,12 +1007,15 @@ class UserRules(Resource):
         job_type = mozart_es.get_by_id(index=HYSDS_IOS_INDEX, id=hysds_io, ignore=404)
         if job_type['found'] is False:
             return {
-                       'success': False,
-                       'message': '%s not found' % hysds_io
-                   }, 400
+                'success': False,
+                'message': '%s not found' % hysds_io
+            }, 400
 
         params = job_type['_source']['params']
         is_passthrough_query = check_passthrough_query(params)
+
+        if type(tags) == str:
+            tags = [tags]
 
         now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
         new_doc = {
@@ -1027,6 +1033,7 @@ class UserRules(Resource):
             "queue": queue,
             "modified_time": now,
             "creation_time": now,
+            "tags": tags
         }
 
         result = mozart_es.index_document(index=user_rules_index, body=new_doc, refresh=True)
@@ -1056,6 +1063,7 @@ class UserRules(Resource):
         kwargs = request_data.get('kwargs')
         queue = request_data.get('queue')
         enabled = request_data.get('enabled')
+        tags = request_data.get('tags')
 
         # check if job_type (hysds_io) exists in elasticsearch (only if we're updating job_type)
         if hysds_io:
@@ -1109,6 +1117,10 @@ class UserRules(Resource):
             update_doc['queue'] = queue
         if enabled is not None:
             update_doc['enabled'] = enabled
+        if tags is not None:
+            if type(tags) == str:
+                tags = [tags]
+            update_doc['tags'] = tags
         update_doc['modified_time'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
 
         app.logger.info('editing document id %s in user_rule index' % _id)
@@ -1251,4 +1263,41 @@ class UserTags(Resource):
         return {
             'success': True,
             'tags': user_tags
+        }
+
+
+@user_rules_tags_ns.route('', endpoint='user-rules-tags')
+@api.doc(responses={200: "Success", 500: "Execution failed"}, description="User tags for Mozart user rules")
+class UserRulesTags(Resource):
+    def get(self):
+        index = app.config['USER_RULES_INDEX']
+        body = {
+            "size": 0,
+            "aggs": {
+                "my_buckets": {
+                    "composite": {
+                        "size": 1000,
+                        "sources": [
+                            {
+                                "tags": {
+                                    "terms": {
+                                        "field": "tags"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+        results = mozart_es.search(index=index, body=body)
+        buckets = results['aggregations']['my_buckets']['buckets']
+        buckets = sorted(buckets, key=lambda k: k['doc_count'], reverse=True)
+        app.logger.info(buckets)
+        return {
+            'success': True,
+            'tags': [{
+                'key': tag['key']['tags'],
+                'count': tag['doc_count']
+            } for tag in buckets]
         }
