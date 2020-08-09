@@ -27,20 +27,28 @@ def get_job_status(ident):
     return hysds_commons.request_utils.get_requests_json_response(full_url)["_source"]["status"]
 
 
-def get_job_list(page_size=100, offset=0):
+def get_job_list(page_size=100, offset=0, username=None):
     '''
     Get a listing of jobs
     @param page_size - page size for pagination of jobs
     @param offset - starting offset for pagination
     '''
     # query
-    data = {"query": {"match_all": {}}, "fields": []}
+    if username is None:
+        data = {"query": {"match_all": {}}, "fields": []}
+    else:
+        data = {"query": {"bool": {"must": [{"term": {"job.job.username": username}}]}}}
+
     es_url = app.config['ES_URL']
     es_index = "job_status-current"
     full_url = "{0}/{1}/_search".format(es_url, es_index)
     results = hysds_commons.request_utils.post_scrolled_json_responses(
         full_url, "{0}/_search".format(es_url), data=json.dumps(data))
-    return sorted([result["_id"] for result in results])
+    if username is None:
+        return ([result["_id"] for result in results])
+    else:
+        return ([[result["_id"], result["_source"]["status"], result["_source"]["type"],
+                  result["_source"]["job"]["params"]["job_specification"]["params"]] for result in results])
 
 
 def get_job_info(ident):
