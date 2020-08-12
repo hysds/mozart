@@ -443,7 +443,7 @@ class GetJobs(Resource):
         '''
         try:
             username = request.form.get('username', request.args.get('username'), None)
-            detailed = request.args.get('detailed', False)
+            detailed = json.loads(request.form.get('detailed', request.args.get('detailed', False)).lower())
             page_size = request.form.get(
                 'page_size', request.args.get('page_size', 100))
             offset = request.form.get('offset', request.args.get('id', 0))
