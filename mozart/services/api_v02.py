@@ -430,6 +430,8 @@ class GetJobs(Resource):
                         help="Job Listing Pagination Size")
     parser.add_argument('username', required=False, type=str,
                         help="Username")
+    parser.add_argument('detailed', required=False, type=bool,
+                        help="Detailed job list flag")
     parser = api.parser()
     parser.add_argument('offset', required=False, type=str,
                         help="Job Listing Pagination Offset")
@@ -441,10 +443,11 @@ class GetJobs(Resource):
         '''
         try:
             username = request.form.get('username', request.args.get('username'), None)
+            detailed = request.args.get('detailed', False)
             page_size = request.form.get(
                 'page_size', request.args.get('page_size', 100))
             offset = request.form.get('offset', request.args.get('id', 0))
-            jobs = mozart.lib.job_utils.get_job_list(page_size, offset, username)
+            jobs = mozart.lib.job_utils.get_job_list(page_size, offset, username, detailed)
         except Exception as e:
             message = "Failed to get job listing(page: {2}, offset: {3}). {0}:{1}".format(
                 type(e), str(e), page_size, offset)

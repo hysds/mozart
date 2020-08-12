@@ -27,7 +27,7 @@ def get_job_status(ident):
     return hysds_commons.request_utils.get_requests_json_response(full_url)["_source"]["status"]
 
 
-def get_job_list(page_size=100, offset=0, username=None):
+def get_job_list(page_size=100, offset=0, username=None, detailed=False):
     '''
     Get a listing of jobs
     @param page_size - page size for pagination of jobs
@@ -44,7 +44,7 @@ def get_job_list(page_size=100, offset=0, username=None):
     full_url = "{0}/{1}/_search".format(es_url, es_index)
     results = hysds_commons.request_utils.post_scrolled_json_responses(
         full_url, "{0}/_search".format(es_url), data=json.dumps(data))
-    if username is None:
+    if detailed is False:
         return ([result["_id"] for result in results])
     else:
         return ([[result["_id"], result["_source"]["status"], result["_source"]["type"],
