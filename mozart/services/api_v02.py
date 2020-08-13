@@ -386,7 +386,7 @@ class Jobs(Resource):
     @api.marshal_with(resp_model)
     def get(self):
         """Paginated list submitted jobs"""
-        detailed = request.args.get('detailed', False)
+        detailed = json.loads(request.form.get('detailed', request.args.get('detailed', False)).lower())
         username = request.form.get('username', request.args.get('username'), None)
         if username is None:
             query = {"query": {"match_all": {}}, "fields": []}
