@@ -316,6 +316,7 @@ class SubmitJob(Resource):
                 'queue', request.args.get('queue', None))
             priority = int(request.form.get(
                 'priority', request.args.get('priority', 0)))
+            username = request.form.get('username', request.args.get('username', 'ops'))
             tags = request.form.get('tags', request.args.get('tags', None))
             job_name = request.form.get(
                 'name', request.args.get('name', None))
@@ -351,7 +352,8 @@ class SubmitJob(Resource):
                                                                  tags, params,
                                                                  job_name=job_name,
                                                                  payload_hash=payload_hash,
-                                                                 enable_dedup=enable_dedup)
+                                                                 enable_dedup=enable_dedup,
+                                                                 username=username)
             ident = hysds_commons.job_utils.submit_hysds_job(job_json)
         except Exception as e:
             message = "Failed to submit job. {0}:{1}".format(type(e), str(e))
@@ -426,6 +428,10 @@ class GetJobs(Resource):
     parser = api.parser()
     parser.add_argument('page_size', required=False, type=str,
                         help="Job Listing Pagination Size")
+    parser.add_argument('username', required=False, type=str,
+                        help="Username")
+    parser.add_argument('detailed', required=False, type=str,
+                        help="Detailed job list flag")
     parser = api.parser()
     parser.add_argument('offset', required=False, type=str,
                         help="Job Listing Pagination Offset")
@@ -436,10 +442,12 @@ class GetJobs(Resource):
         Paginated list submitted jobs 
         '''
         try:
+            username = request.form.get('username', request.args.get('username'), None)
+            detailed = json.loads(request.form.get('detailed', request.args.get('detailed', 'False')).lower())
             page_size = request.form.get(
                 'page_size', request.args.get('page_size', 100))
             offset = request.form.get('offset', request.args.get('id', 0))
-            jobs = mozart.lib.job_utils.get_job_list(page_size, offset)
+            jobs = mozart.lib.job_utils.get_job_list(page_size, offset, username, detailed)
         except Exception as e:
             message = "Failed to get job listing(page: {2}, offset: {3}). {0}:{1}".format(
                 type(e), str(e), page_size, offset)
