@@ -381,12 +381,12 @@ class Jobs(Resource):
     parser.add_argument('page_size', required=False, type=str, help="Job Listing Pagination Size")
     parser.add_argument('offset', required=False, type=str, help="Job Listing Pagination Offset")
     parser.add_argument('username', required=False, type=str, help="Username")
-    parser.add_argument('detailed', required=False, type=bool, help="Detailed Job List")
+    parser.add_argument('detailed', required=False, type=str, help="Detailed Job List")
 
     @api.marshal_with(resp_model)
     def get(self):
         """Paginated list submitted jobs"""
-        detailed = json.loads(request.form.get('detailed', request.args.get('detailed', False)).lower())
+        detailed = json.loads(request.form.get('detailed', request.args.get('detailed', 'False')).lower())
         username = request.form.get('username', request.args.get('username'), None)
         if username is None:
             query = {"query": {"match_all": {}}, "fields": []}
