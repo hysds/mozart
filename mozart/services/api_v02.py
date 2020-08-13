@@ -430,7 +430,7 @@ class GetJobs(Resource):
                         help="Job Listing Pagination Size")
     parser.add_argument('username', required=False, type=str,
                         help="Username")
-    parser.add_argument('detailed', required=False, type=bool,
+    parser.add_argument('detailed', required=False, type=str,
                         help="Detailed job list flag")
     parser = api.parser()
     parser.add_argument('offset', required=False, type=str,
@@ -443,7 +443,7 @@ class GetJobs(Resource):
         '''
         try:
             username = request.form.get('username', request.args.get('username'), None)
-            detailed = json.loads(request.form.get('detailed', request.args.get('detailed', False)).lower())
+            detailed = json.loads(request.form.get('detailed', request.args.get('detailed', 'False')).lower())
             page_size = request.form.get(
                 'page_size', request.args.get('page_size', 100))
             offset = request.form.get('offset', request.args.get('id', 0))
