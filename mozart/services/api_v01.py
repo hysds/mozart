@@ -1063,7 +1063,7 @@ class UserRules(Resource):
                     'message': rule['message']
                 }, 404
             else:
-                rule = {**rule, **rule['_source']}
+                rule = {**rule}
                 return {
                     'success': True,
                     'rule': rule
@@ -1076,7 +1076,7 @@ class UserRules(Resource):
                     "message": "rule {} not found".format(_rule_name)
                 }, 404
             user_rule = result.get("hits").get("hits")[0]
-            user_rule = {**user_rule, **user_rule["_source"]}
+            user_rule = {**user_rule}
             return {
                 "success": True,
                 "rule": user_rule
