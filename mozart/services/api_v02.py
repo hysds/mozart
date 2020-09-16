@@ -1122,6 +1122,12 @@ class UserRules(Resource):
 
         update_doc = {}
         if rule_name:
+            if len(rule_name) > 32:
+                return {
+                           "success": False,
+                           "message": "rule_name needs to be less than 32 characters",
+                           "result": None,
+                       }, 400
             update_doc['rule_name'] = rule_name
         if hysds_io:
             update_doc['workflow'] = hysds_io
