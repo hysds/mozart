@@ -918,7 +918,8 @@ class UserRules(Resource):
                     'message': rule['message']
                 }, 404
             else:
-                rule = rule["_source"]
+                rule = {**rule, **rule["_source"]}
+                rule.pop("_source", None)
                 return {
                     'success': True,
                     'rule': rule
@@ -930,11 +931,12 @@ class UserRules(Resource):
                     "success": False,
                     "message": "rule {} not found".format(_rule_name)
                 }, 404
-            user_rule = result.get("hits").get("hits")[0]
-            user_rule = user_rule["_source"]
+            rule = result.get("hits").get("hits")[0]
+            rule = {**rule, **rule["_source"]}
+            rule.pop("_source", None)
             return {
                 "success": True,
-                "rule": user_rule
+                "rule": rule
             }
 
         user_rules = mozart_es.query(index=user_rules_index)
