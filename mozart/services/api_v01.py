@@ -1063,7 +1063,7 @@ class UserRules(Resource):
                     'message': rule['message']
                 }, 404
             else:
-                rule = {**rule["_source"]}
+                rule = {rule["_source"]}
                 return {
                     'success': True,
                     'rule': rule
@@ -1076,7 +1076,7 @@ class UserRules(Resource):
                     "message": "rule {} not found".format(_rule_name)
                 }, 404
             user_rule = result.get("hits").get("hits")[0]
-            user_rule = {**user_rule["_source"]}
+            user_rule = {user_rule["_source"]}
             return {
                 "success": True,
                 "rule": user_rule
@@ -1211,15 +1211,12 @@ class UserRules(Resource):
 
     def put(self):  # TODO: add user role and permissions
         request_data = request.json or request.form
-        _id = None
-        _rule_name = None
-        if "id" in request_data:
-            _id = request_data.get('id')
-        elif "rule_name" in request_data:
-            _rule_name = request_data.get("rule_name")
-        else:
+        _id = request_data.get("id", None)
+        _rule_name = request_data.get("rule_name", None)
+
+        if not _id and not _rule_name:
             return {
-                "result": False,
+                "success": False,
                 "message": "Must specify id or rule_name in the request"
             }, 400
 
@@ -1335,11 +1332,15 @@ class UserRules(Resource):
     def delete(self):
         # TODO: need to add user rules and permissions
         user_rules_index = app.config['USER_RULES_INDEX']
-        _id = None
-        _rule_name = None
+        _id = request.args.get("id", None)
+        _rule_name = request.args.get("rule_name", None)
 
-        if "id" in request.args:
-            _id = request.args.get('id')
+        if not _id and not _rule_name:
+            return {"success": False,
+                    "message": "Must specify id or rule_name in the request"
+                    }, 400
+
+        if _id:
             mozart_es.delete_by_id(index=user_rules_index, id=_id, ignore=404)
             app.logger.info('user rule %s deleted' % _id)
             return {
@@ -1347,8 +1348,7 @@ class UserRules(Resource):
                 'message': 'user rule deleted',
                 'id': _id
             }
-        elif "rule_name" in request.args:
-            _rule_name = request.args.get("rule_name")
+        elif _rule_name:
             query = {
                 "query": {
                     "match": {
@@ -1363,8 +1363,6 @@ class UserRules(Resource):
                 'message': 'user rule deleted',
                 'rule_name': _rule_name
             }
-        else:
-            return {'result': False, 'message': 'id or rule_name not included'}, 400
 
 
 @user_tags_ns.route('', endpoint='user-tags')
