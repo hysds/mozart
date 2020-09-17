@@ -1051,22 +1051,38 @@ class UserRules(Resource):
 
     def get(self):
         # TODO: add user role and permissions
-        _id = request.args.get('id')
+        _id = request.args.get("id", None)
+        _rule_name = request.args.get("rule_name", None)
         user_rules_index = app.config['USER_RULES_INDEX']
 
         if _id:
             rule = mozart_es.get_by_id(index=user_rules_index, id=_id, ignore=404)
-            if rule['found'] is False:
+            if rule.get("found", False) is False:
                 return {
                     'success': False,
                     'message': rule['message']
                 }, 404
             else:
-                rule = {**rule, **rule['_source']}
+                rule = {**rule, **rule["_source"]}
+                rule.pop("_source", None)
                 return {
                     'success': True,
                     'rule': rule
                 }
+        elif _rule_name:
+            result = mozart_es.search(index=user_rules_index, q="rule_name:{}".format(_rule_name), ignore=404)
+            if result.get("hits", {}).get("total", {}).get("value", 0) == 0:
+                return {
+                    "success": False,
+                    "message": "rule {} not found".format(_rule_name)
+                }, 404
+            rule = result.get("hits").get("hits")[0]
+            rule = {**rule, **rule["_source"]}
+            rule.pop("_source", None)
+            return {
+                "success": True,
+                "rule": rule
+            }
 
         user_rules = mozart_es.query(index=user_rules_index)
 
@@ -1113,6 +1129,13 @@ class UserRules(Resource):
                 'success': False,
                 'message': 'Params not specified: %s' % ', '.join(missing_params),
                 'result': None,
+            }, 400
+
+        if len(rule_name) > 32:
+            return {
+                "success": False,
+                "message": "rule_name needs to be less than 32 characters",
+                "result": None,
             }, 400
 
         try:
@@ -1190,12 +1213,13 @@ class UserRules(Resource):
 
     def put(self):  # TODO: add user role and permissions
         request_data = request.json or request.form
+        _id = request_data.get("id", None)
+        _rule_name = request_data.get("rule_name", None)
 
-        _id = request_data.get('id')
-        if not _id:
+        if not _id and not _rule_name:
             return {
-                'result': False,
-                'message': 'id not included'
+                "success": False,
+                "message": "Must specify id or rule_name in the request"
             }, 400
 
         user_rules_index = app.config['USER_RULES_INDEX']
@@ -1213,23 +1237,39 @@ class UserRules(Resource):
         # check if job_type (hysds_io) exists in elasticsearch (only if we're updating job_type)
         if hysds_io:
             job_type = mozart_es.get_by_id(index=HYSDS_IOS_INDEX, id=hysds_io, ignore=404)
-            if job_type['found'] is False:
+            if job_type.get("found", False) is False:
                 return {
                     'success': False,
                     'message': 'job_type not found: %s' % hysds_io
                 }, 404
 
-        app.logger.info('finding existing user rule: %s' % _id)
-        existing_rule = mozart_es.get_by_id(index=user_rules_index, id=_id, ignore=404)
-        if existing_rule['found'] is False:
-            app.logger.info('rule not found %s' % _id)
-            return {
-                'result': False,
-                'message': 'user rule not found: %s' % _id
-            }, 404
+        if _id:
+            app.logger.info('finding existing user rule: %s' % _id)
+            existing_rule = mozart_es.get_by_id(index=user_rules_index, id=_id, ignore=404)
+            if existing_rule.get("found", False) is False:
+                app.logger.info('rule not found %s' % _id)
+                return {
+                    'result': False,
+                    'message': 'user rule not found: %s' % _id
+                }, 404
+        elif _rule_name:
+            result = mozart_es.search(index=user_rules_index, q="rule_name:{}".format(_rule_name), ignore=404)
+            if result.get("hits", {}).get("total", {}).get("value", 0) == 0:
+                return {
+                           'success': False,
+                           'message': 'rule %s not found' % _rule_name
+                       }, 404
+            else:
+                _id = result.get("hits").get("hits")[0].get("_id")
 
         update_doc = {}
         if rule_name:
+            if len(rule_name) > 32:
+                return {
+                           "success": False,
+                           "message": "rule_name needs to be less than 32 characters",
+                           "result": None,
+                       }, 400
             update_doc['rule_name'] = rule_name
         if hysds_io:
             update_doc['workflow'] = hysds_io
@@ -1261,7 +1301,14 @@ class UserRules(Resource):
         if queue:
             update_doc['queue'] = queue
         if enabled is not None:
-            update_doc['enabled'] = enabled
+            if isinstance(enabled, str):
+                if enabled.lower() == "false":
+                    value = False
+                else:
+                    value = True
+                update_doc["enabled"] = value
+            else:
+                update_doc["enabled"] = enabled
         if tags is not None:
             if type(tags) == str:
                 tags = [tags]
@@ -1287,27 +1334,37 @@ class UserRules(Resource):
     def delete(self):
         # TODO: need to add user rules and permissions
         user_rules_index = app.config['USER_RULES_INDEX']
-        _id = request.args.get('id')
-        if not _id:
-            return {
-                'result': False,
-                'message': 'id not included'
-            }, 400
+        _id = request.args.get("id", None)
+        _rule_name = request.args.get("rule_name", None)
 
-        result = mozart_es.delete_by_id(index=user_rules_index, id=_id, ignore=404)
-        if result['found'] is False:
-            app.logger.error('failed to delete %s from user_rules index' % _id)
-            return {
-                'success': False,
-                'message': 'user rule not found: %s' % _id
-            }, 404
+        if not _id and not _rule_name:
+            return {"success": False,
+                    "message": "Must specify id or rule_name in the request"
+                    }, 400
 
-        app.logger.info('user rule deleted: %s' % _id)
-        return {
-            'success': True,
-            'message': 'user rule deleted',
-            'id': _id
-        }
+        if _id:
+            mozart_es.delete_by_id(index=user_rules_index, id=_id, ignore=404)
+            app.logger.info('user rule %s deleted' % _id)
+            return {
+                'success': True,
+                'message': 'user rule deleted',
+                'id': _id
+            }
+        elif _rule_name:
+            query = {
+                "query": {
+                    "match": {
+                        "rule_name": _rule_name
+                    }
+                }
+            }
+            mozart_es.es.delete_by_query(index=user_rules_index, body=query, ignore=404)
+            app.logger.info('user rule %s deleted' % _rule_name)
+            return {
+                'success': True,
+                'message': 'user rule deleted',
+                'rule_name': _rule_name
+            }
 
 
 @user_tags_ns.route('', endpoint='user-tags')
