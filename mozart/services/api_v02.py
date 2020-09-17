@@ -924,7 +924,7 @@ class UserRules(Resource):
                     'rule': rule
                 }
         elif _rule_name:
-            result = mozart_es.search(index=user_rules_index, q="rule_name.keyword:{}".format(_rule_name), ignore=404)
+            result = mozart_es.search(index=user_rules_index, q="rule_name:{}".format(_rule_name), ignore=404)
             if result.get("hits", {}).get("total", {}).get("value", 0) == 0:
                 return {
                     "success": False,
@@ -1111,7 +1111,7 @@ class UserRules(Resource):
                 }, 404
         elif _rule_name:
             app.logger.info('finding existing user rule: %s' % _rule_name)
-            result = mozart_es.search(index=user_rules_index, q="rule_name.keyword:{}".format(_rule_name), ignore=404)
+            result = mozart_es.search(index=user_rules_index, q="rule_name:{}".format(_rule_name), ignore=404)
             if result.get("hits", {}).get("total", {}).get("value", 0) == 0:
                 return {
                            'success': False,
@@ -1209,7 +1209,7 @@ class UserRules(Resource):
             query = {
                 "query": {
                     "match": {
-                        "rule_name.keyword": _rule_name
+                        "rule_name": _rule_name
                     }
                 }
             }
