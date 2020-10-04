@@ -877,24 +877,33 @@ class JobParams(Resource):
                 "term": {"job-specification.keyword": job_type}
             }
         }
-        documents = mozart_es.search(index=HYSDS_IOS_INDEX, body=query)
+        hysds_io = mozart_es.search(index=HYSDS_IOS_INDEX, body=query)
 
-        if documents['hits']['total']['value'] == 0:
-            error_message = '%s not found' % job_type
+        if hysds_io['hits']['total']['value'] == 0:
             return {
                 'success': False,
-                'message': error_message
+                'message': '%s not found in hysds_ios' % job_type
             }, 404
 
-        job_type = documents['hits']['hits'][0]
-        job_params = job_type['_source']['params']
+        hysds_io = hysds_io['hits']['hits'][0]
+        job_params = hysds_io['_source']['params']
         job_params = list(filter(lambda x: x['from'] == 'submitter', job_params))
+
+        job_spec = mozart_es.get_by_id(index=JOB_SPECS_INDEX, id=job_type, ignore=404)
+        if job_spec.get('found', False) is False:
+            return {
+                'success': False,
+                'message': '%s not found in job_specs' % job_type
+            }, 404
 
         return {
             'success': True,
-            'submission_type': job_type['_source'].get('submission_type'),
-            'hysds_io': job_type['_source']['id'],
-            'params': job_params
+            'submission_type': hysds_io['_source'].get('submission_type'),
+            'hysds_io': hysds_io['_source']['id'],
+            'params': job_params,
+            'time_limit': job_spec['_source']['time_limit'],
+            'soft_time_limit': job_spec['_source']['soft_time_limit'],
+            'disk_usage': job_spec['_source']['disk_usage']
         }
 
 
