@@ -267,20 +267,18 @@ class SubmitJob(Resource):
     @api.expect(parser, validate=True)
     def post(self):
         """Submits a job to run inside HySDS"""
+        job_type = request.form.get('type', request.args.get('type', None))
+        job_queue = request.form.get('queue', request.args.get('queue', None))
+
+        priority = int(request.form.get('priority', request.args.get('priority', 0)))
+
+        tags = request.form.get('tags', request.args.get('tags', None))
+        job_name = request.form.get('name', request.args.get('name', None))
+
+        payload_hash = request.form.get('payload_hash', request.args.get('payload_hash', None))
+        enable_dedup = str(request.form.get('enable_dedup', request.args.get('enable_dedup', "true")))
+
         try:
-            app.logger.warning(request.form)
-
-            job_type = request.form.get('type', request.args.get('type', None))
-            job_queue = request.form.get('queue', request.args.get('queue', None))
-
-            priority = int(request.form.get('priority', request.args.get('priority', 0)))
-
-            tags = request.form.get('tags', request.args.get('tags', None))
-            job_name = request.form.get('name', request.args.get('name', None))
-
-            payload_hash = request.form.get('payload_hash', request.args.get('payload_hash', None))
-            enable_dedup = str(request.form.get('enable_dedup', request.args.get('enable_dedup', "true")))
-
             if enable_dedup.strip().lower() == "true":
                 enable_dedup = True
             elif enable_dedup.strip().lower() == "false":
@@ -787,6 +785,8 @@ class OnDemandJobs(Resource):
         priority = int(request_data.get('priority', 0))
         query_string = request_data.get('query', None)
         kwargs = request_data.get('kwargs', '{}')
+        time_limit = request_data.get('time_limit', None)
+        soft_time_limit = request_data.get('soft_time_limit', None)
 
         try:
             query = json.loads(query_string)
@@ -829,6 +829,24 @@ class OnDemandJobs(Resource):
             'query_all': False,
             'queue': queue
         }
+
+        if time_limit and isinstance(time_limit, int):
+            if time_limit <= 0 or time_limit > 86400 * 7:
+                return {
+                    'success': False,
+                    'message': 'time_limit limit is 604800 (sec)'
+                }, 400
+            else:
+                rule['time_limit'] = time_limit
+
+        if soft_time_limit and isinstance(soft_time_limit, int):
+            if soft_time_limit <= 0 or soft_time_limit > 86400 * 7:
+                return {
+                    'success': False,
+                    'message': 'time_limit limit is 604800 (sec)'
+                }, 400
+            else:
+                rule['soft_time_limit'] = soft_time_limit
 
         payload = {
             'type': 'job_iterator',
