@@ -834,7 +834,7 @@ class OnDemandJobs(Resource):
             if time_limit <= 0 or time_limit > 86400 * 7:
                 return {
                     'success': False,
-                    'message': 'time_limit limit is 604800 (sec)'
+                    'message': 'time_limit must be between 0 and 604800 (sec)'
                 }, 400
             else:
                 rule['time_limit'] = time_limit
@@ -843,7 +843,7 @@ class OnDemandJobs(Resource):
             if soft_time_limit <= 0 or soft_time_limit > 86400 * 7:
                 return {
                     'success': False,
-                    'message': 'time_limit limit is 604800 (sec)'
+                    'message': 'soft_time_limit must be between 0 and 604800 (sec)'
                 }, 400
             else:
                 rule['soft_time_limit'] = soft_time_limit
