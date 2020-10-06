@@ -58,6 +58,15 @@
       },
       "tags": {
         "type": "keyword"
+      },
+      "soft_time_limit": {
+        "type": "long"
+      },
+      "time_limit": {
+        "type": "long"
+      },
+      "disk_usage": {
+        "type": "keyword"
       }
     }
   }
