@@ -787,6 +787,7 @@ class OnDemandJobs(Resource):
         kwargs = request_data.get('kwargs', '{}')
         time_limit = request_data.get('time_limit', None)
         soft_time_limit = request_data.get('soft_time_limit', None)
+        disk_usage = request_data.get('disk_usage', None)
 
         try:
             query = json.loads(query_string)
@@ -847,6 +848,9 @@ class OnDemandJobs(Resource):
                 }, 400
             else:
                 rule['soft_time_limit'] = soft_time_limit
+
+        if disk_usage:
+            rule['disk_usage'] = disk_usage
 
         payload = {
             'type': 'job_iterator',
@@ -994,6 +998,7 @@ class UserRules(Resource):
         tags = request_data.get('tags', [])
         time_limit = request_data.get('time_limit', None)
         soft_time_limit = request_data.get('soft_time_limit', None)
+        disk_usage = request_data.get('disk_usage', None)
 
         username = "ops"  # TODO: add user role and permissions, hard coded to "ops" for now
 
@@ -1106,6 +1111,9 @@ class UserRules(Resource):
             else:
                 new_doc['soft_time_limit'] = soft_time_limit
 
+        if disk_usage:
+            new_doc['disk_usage'] = disk_usage
+
         result = mozart_es.index_document(index=user_rules_index, body=new_doc, refresh=True)
         return {
             'success': True,
@@ -1137,6 +1145,7 @@ class UserRules(Resource):
         tags = request_data.get('tags')
         time_limit = request_data.get('time_limit', None)
         soft_time_limit = request_data.get('soft_time_limit', None)
+        disk_usage = request_data.get('disk_usage', None)
 
         # check if job_type (hysds_io) exists in elasticsearch (only if we're updating job_type)
         if hysds_io:
@@ -1237,6 +1246,9 @@ class UserRules(Resource):
                 }, 400
             else:
                 update_doc['soft_time_limit'] = soft_time_limit
+
+        if disk_usage:
+            update_doc['disk_usage'] = disk_usage
 
         app.logger.info('editing document id %s in user_rule index' % _id)
 
