@@ -1229,26 +1229,29 @@ class UserRules(Resource):
             update_doc['tags'] = tags
         update_doc['modified_time'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
 
-        if time_limit and isinstance(time_limit, int):
-            if time_limit <= 0 or time_limit > 86400 * 7:
+        if time_limit:
+            if isinstance(time_limit, int) and 0 < time_limit <= 86400 * 7:
+                update_doc['time_limit'] = time_limit
+            else:
                 return {
                     'success': False,
                     'message': 'time_limit must be between 0 and 604800 (sec)'
                 }, 400
-            else:
-                update_doc['time_limit'] = time_limit
+        else:
+            update_doc['time_limit'] = None
 
-        if soft_time_limit and isinstance(soft_time_limit, int):
-            if soft_time_limit <= 0 or soft_time_limit > 86400 * 7:
+        if soft_time_limit:
+            if isinstance(soft_time_limit, int) and 0 < soft_time_limit <= 86400 * 7:
+                update_doc['soft_time_limit'] = soft_time_limit
+            else:
                 return {
                     'success': False,
                     'message': 'soft_time_limit must be between 0 and 604800 (sec)'
                 }, 400
-            else:
-                update_doc['soft_time_limit'] = soft_time_limit
+        else:
+            update_doc['soft_time_limit'] = None
 
-        if disk_usage:
-            update_doc['disk_usage'] = disk_usage
+        update_doc['disk_usage'] = disk_usage
 
         app.logger.info('editing document id %s in user_rule index' % _id)
 
