@@ -1229,29 +1229,32 @@ class UserRules(Resource):
             update_doc['tags'] = tags
         update_doc['modified_time'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
 
-        if time_limit:
-            if isinstance(time_limit, int) and 0 < time_limit <= 86400 * 7:
-                update_doc['time_limit'] = time_limit
+        if 'time_limit' in request_data:  # if submitted in editor
+            if time_limit is None:
+                update_doc['time_limit'] = None
             else:
-                return {
-                    'success': False,
-                    'message': 'time_limit must be between 0 and 604800 (sec)'
-                }, 400
-        else:
-            update_doc['time_limit'] = None
+                if isinstance(time_limit, int) and 0 < time_limit <= 86400 * 7:
+                    update_doc['time_limit'] = time_limit
+                else:
+                    return {
+                        'success': False,
+                        'message': 'time_limit must be between 0 and 604800 (sec)'
+                    }, 400
 
-        if soft_time_limit:
-            if isinstance(soft_time_limit, int) and 0 < soft_time_limit <= 86400 * 7:
-                update_doc['soft_time_limit'] = soft_time_limit
+        if 'soft_time_limit' in request_data:  # if submitted in editor
+            if soft_time_limit is None:
+                update_doc['soft_time_limit'] = None
             else:
-                return {
-                    'success': False,
-                    'message': 'soft_time_limit must be between 0 and 604800 (sec)'
-                }, 400
-        else:
-            update_doc['soft_time_limit'] = None
+                if isinstance(soft_time_limit, int) and 0 < soft_time_limit <= 86400 * 7:
+                    update_doc['soft_time_limit'] = time_limit
+                else:
+                    return {
+                        'success': False,
+                        'message': 'time_limit must be between 0 and 604800 (sec)'
+                    }, 400
 
-        update_doc['disk_usage'] = disk_usage
+        if 'disk_usage' in request_data:
+            update_doc['disk_usage'] = disk_usage
 
         app.logger.info('editing document id %s in user_rule index' % _id)
 
