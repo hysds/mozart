@@ -274,7 +274,7 @@ class SubmitJob(Resource):
             job_queue = request.form.get('queue', request.args.get('queue', None))
 
             priority = int(request.form.get('priority', request.args.get('priority', 0)))
-
+            username = request.form.get('username', request.args.get('username', 'ops'))
             tags = request.form.get('tags', request.args.get('tags', None))
             job_name = request.form.get('name', request.args.get('name', None))
 
@@ -311,7 +311,8 @@ class SubmitJob(Resource):
             job_json = hysds_commons.job_utils.resolve_hysds_job(job_type, job_queue, priority, tags, params,
                                                                  job_name=job_name,
                                                                  payload_hash=payload_hash,
-                                                                 enable_dedup=enable_dedup)
+                                                                 enable_dedup=enable_dedup,
+                                                                 username=username)
             ident = hysds_commons.job_utils.submit_hysds_job(job_json)
         except Exception as e:
             message = "Failed to submit job. {0}:{1}".format(type(e), str(e))
@@ -379,15 +380,28 @@ class Jobs(Resource):
     parser = api.parser()
     parser.add_argument('page_size', required=False, type=str, help="Job Listing Pagination Size")
     parser.add_argument('offset', required=False, type=str, help="Job Listing Pagination Offset")
+    parser.add_argument('username', required=False, type=str, help="Username")
+    parser.add_argument('detailed', required=False, type=str, help="Detailed Job List")
 
     @api.marshal_with(resp_model)
     def get(self):
         """Paginated list submitted jobs"""
-        jobs = mozart_es.query(index=JOB_STATUS_INDEX, _source=False)
+        detailed = json.loads(request.form.get('detailed', request.args.get('detailed', 'False')).lower())
+        username = request.form.get('username', request.args.get('username'), None)
+        if username is None:
+            query = {"query": {"match_all": {}}, "fields": []}
+        else:
+            query = {"query": {"bool": {"must": [{"term": {"job.job.username": username}}]}}}
+        jobs = mozart_es.query(index=JOB_STATUS_INDEX, body=query, _source=False)
+        if detailed:
+            result = sorted([job["_id"] for job in jobs])
+        else:
+            result = sorted([[result["_id"], result["_source"]["status"], result["_source"]["type"],
+                              result["_source"]["job"]["params"]["job_specification"]["params"]] for result in jobs])
         return {
             'success': True,
             'message': "",
-            'result': sorted([job["_id"] for job in jobs])
+            'result': result
         }
 
 
