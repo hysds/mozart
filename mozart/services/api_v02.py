@@ -267,20 +267,18 @@ class SubmitJob(Resource):
     @api.expect(parser, validate=True)
     def post(self):
         """Submits a job to run inside HySDS"""
+        job_type = request.form.get('type', request.args.get('type', None))
+        job_queue = request.form.get('queue', request.args.get('queue', None))
+
+        priority = int(request.form.get('priority', request.args.get('priority', 0)))
+
+        tags = request.form.get('tags', request.args.get('tags', None))
+        job_name = request.form.get('name', request.args.get('name', None))
+
+        payload_hash = request.form.get('payload_hash', request.args.get('payload_hash', None))
+        enable_dedup = str(request.form.get('enable_dedup', request.args.get('enable_dedup', "true")))
+
         try:
-            app.logger.warning(request.form)
-
-            job_type = request.form.get('type', request.args.get('type', None))
-            job_queue = request.form.get('queue', request.args.get('queue', None))
-
-            priority = int(request.form.get('priority', request.args.get('priority', 0)))
-
-            tags = request.form.get('tags', request.args.get('tags', None))
-            job_name = request.form.get('name', request.args.get('name', None))
-
-            payload_hash = request.form.get('payload_hash', request.args.get('payload_hash', None))
-            enable_dedup = str(request.form.get('enable_dedup', request.args.get('enable_dedup', "true")))
-
             if enable_dedup.strip().lower() == "true":
                 enable_dedup = True
             elif enable_dedup.strip().lower() == "false":
@@ -787,6 +785,9 @@ class OnDemandJobs(Resource):
         priority = int(request_data.get('priority', 0))
         query_string = request_data.get('query', None)
         kwargs = request_data.get('kwargs', '{}')
+        time_limit = request_data.get('time_limit', None)
+        soft_time_limit = request_data.get('soft_time_limit', None)
+        disk_usage = request_data.get('disk_usage', None)
 
         try:
             query = json.loads(query_string)
@@ -829,6 +830,27 @@ class OnDemandJobs(Resource):
             'query_all': False,
             'queue': queue
         }
+
+        if time_limit and isinstance(time_limit, int):
+            if time_limit <= 0 or time_limit > 86400 * 7:
+                return {
+                    'success': False,
+                    'message': 'time_limit must be between 0 and 604800 (sec)'
+                }, 400
+            else:
+                rule['time_limit'] = time_limit
+
+        if soft_time_limit and isinstance(soft_time_limit, int):
+            if soft_time_limit <= 0 or soft_time_limit > 86400 * 7:
+                return {
+                    'success': False,
+                    'message': 'soft_time_limit must be between 0 and 604800 (sec)'
+                }, 400
+            else:
+                rule['soft_time_limit'] = soft_time_limit
+
+        if disk_usage:
+            rule['disk_usage'] = disk_usage
 
         payload = {
             'type': 'job_iterator',
@@ -877,24 +899,33 @@ class JobParams(Resource):
                 "term": {"job-specification.keyword": job_type}
             }
         }
-        documents = mozart_es.search(index=HYSDS_IOS_INDEX, body=query)
+        hysds_io = mozart_es.search(index=HYSDS_IOS_INDEX, body=query)
 
-        if documents['hits']['total']['value'] == 0:
-            error_message = '%s not found' % job_type
+        if hysds_io['hits']['total']['value'] == 0:
             return {
                 'success': False,
-                'message': error_message
+                'message': '%s not found in hysds_ios' % job_type
             }, 404
 
-        job_type = documents['hits']['hits'][0]
-        job_params = job_type['_source']['params']
+        hysds_io = hysds_io['hits']['hits'][0]
+        job_params = hysds_io['_source']['params']
         job_params = list(filter(lambda x: x['from'] == 'submitter', job_params))
+
+        job_spec = mozart_es.get_by_id(index=JOB_SPECS_INDEX, id=job_type, ignore=404)
+        if job_spec.get('found', False) is False:
+            return {
+                'success': False,
+                'message': '%s not found in job_specs' % job_type
+            }, 404
 
         return {
             'success': True,
-            'submission_type': job_type['_source'].get('submission_type'),
-            'hysds_io': job_type['_source']['id'],
-            'params': job_params
+            'submission_type': hysds_io['_source'].get('submission_type'),
+            'hysds_io': hysds_io['_source']['id'],
+            'params': job_params,
+            'time_limit': job_spec['_source']['time_limit'],
+            'soft_time_limit': job_spec['_source']['soft_time_limit'],
+            'disk_usage': job_spec['_source']['disk_usage']
         }
 
 
@@ -965,6 +996,9 @@ class UserRules(Resource):
         kwargs = request_data.get('kwargs', '{}')
         queue = request_data.get('queue')
         tags = request_data.get('tags', [])
+        time_limit = request_data.get('time_limit', None)
+        soft_time_limit = request_data.get('soft_time_limit', None)
+        disk_usage = request_data.get('disk_usage', None)
 
         username = "ops"  # TODO: add user role and permissions, hard coded to "ops" for now
 
@@ -1059,6 +1093,27 @@ class UserRules(Resource):
             "tags": tags
         }
 
+        if time_limit and isinstance(time_limit, int):
+            if time_limit <= 0 or time_limit > 86400 * 7:
+                return {
+                    'success': False,
+                    'message': 'time_limit must be between 0 and 604800 (sec)'
+                }, 400
+            else:
+                new_doc['time_limit'] = time_limit
+
+        if soft_time_limit and isinstance(soft_time_limit, int):
+            if soft_time_limit <= 0 or soft_time_limit > 86400 * 7:
+                return {
+                    'success': False,
+                    'message': 'soft_time_limit must be between 0 and 604800 (sec)'
+                }, 400
+            else:
+                new_doc['soft_time_limit'] = soft_time_limit
+
+        if disk_usage:
+            new_doc['disk_usage'] = disk_usage
+
         result = mozart_es.index_document(index=user_rules_index, body=new_doc, refresh=True)
         return {
             'success': True,
@@ -1088,6 +1143,9 @@ class UserRules(Resource):
         queue = request_data.get('queue')
         enabled = request_data.get('enabled')
         tags = request_data.get('tags')
+        time_limit = request_data.get('time_limit', None)
+        soft_time_limit = request_data.get('soft_time_limit', None)
+        disk_usage = request_data.get('disk_usage', None)
 
         # check if job_type (hysds_io) exists in elasticsearch (only if we're updating job_type)
         if hysds_io:
@@ -1170,6 +1228,33 @@ class UserRules(Resource):
                 tags = [tags]
             update_doc['tags'] = tags
         update_doc['modified_time'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        if 'time_limit' in request_data:  # if submitted in editor
+            if time_limit is None:
+                update_doc['time_limit'] = None
+            else:
+                if isinstance(time_limit, int) and 0 < time_limit <= 86400 * 7:
+                    update_doc['time_limit'] = time_limit
+                else:
+                    return {
+                        'success': False,
+                        'message': 'time_limit must be between 0 and 604800 (sec)'
+                    }, 400
+
+        if 'soft_time_limit' in request_data:  # if submitted in editor
+            if soft_time_limit is None:
+                update_doc['soft_time_limit'] = None
+            else:
+                if isinstance(soft_time_limit, int) and 0 < soft_time_limit <= 86400 * 7:
+                    update_doc['soft_time_limit'] = time_limit
+                else:
+                    return {
+                        'success': False,
+                        'message': 'time_limit must be between 0 and 604800 (sec)'
+                    }, 400
+
+        if 'disk_usage' in request_data:
+            update_doc['disk_usage'] = disk_usage
 
         app.logger.info('editing document id %s in user_rule index' % _id)
 
