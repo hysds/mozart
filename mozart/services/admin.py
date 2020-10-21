@@ -4,11 +4,9 @@ from __future__ import division
 from __future__ import absolute_import
 from future import standard_library
 standard_library.install_aliases()
+
 import os
-import sys
-import json
 import time
-import pprint
 import subprocess
 from flask import jsonify, Blueprint
 

@@ -21,8 +21,7 @@ def ldap_user_verified(username, password):
     groups = app.config['LDAP_GROUPS']
 
     try:
-        l = simpleldap.Connection(host, dn='uid=%s,%s' % (username, base_dn),
-                                  encryption='ssl', password=password)
+        l = simpleldap.Connection(host, dn='uid=%s,%s' % (username, base_dn), encryption='ssl', password=password)
     except Exception as e:
         app.logger.info("Got error trying to verify LDAP user %s:" % username)
         app.logger.info("%s:\n\n%s" % (str(e), traceback.format_exc()))

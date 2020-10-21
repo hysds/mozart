@@ -17,9 +17,6 @@ from hysds.celery import app as celery_app
 from hysds.task_worker import do_submit_task
 from flask_restx import Api, apidoc, Resource, fields
 
-import hysds_commons.container_utils
-import hysds_commons.hysds_io_utils
-import hysds_commons.job_spec_utils
 import hysds_commons.job_utils
 from hysds_commons.action_utils import check_passthrough_query
 

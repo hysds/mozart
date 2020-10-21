@@ -5,12 +5,7 @@ from __future__ import absolute_import
 from future import standard_library
 standard_library.install_aliases()
 
-import json
-import requests
-
-import hysds_commons.request_utils
-
-from mozart import app
+from mozart import app, mozart_es
 
 
 def get_job_status(_id):
@@ -21,41 +16,46 @@ def get_job_status(_id):
     if _id is None:
         raise Exception("'id' must be supplied by request")
 
-    es_url = app.config['ES_URL']
     es_index = "job_status-current"
-    full_url = "{0}/{1}/job/{2}?_source=status".format(es_url, es_index, _id)
-    return hysds_commons.request_utils.get_requests_json_response(full_url)["_source"]["status"]
+    status = mozart_es.get_by_id(es_index, id=_id, _source_includes=['status'], ignore=404)
+    if status['found'] is False:
+        raise Exception("job _id not found")
+
+    return status['_source']['status']
 
 
 def get_job_list():
     """Get a listing of jobs"""
-
-    data = {"query": {"match_all": {}}, "fields": []}
-    es_url = app.config['ES_URL']
+    query = {
+        "query": {
+            "match_all": {}
+        }
+    }
     es_index = "job_status-current"
-    full_url = "{0}/{1}/_search".format(es_url, es_index)
-    results = hysds_commons.request_utils.post_scrolled_json_responses(full_url, "{0}/_search".format(es_url),
-                                                                       data=json.dumps(data))
+    results = mozart_es.query(es_index=es_index, body=query, _source=False)
     return sorted([result["_id"] for result in results])
 
 
-def get_job_info(ident):
+def get_job_info(_id):
     """
     Get the full info of a job with the given identity
-    @param ident - id of the job
+    @param _id - id of the job
     """
-    if ident is None:
+    if _id is None:
         raise Exception("'id' must be supplied by request")
 
-    es_url = app.config['ES_URL']
     es_index = "job_status-current"
-    full_url = "{0}/{1}/job/{2}".format(es_url, es_index, ident)
-    return hysds_commons.request_utils.get_requests_json_response(full_url)["_source"]
+    result = mozart_es.get_by_id(es_index, id=_id, ignore=404)
+    if result['found'] is False:
+        raise Exception('job _id not found: %s' % _id)
+
+    return result['_source']
 
 
 def get_execute_nodes():
     """Return the names of all execute nodes."""
 
+    # TODO: facets have been deprecated: https://www.elastic.co/guide/en/elasticsearch/reference/6.8/search-facets.html
     query = {
         "size": 0,
         "facets": {
@@ -67,13 +67,9 @@ def get_execute_nodes():
             }
         }
     }
-    es_url = app.config['ES_URL']
     index = app.config['JOB_STATUS_INDEX']
-    r = requests.post('%s/%s/_search' % (es_url, index), data=json.dumps(query))
-    r.raise_for_status()
-    result = r.json()
-    # app.logger.debug(pformat(result))
-    total = len(result['facets']['job.job_info.execute_node']['terms'])
+    result = mozart_es.search(index, body=query)
+
     nodes = []
     for terms in result['facets']['job.job_info.execute_node']['terms']:
         nodes.append(terms['term'])

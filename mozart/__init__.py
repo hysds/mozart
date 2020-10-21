@@ -113,12 +113,6 @@ app.register_blueprint(esModule)
 from mozart.services.stats import mod as statsModule
 app.register_blueprint(statsModule)
 
-from mozart.services.user_rules import mod as userRulesModule
-app.register_blueprint(userRulesModule)
-
-from mozart.services.user_tags import mod as userTagsModule
-app.register_blueprint(userTagsModule)
-
 # rest API blueprints
 from mozart.services.api_v01 import services as api_v01Services
 app.register_blueprint(api_v01Services)
