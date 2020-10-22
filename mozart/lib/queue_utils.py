@@ -6,39 +6,30 @@ from future import standard_library
 standard_library.install_aliases()
 
 from hysds_commons.queue_utils import get_all_queues
-from hysds_commons.job_spec_utils import get_job_spec
 
-from mozart import app
+from mozart import app, mozart_es
 
 
-def get_queue_names(ident):
+def get_queue_names(_id):
     """
     List the queues available for job-running
     Note: does not return celery internal queues
-    @param ident - identity of job
+    @param _id - identity of job
     @return: list of queues
     """
 
-    # Non-celery queues set
-    queues = set(get_all_queues(app.config["RABBITMQ_ADMIN_API"]))
-    # app.logger.info("queues: %s" % queues)
-
+    queues = set(get_all_queues(app.config["RABBITMQ_ADMIN_API"]))  # Non-celery queues set
     protected = set(app.config["PROTECTED_QUEUES"])
-    # app.logger.info("protected: %s" % protected)
-
-    # Visible generic queues
-    visible = queues - protected
-    # app.logger.info("visible: %s" % visible)
-    # app.logger.info("ident: %s" % ident)
+    visible = queues - protected  # Visible generic queues
 
     spec = {}
-
     try:
-        spec = get_job_spec(app.config['ES_URL'], ident)
+        spec = mozart_es.get_by_id("job_specs", id=_id, ignore=404)
+        if spec['found'] is True:
+            spec = spec['_source']
     except Exception as e:
-        app.logger.warn("Failed to get job-spec: {0} proceeding without it. {1}:{2}".format(ident, type(e), e))
+        app.logger.warn("Failed to get job-spec: {0} proceeding without it. {1}:{2}".format(_id, type(e), e))
 
-    # app.logger.info("spec: %s" % spec)
     # adding backwards compatibility to queues
     required = set(spec.get("required-queues", spec.get("required_queues", [])))
     recommended = set(spec.get("recommended-queues", spec.get("recommended_queues", [])))
@@ -46,6 +37,4 @@ def get_queue_names(ident):
         "queues": sorted(visible | required | recommended),
         "recommended": sorted(required | recommended)
     }
-
-    # app.logger.info("queue_config: %s" % json.dumps(queue_config, indent=2))
     return queue_config

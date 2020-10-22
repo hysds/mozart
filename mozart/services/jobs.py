@@ -71,6 +71,7 @@ def get_text():
     # read contents
     try:
         r = requests.get(url_file, verify=False)
+        r.raise_for_status()
     except Exception as e:
         return jsonify({
             'success': False,
@@ -149,7 +150,7 @@ def purge(es_index, purge):
                 yield 'Cannot stop inactive job: %s\n' % (uuid)
                 continue
 
-            # Saftey net to revoke job if in PENDING state
+            # Safety net to revoke job if in PENDING state
             if state == "PENDING":
                 yield 'Revoking %s\n' % (uuid)
                 celapp.control.revoke(uuid, terminate=True)
