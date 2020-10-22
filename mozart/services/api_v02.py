@@ -36,8 +36,8 @@ api = Api(services, ui=False, version="0.2", title="Mozart API", description="AP
 QUEUE_NS = "queue"
 queue_ns = api.namespace(QUEUE_NS, description="Mozart queue operations")
 
-JOBSPEC_NS = "job_spec"
-job_spec_ns = api.namespace(JOBSPEC_NS, description="Mozart job-specification operations")
+JOB_SPEC_NS = "job_spec"
+job_spec_ns = api.namespace(JOB_SPEC_NS, description="Mozart job-specification operations")
 
 JOB_NS = "job"
 job_ns = api.namespace(JOB_NS, description="Mozart job operations")
@@ -74,44 +74,16 @@ def swagger_ui():
     return apidoc.ui_for(api)
 
 
-@job_spec_ns.route('/list', endpoint='job_specs')
-@api.doc(responses={200: "Success", 500: "Query execution failed"},
-         description="Get list of registered job types and return as JSON.")
-class GetJobTypes(Resource):
-    """Get list of registered job types and return as JSON."""
-    resp_model_job_types = api.model('Job Type List Response(JSON)', {
-        'success': fields.Boolean(required=True, description="Boolean, whether the API was successful"),
-        'message': fields.String(required=True, description="message describing " + "success or failure"),
-        'result':  fields.List(fields.String, required=True, description="list of job types")
-    })
-
-    @api.marshal_with(resp_model_job_types)
-    def get(self):
-        """Gets a list of Job Type specifications"""
-        query = {
-            "query": {
-                "match_all": {}
-            }
-        }
-        job_specs = mozart_es.query(index=JOB_SPECS_INDEX, body=query)
-        ids = [job_spec['_id'] for job_spec in job_specs]
-        return {
-            'success': True,
-            'message': "",
-            'result': ids
-        }
-
-
 @job_spec_ns.route('', endpoint='job_spec')
 @api.doc(responses={200: "Success", 500: "Query execution failed"},
          description="Get list of registered job types and return as JSON.")
 class JobSpecs(Resource):
     """Rest APIs for all job_specs (GET, POST, DELETE)"""
 
-    resp_model_job_type = api.model('Job Type List Response(JSON)', {
+    resp_model_job_spec = api.model('Job Specification List Response(JSON)', {
         'success': fields.Boolean(required=True, description="Boolean, whether the API was successful"),
         'message': fields.String(required=True, description="message describing success or failure"),
-        'result': fields.Raw(fields.String, required=True, description="list of job types")
+        'result': fields.Raw(required=True, description="list of job types")
     })
 
     job_spec_parser = api.parser()
@@ -120,8 +92,8 @@ class JobSpecs(Resource):
     post_job_spec_parser = api.parser()
     post_job_spec_parser.add_argument('spec', required=True, type=str, help="Job Type Specification JSON Object")
 
-    @api.marshal_with(resp_model_job_type)
     @api.expect(job_spec_parser)
+    @api.marshal_with(resp_model_job_spec)
     def get(self):
         """Gets a Job Type specification object for the given ID."""
         _id = request.form.get('id', request.args.get('id', None))
@@ -129,11 +101,13 @@ class JobSpecs(Resource):
             return {'success': False, 'message': 'missing parameter: id'}, 400
 
         job_spec = mozart_es.get_by_id(index=JOB_SPECS_INDEX, id=_id, ignore=404)
+        app.logger.info(job_spec)
         if job_spec['found'] is False:
             app.logger.error('job_spec not found %s' % _id)
             return {
                 'success': False,
-                'message': 'Failed to retrieve job_spec: %s' % _id
+                'message': 'Failed to retrieve job_spec: %s' % _id,
+                'result': None
             }, 404
 
         return {
@@ -142,8 +116,8 @@ class JobSpecs(Resource):
             'result': job_spec['_source']
         }
 
-    @api.marshal_with(resp_model_job_type)
     @api.expect(post_job_spec_parser)
+    @api.marshal_with(resp_model_job_spec)
     def post(self):
         """Add a Job Type specification JSON object."""
         spec = request.form.get('spec', request.args.get('spec', None))
@@ -163,7 +137,7 @@ class JobSpecs(Resource):
             'result': _id
         }
 
-    @api.marshal_with(resp_model_job_type)
+    @api.marshal_with(resp_model_job_spec)
     @api.expect(job_spec_parser)
     def delete(self):
         """Remove Job Spec for the given ID"""
@@ -179,6 +153,34 @@ class JobSpecs(Resource):
         return {
             'success': True,
             'message': ""
+        }
+
+
+@job_spec_ns.route('/list', endpoint='job_specs')
+@api.doc(responses={200: "Success", 500: "Query execution failed"},
+         description="Get list of registered job types and return as JSON.")
+class GetJobTypes(Resource):
+    """Get list of registered job types and return as JSON."""
+    resp_model_job_types = api.model('Job Type List Response(JSON)', {
+        'success': fields.Boolean(required=True, description="Boolean, whether the API was successful"),
+        'message': fields.String(required=True, description="message describing success or failure"),
+        'result':  fields.List(fields.String, required=True, description="list of job types")
+    })
+
+    @api.marshal_with(resp_model_job_types)
+    def get(self):
+        """Gets a list of Job Type specifications"""
+        query = {
+            "query": {
+                "match_all": {}
+            }
+        }
+        job_specs = mozart_es.query(index=JOB_SPECS_INDEX, body=query)
+        ids = [job_spec['_id'] for job_spec in job_specs]
+        return {
+            'success': True,
+            'message': "",
+            'result': ids
         }
 
 
@@ -249,16 +251,16 @@ class SubmitJob(Resource):
                         type=bool, help='flag to enable/disable job dedup')
     parser.add_argument('params', required=False, type=str,
                         help="""JSON job context, e.g. {
-        "entity_id": "LC80101172015002LGN00",
-        "min_lat": -79.09923,
-        "max_lon": -125.09297,
-        "id": "dumby-product-20161114180506209624",
-        "acq_time": "2015-01-02T15:49:05.571384",
-        "min_sleep": 1,
-        "max_lat": -77.7544,
-        "min_lon": -139.66082,
-        "max_sleep": 10
-    }""")
+                             "entity_id": "LC80101172015002LGN00",
+                             "min_lat": -79.09923,
+                             "max_lon": -125.09297,
+                             "id": "dumby-product-20161114180506209624",
+                             "acq_time": "2015-01-02T15:49:05.571384",
+                             "min_sleep": 1,
+                             "max_lat": -77.7544,
+                             "min_lon": -139.66082,
+                             "max_sleep": 10
+                        }""")
 
     @api.marshal_with(resp_model)
     @api.expect(parser, validate=True)
@@ -470,12 +472,19 @@ class Containers(Resource):
     def get(self):
         """Get information on container by ID"""
         _id = request.form.get('id', request.args.get('id', None))
+        if _id is None:
+            return {
+                'success': False,
+                'message': 'id must be supplied',
+                'result': None
+            }
 
         container = mozart_es.get_by_id(index=CONTAINERS_INDEX, id=_id, ignore=404)
         if container['found'] is False:
             return {
                 'success': False,
-                'message': ""
+                'message': "container not found: %s" % _id,
+                'result': None
             }, 404
 
         return {
@@ -521,7 +530,8 @@ class Containers(Resource):
         if _id is None:
             return {
                 'success': False,
-                'message': 'id must be supplied'
+                'message': 'id must be supplied',
+                'result': None
             }, 400
 
         mozart_es.delete_by_id(index=CONTAINERS_INDEX, id=_id)
@@ -655,12 +665,12 @@ class AddLogEvent(Resource):
                         help="Event status, e.g. spot_termination, docker_daemon_failed")
     parser.add_argument('event', required=True, type=str,
                         help="""Arbitrary JSON event payload, e.g. {} or {
-        "ec2_instance_id": "i-07b8989f41ce23880",
-        "private_ip": "100.64.134.145",
-        "az": "us-west-2a",
-        "reservation": "r-02fd006170749a0a8",
-        "termination_date": "2015-01-02T15:49:05.571384"
-    }""")
+                            "ec2_instance_id": "i-07b8989f41ce23880",
+                            "private_ip": "100.64.134.145",
+                            "az": "us-west-2a",
+                            "reservation": "r-02fd006170749a0a8",
+                            "termination_date": "2015-01-02T15:49:05.571384"
+                        }""")
     parser.add_argument('tags', required=False, type=str,
                         help='JSON list of tags, e.g. ["dumby", "test_job"]')
     parser.add_argument('hostname', required=False, type=str,
@@ -672,9 +682,6 @@ class AddLogEvent(Resource):
         """Log HySDS custom event."""
 
         try:
-            #app.logger.info("data: %s %d" % (request.data, len(request.data)))
-            #app.logger.info("form: %s" % request.form)
-            #app.logger.info("args: %s" % request.args)
             if len(request.data) > 0:
                 try:
                     form = json.loads(request.data)
@@ -690,8 +697,7 @@ class AddLogEvent(Resource):
                 if event is not None and not isinstance(event, dict):
                     event = json.loads(event)
             except Exception as e:
-                raise Exception(
-                    "Failed to parse input event. '{0}' is malformed JSON".format(event))
+                raise Exception("Failed to parse input event. '{0}' is malformed JSON".format(event))
             tags = form.get('tags', request.args.get('tags', None))
             try:
                 if tags is not None and not isinstance(tags, list):
@@ -705,17 +711,18 @@ class AddLogEvent(Resource):
             app.logger.info("event: %s" % event)
             app.logger.info("tags: %s" % tags)
             app.logger.info("hostname: %s" % hostname)
-            uuid = log_custom_event(
-                event_type, event_status, event, tags, hostname)
+            uuid = log_custom_event(event_type, event_status, event, tags, hostname)
+
         except Exception as e:
-            message = "Failed to log custom event. {0}:{1}".format(
-                type(e), str(e))
+            message = "Failed to log custom event. {0}:{1}".format(type(e), str(e))
             app.logger.warning(message)
             app.logger.warning(traceback.format_exc(e))
             return {'success': False, 'message': message}, 500
-        return {'success': True,
-                'message': '',
-                'result': uuid}
+        return {
+            'success': True,
+            'message': '',
+            'result': uuid
+        }
 
 
 @on_demand_ns.route('', endpoint='on-demand')
@@ -736,8 +743,6 @@ class OnDemandJobs(Resource):
     })
 
     parser = api.parser()
-    # parser.add_argument('dataset_info', required=True, type=str,
-    #                     location='form',  help="HySDS dataset info JSON")
 
     # @api.marshal_with(resp_model)
     def get(self):
