@@ -95,6 +95,10 @@ lm.login_view = 'views/main.login'
 # Mozart's connection to Elasticsearch
 mozart_es = ElasticsearchUtility(app.config['ES_URL'], app.logger)
 
+# views blueprints
+from mozart.views.main import mod as viewsModule
+app.register_blueprint(viewsModule)
+
 # services blueprints
 from mozart.services.main import mod as mainModule
 app.register_blueprint(mainModule)
