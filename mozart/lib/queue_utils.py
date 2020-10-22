@@ -24,7 +24,7 @@ def get_queue_names(_id):
 
     spec = {}
     try:
-        spec = mozart_es.get_by_id("job_specs", id=_id, ignore=404)
+        spec = mozart_es.get_by_id(index="job_specs", id=_id, ignore=404)
         if spec['found'] is True:
             spec = spec['_source']
     except Exception as e:
