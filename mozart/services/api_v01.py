@@ -17,9 +17,6 @@ from hysds.celery import app as celery_app
 from hysds.task_worker import do_submit_task
 from flask_restx import Api, apidoc, Resource, fields
 
-import hysds_commons.container_utils
-import hysds_commons.hysds_io_utils
-import hysds_commons.job_spec_utils
 import hysds_commons.job_utils
 from hysds_commons.action_utils import check_passthrough_query
 
@@ -39,8 +36,8 @@ api = Api(services, ui=False, version="0.1", title="Mozart API", description="AP
 QUEUE_NS = "queue"
 queue_ns = api.namespace(QUEUE_NS, description="Mozart queue operations")
 
-JOBSPEC_NS = "job_spec"
-job_spec_ns = api.namespace(JOBSPEC_NS, description="Mozart job-specification operations")
+JOB_SPEC_NS = "job_spec"
+job_spec_ns = api.namespace(JOB_SPEC_NS, description="Mozart job-specification operations")
 
 JOB_NS = "job"
 job_ns = api.namespace(JOB_NS, description="Mozart job operations")
@@ -800,12 +797,12 @@ class AddLogEvent(Resource):
                         help="Event status, e.g. spot_termination, docker_daemon_failed")
     parser.add_argument('event', required=True, type=str,
                         help="""Arbitrary JSON event payload, e.g. {} or {
-        "ec2_instance_id": "i-07b8989f41ce23880",
-        "private_ip": "100.64.134.145",
-        "az": "us-west-2a",
-        "reservation": "r-02fd006170749a0a8",
-        "termination_date": "2015-01-02T15:49:05.571384"
-    }""")
+                            "ec2_instance_id": "i-07b8989f41ce23880",
+                            "private_ip": "100.64.134.145",
+                            "az": "us-west-2a",
+                            "reservation": "r-02fd006170749a0a8",
+                            "termination_date": "2015-01-02T15:49:05.571384"
+                        }""")
     parser.add_argument('tags', required=False, type=str,
                         help='JSON list of tags, e.g. ["dumby", "test_job"]')
     parser.add_argument('hostname', required=False, type=str,
@@ -817,9 +814,6 @@ class AddLogEvent(Resource):
         """Log HySDS custom event."""
 
         try:
-            # app.logger.info("data: %s %d" % (request.data, len(request.data)))
-            # app.logger.info("form: %s" % request.form)
-            # app.logger.info("args: %s" % request.args)
             if len(request.data) > 0:
                 try:
                     form = json.loads(request.data)
@@ -836,8 +830,7 @@ class AddLogEvent(Resource):
                 if event is not None and not isinstance(event, dict):
                     event = json.loads(event)
             except Exception as e:
-                raise Exception(
-                    "Failed to parse input event. '{0}' is malformed JSON".format(event))
+                raise Exception("Failed to parse input event. '{0}' is malformed JSON".format(event))
 
             tags = form.get('tags', request.args.get('tags', None))
             try:
@@ -856,8 +849,7 @@ class AddLogEvent(Resource):
             uuid = log_custom_event(event_type, event_status, event, tags, hostname)
 
         except Exception as e:
-            message = "Failed to log custom event. {0}:{1}".format(
-                type(e), str(e))
+            message = "Failed to log custom event. {0}:{1}".format(type(e), str(e))
             app.logger.warning(message)
             app.logger.warning(traceback.format_exc(e))
             return {'success': False, 'message': message}, 500

@@ -12,6 +12,7 @@ ROLE_USER = 0
 ROLE_ADMIN = 1
 
 
+# TODO: may remove this because authentication/authorization will be handled by SSO/keycloak
 class User(db.Model):
     id = db.Column(db.String(64), primary_key=True)
     ldap_info = db.Column(db.PickleType)

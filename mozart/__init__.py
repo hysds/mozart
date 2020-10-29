@@ -14,7 +14,8 @@ from hysds_commons.elasticsearch_utils import ElasticsearchUtility
 
 
 class ReverseProxied(object):
-    '''Wrap the application in this middleware and configure the 
+    """
+    Wrap the application in this middleware and configure the 
     front-end server to add these headers, to let you quietly bind 
     this to a URL other than / and to an HTTP scheme that is 
     different than what is used locally.
@@ -51,7 +52,7 @@ class ReverseProxied(object):
         </Directory>
 
     :param app: the WSGI application
-    '''
+    """
 
     def __init__(self, app):
         self.app = app
@@ -80,6 +81,7 @@ app.config.from_pyfile('../settings.cfg')
 # TODO: will remove this when ready for actual release, need to figure out the right host
 CORS(app)
 
+# TODO: may remove this (and any code related to User models and authentication) once SSO is integrated
 # set database config
 dbdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(dbdir, 'app.db')
@@ -112,12 +114,6 @@ app.register_blueprint(esModule)
 
 from mozart.services.stats import mod as statsModule
 app.register_blueprint(statsModule)
-
-from mozart.services.user_rules import mod as userRulesModule
-app.register_blueprint(userRulesModule)
-
-from mozart.services.user_tags import mod as userTagsModule
-app.register_blueprint(userTagsModule)
 
 # rest API blueprints
 from mozart.services.api_v01 import services as api_v01Services
