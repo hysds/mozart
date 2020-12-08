@@ -121,3 +121,6 @@ app.register_blueprint(api_v01Services)
 
 from mozart.services.api_v02 import services as api_v02Services
 app.register_blueprint(api_v02Services)
+
+from mozart.services.jenkins import services as jenkins_services
+app.register_blueprint(jenkins_services)
