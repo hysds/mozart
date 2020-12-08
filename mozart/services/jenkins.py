@@ -37,6 +37,16 @@ class JenkinsJob(Resource):
     sds -d ci remove_job -b <branch> <github link>
     """
 
+    @staticmethod
+    def execute(cmd):
+        prcss = subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True, shell=True)
+        for stdout_line in iter(prcss.stdout.readline, ""):
+            if 'GIT_OAUTH_TOKEN' not in stdout_line and '@github.com' not in stdout_line:
+                # TODO: this is a workaround to mask the github oauth token, need to find a better way to do this
+                app.logger.debug(stdout_line)
+                yield 'data: ' + stdout_line + '\n'
+        prcss.stdout.close()
+
     def put(self):
         """Register jobs in jenkins"""
         request_data = request.json or request.form
@@ -44,46 +54,37 @@ class JenkinsJob(Resource):
         branch = request_data.get('branch')
 
         if repo is None:
-            return {
-                'success': False,
-                'message': 'repo must be supplied'
-            }, 400
+            return {'success': False, 'message': 'repo must be supplied'}, 400
 
         if branch:
             cmd = 'exec sds -d ci add_job -b %s --token %s s3' % (branch, repo)
         else:
             cmd = 'exec sds -d ci add_job --token %s s3' % repo
+        resp = Response(self.execute(cmd), mimetype="text/event-stream")
+        resp.headers['Cache-Control'] = 'no-cache'
+        resp.headers["Access-Control-Allow-Origin"] = '*'
+        resp.headers['Content-Type'] = 'text/event-stream'
+        resp.headers['Connection'] = 'keep-alive'
+        return resp
 
-        try:
-            self.execute(cmd)
-        except Exception as e:
-            app.logger.error(e)
-            return {
-                'success': False,
-                'message': str(e)
-            }, 400
-        return {
-            'success': True,
-            'message': 'registered jenkins job %s' % repo
-        }
+    def get(self):
+        """build jobs in jenkins (using EventSource javascript api)"""
+        repo = request.args.get('repo')
+        branch = request.args.get('branch')
 
-    @staticmethod
-    def execute(cmd):
-        prcss = subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True, shell=True)
-        for stdout_line in iter(prcss.stdout.readline, ""):
-            app.logger.debug(stdout_line)
-            yield 'data: ' + stdout_line + '\n'
-        prcss.stdout.close()
+        if repo is None:
+            return {'success': False, 'message': 'repo must be supplied'}, 400
 
-    # def get(self):
-    #     """build jobs in jenkins (using EventSource javascript api)"""
-    #     cmd = ""
-    #     resp = Response(self.execute(cmd), mimetype="text/event-stream")
-    #     resp.headers['Cache-Control'] = 'no-cache'
-    #     resp.headers["Access-Control-Allow-Origin"] = '*'
-    #     resp.headers['Content-Type'] = 'text/event-stream'
-    #     resp.headers['Connection'] = 'keep-alive'
-    #     return resp
+        if branch:
+            cmd = 'exec sds -d ci build_job -b %s %s' % (branch, repo)
+        else:
+            cmd = 'exec sds -d ci build_job %s' % repo
+        resp = Response(self.execute(cmd), mimetype="text/event-stream")
+        resp.headers['Cache-Control'] = 'no-cache'
+        resp.headers["Access-Control-Allow-Origin"] = '*'
+        resp.headers['Content-Type'] = 'text/event-stream'
+        resp.headers['Connection'] = 'keep-alive'
+        return resp
 
     def post(self):
         """build jobs in jenkins (using a regular curl command)"""
@@ -92,16 +93,12 @@ class JenkinsJob(Resource):
         branch = request_data.get('branch')
 
         if repo is None:
-            return {
-                'success': False,
-                'message': 'repo must be supplied'
-            }, 400
+            return {'success': False, 'message': 'repo must be supplied'}, 400
 
         if branch:
-            cmd = 'exec sds -d ci build_job -b %s --token %s' % (branch, repo)
+            cmd = 'exec sds -d ci build_job -b %s %s' % (branch, repo)
         else:
-            cmd = 'exec sds -d ci build_job --token %s' % repo
-
+            cmd = 'exec sds -d ci build_job %s' % repo
         resp = Response(self.execute(cmd), mimetype="text/event-stream")
         resp.headers['Cache-Control'] = 'no-cache'
         resp.headers["Access-Control-Allow-Origin"] = '*'
