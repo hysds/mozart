@@ -40,7 +40,7 @@ class JenkinsJob(Resource):
 
     @staticmethod
     def execute(cmd):
-        with Popen(cmd, stdout=PIPE, stderr=STDOUT, universal_newlines=True, bufsize=1, shell=True) as p:
+        with Popen(cmd, stdout=PIPE, stderr=STDOUT, universal_newlines=True, shell=True) as p:
             for stdout_line in iter(p.stdout.readline, ''):
                 if 'GIT_OAUTH_TOKEN' not in stdout_line and '@github.com' not in stdout_line:
                     # TODO: this is a workaround to mask the github oauth token, need to find a better way to do this
