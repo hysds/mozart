@@ -39,12 +39,20 @@ class JenkinsJob(Resource):
     """
 
     @staticmethod
-    def execute(cmd):
+    def execute(cmd, event_source=False):
+        """
+        :param cmd: sds ci command
+        :param event_source: boolean, if the source of the request uses the EventSource javascript API
+        """
         with Popen(cmd, stdout=PIPE, stderr=STDOUT, universal_newlines=True, shell=True) as p:
             for stdout_line in iter(p.stdout.readline, ''):
-                if 'GIT_OAUTH_TOKEN' not in stdout_line and '@github.com' not in stdout_line:
-                    # TODO: this is a workaround to mask the github oauth token, need to find a better way to do this
+                # TODO: this is a workaround to mask the github oauth token, need to find a better way to do this
+                if 'GIT_OAUTH_TOKEN' in stdout_line or '@github' in stdout_line:
+                    continue
+                if event_source:
                     yield 'data: ' + stdout_line + '\n'
+                else:
+                    yield stdout_line
             p.stdout.close()
 
     def put(self):
@@ -83,7 +91,7 @@ class JenkinsJob(Resource):
             cmd = 'exec sds -d ci build_job -b %s %s' % (branch, repo)  # exec
         else:
             cmd = 'exec sds -d ci build_job %s' % repo
-        resp = Response(self.execute(cmd), mimetype="text/event-stream")
+        resp = Response(self.execute(cmd, event_source=True), mimetype="text/event-stream")
         resp.headers['Cache-Control'] = 'no-cache'
         resp.headers["Access-Control-Allow-Origin"] = '*'
         resp.headers['Content-Type'] = 'text/event-stream'
