@@ -19,7 +19,8 @@ services = Blueprint('jenkins', __name__, url_prefix='/api/jenkins')
 api = Api(services, ui=False, version="0.1", title="Mozart API",
           description="API for HySDS job submission and building (Jenkins)")
 
-jenkins_ns = api.namespace('', description="Register and build Jenkins jobs")
+job_registration_ns = api.namespace('register', description="Register Jenkins jobs")
+job_builder_ns = api.namespace('build', description="Build Jenkins jobs")
 
 
 @services.route('/doc/', endpoint='api_doc')
@@ -27,35 +28,34 @@ def swagger_ui():
     return apidoc.ui_for(api)
 
 
-@jenkins_ns.route('/job', endpoint='jenkins')
-@api.doc(responses={200: "Success", 500: "Query execution failed"}, description="Register and build jenkins jobs")
-class JenkinsJob(Resource):
+def execute(cmd, event_source=False):
     """
-    sdscli wrapper to register and build jobs and start in jenkins
+    :param cmd: sds ci command
+    :param event_source: boolean, if the source of the request uses the EventSource javascript API
+    """
+    with Popen(cmd, stdout=PIPE, stderr=STDOUT, universal_newlines=True, shell=True) as p:
+        for stdout_line in iter(p.stdout.readline, ''):
+            # TODO: this is a workaround to mask the github oauth token, need to find a better way to do this
+            if 'GIT_OAUTH_TOKEN' in stdout_line or '@github' in stdout_line:
+                continue
+            if event_source:
+                yield 'data: ' + stdout_line + '\n'
+            else:
+                yield stdout_line
+        p.stdout.close()
+
+
+@job_registration_ns.route('', endpoint='register')
+@api.doc(responses={200: "Success", 500: "Query execution failed"}, description="Register and build jenkins jobs")
+class JobRegistration(Resource):
+    """
+    sdscli wrapper to register jobs in jenkins
 
     sds -d ci add_job -b <branch> --token <github link> s3
-    sds -d ci build_job -b <branch> <github link>
     sds -d ci remove_job -b <branch> <github link>
     """
 
-    @staticmethod
-    def execute(cmd, event_source=False):
-        """
-        :param cmd: sds ci command
-        :param event_source: boolean, if the source of the request uses the EventSource javascript API
-        """
-        with Popen(cmd, stdout=PIPE, stderr=STDOUT, universal_newlines=True, shell=True) as p:
-            for stdout_line in iter(p.stdout.readline, ''):
-                # TODO: this is a workaround to mask the github oauth token, need to find a better way to do this
-                if 'GIT_OAUTH_TOKEN' in stdout_line or '@github' in stdout_line:
-                    continue
-                if event_source:
-                    yield 'data: ' + stdout_line + '\n'
-                else:
-                    yield stdout_line
-            p.stdout.close()
-
-    def put(self):
+    def post(self):
         """Register jobs in jenkins"""
         request_data = request.json or request.form
         repo = request_data.get('repo')
@@ -70,7 +70,45 @@ class JenkinsJob(Resource):
             cmd = 'exec sds -d ci add_job -b %s --token %s s3' % (branch, repo)  # exec
         else:
             cmd = 'exec sds -d ci add_job --token %s s3' % repo
-        resp = Response(self.execute(cmd), mimetype="text/event-stream")
+        resp = Response(execute(cmd), mimetype="text/event-stream")
+        resp.headers['Cache-Control'] = 'no-cache'
+        resp.headers["Access-Control-Allow-Origin"] = '*'
+        resp.headers['Content-Type'] = 'text/event-stream'
+        resp.headers['Connection'] = 'keep-alive'
+        return resp
+
+    def delete(self):
+        """
+        sds -d ci remove_job -b <branch> <github link>
+        """
+        pass
+
+
+@job_builder_ns.route('', endpoint='build')
+@api.doc(responses={200: "Success", 500: "Query execution failed"}, description="Register and build jenkins jobs")
+class JobBuilder(Resource):
+    """
+    sdscli wrapper to build jobs in jenkins
+
+    sds -d ci build_job -b <branch> <github link>
+    """
+
+    def post(self):
+        """build jobs in jenkins (using a regular curl command)"""
+        request_data = request.json or request.form
+        repo = request_data.get('repo')
+        branch = request_data.get('branch')
+        app.logger.info("repo: %s" % repo)
+        app.logger.info("branch: %s" % branch)
+
+        if repo is None:
+            return {'success': False, 'message': 'repo must be supplied'}, 400
+
+        if branch:
+            cmd = 'exec sds -d ci build_job -b %s %s' % (branch, repo)  # exec
+        else:
+            cmd = 'exec sds -d ci build_job %s' % repo
+        resp = Response(execute(cmd), mimetype="text/event-stream")
         resp.headers['Cache-Control'] = 'no-cache'
         resp.headers["Access-Control-Allow-Origin"] = '*'
         resp.headers['Content-Type'] = 'text/event-stream'
@@ -91,31 +129,15 @@ class JenkinsJob(Resource):
             cmd = 'exec sds -d ci build_job -b %s %s' % (branch, repo)  # exec
         else:
             cmd = 'exec sds -d ci build_job %s' % repo
-        resp = Response(self.execute(cmd, event_source=True), mimetype="text/event-stream")
+        resp = Response(execute(cmd, event_source=True), mimetype="text/event-stream")
         resp.headers['Cache-Control'] = 'no-cache'
         resp.headers["Access-Control-Allow-Origin"] = '*'
         resp.headers['Content-Type'] = 'text/event-stream'
         resp.headers['Connection'] = 'keep-alive'
         return resp
 
-    def post(self):
-        """build jobs in jenkins (using a regular curl command)"""
-        request_data = request.json or request.form
-        repo = request_data.get('repo')
-        branch = request_data.get('branch')
-        app.logger.info("repo: %s" % repo)
-        app.logger.info("branch: %s" % branch)
-
-        if repo is None:
-            return {'success': False, 'message': 'repo must be supplied'}, 400
-
-        if branch:
-            cmd = 'exec sds -d ci build_job -b %s %s' % (branch, repo)  # exec
-        else:
-            cmd = 'exec sds -d ci build_job %s' % repo
-        resp = Response(self.execute(cmd), mimetype="text/event-stream")
-        resp.headers['Cache-Control'] = 'no-cache'
-        resp.headers["Access-Control-Allow-Origin"] = '*'
-        resp.headers['Content-Type'] = 'text/event-stream'
-        resp.headers['Connection'] = 'keep-alive'
-        return resp
+    def delete(self):
+        """
+        Maybe we can stop builds through the use of the jenkins rest api
+        """
+        pass
