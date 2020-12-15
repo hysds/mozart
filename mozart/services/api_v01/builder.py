@@ -13,17 +13,8 @@ from flask import request
 from flask_restx import Resource, fields
 
 from mozart import app, mozart_es
-from mozart.services.api_v01 import api
+from mozart.services.api_v01 import api, job_spec_ns, container_ns, hysds_io_ns
 
-
-JOB_SPEC_NS = "job_spec"
-job_spec_ns = api.namespace(JOB_SPEC_NS, description="Mozart job-specification operations")
-
-CONTAINER_NS = "container"
-container_ns = api.namespace(CONTAINER_NS, description="Mozart container operations")
-
-HYSDS_IO_NS = "hysds_io"
-hysds_io_ns = api.namespace(HYSDS_IO_NS, description="HySDS IO operations")
 
 HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
 JOB_SPECS_INDEX = app.config['JOB_SPECS_INDEX']

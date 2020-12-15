@@ -16,21 +16,12 @@ from flask_restx import Resource, fields
 import hysds_commons.job_utils
 
 from mozart import app, mozart_es
-from mozart.services.api_v01 import api
+from mozart.services.api_v01 import api, job_ns, queue_ns, on_demand_ns
 
 # Library backend imports
 import mozart.lib.job_utils
 import mozart.lib.queue_utils
 
-
-JOB_NS = "job"
-job_ns = api.namespace(JOB_NS, description="Mozart job operations")
-
-QUEUE_NS = "queue"
-queue_ns = api.namespace(QUEUE_NS, description="Mozart queue operations")
-
-ON_DEMAND_NS = "on-demand"
-on_demand_ns = api.namespace(ON_DEMAND_NS, description="For retrieving and submitting on-demand jobs for mozart")
 
 HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
 JOB_SPECS_INDEX = app.config['JOB_SPECS_INDEX']

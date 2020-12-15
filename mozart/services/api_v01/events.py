@@ -16,11 +16,7 @@ from flask_restx import Resource, fields
 from hysds.log_utils import log_custom_event
 
 from mozart import app
-from mozart.services.api_v01 import api
-
-
-EVENT_NS = "event"
-event_ns = api.namespace(EVENT_NS, description="HySDS event stream operations")
+from mozart.services.api_v01 import api, event_ns
 
 
 @event_ns.route('/add', endpoint='event-add', methods=['POST'])

@@ -11,14 +11,7 @@ from flask import request
 from flask_restx import Resource
 
 from mozart import app, mozart_es
-from mozart.services.api_v01 import api
-
-
-USER_TAGS_NS = "user-tags"
-user_tags_ns = api.namespace(USER_TAGS_NS, description="user tags for Mozart jobs")
-
-USER_RULES_TAGS = "user-rules-tags"
-user_rules_tags_ns = api.namespace(USER_RULES_TAGS, description="user tags for Mozart jobs")
+from mozart.services.api_v01 import api, user_tags_ns, user_rules_tags_ns
 
 
 @user_tags_ns.route('', endpoint='user-tags')

@@ -16,11 +16,8 @@ from flask_restx import Resource
 from hysds_commons.action_utils import check_passthrough_query
 
 from mozart import app, mozart_es
-from mozart.services.api_v01 import api
+from mozart.services.api_v01 import api, user_rule_ns
 
-
-USER_RULE_NS = "user-rules"
-user_rule_ns = api.namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user rules")
 
 HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
 
