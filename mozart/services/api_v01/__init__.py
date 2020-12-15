@@ -10,38 +10,33 @@ standard_library.install_aliases()
 from flask import Blueprint
 from flask_restx import Api
 
+from mozart.services.api_v01.builder import job_spec_ns, container_ns, hysds_io_ns
+from mozart.services.api_v01.events import event_ns
+from mozart.services.api_v01.jobs import job_ns, queue_ns, on_demand_ns
+from mozart.services.api_v01.tags import user_tags_ns, user_rules_tags_ns
+from mozart.services.api_v01.user_rules import user_rule_ns
+
 
 services = Blueprint('api_v0-1', __name__, url_prefix='/api/v0.1')
 api = Api(services, ui=False, version="0.1", title="Mozart API",
           description="Rest API for all job related functionality")
 
+# builder.py
+api.add_namespace(job_spec_ns)
+api.add_namespace(container_ns)
+api.add_namespace(hysds_io_ns)
 
-JOB_SPEC_NS = "job_spec"
-job_spec_ns = api.namespace(JOB_SPEC_NS, description="Mozart job-specification operations")
+# events.py
+api.add_namespace(event_ns)
 
-CONTAINER_NS = "container"
-container_ns = api.namespace(CONTAINER_NS, description="Mozart container operations")
+# jobs.py
+api.add_namespace(job_ns)
+api.add_namespace(queue_ns)
+api.add_namespace(on_demand_ns)
 
-HYSDS_IO_NS = "hysds_io"
-hysds_io_ns = api.namespace(HYSDS_IO_NS, description="HySDS IO operations")
+# tags.py
+api.add_namespace(user_tags_ns)
+api.add_namespace(user_rules_tags_ns)
 
-JOB_NS = "job"
-job_ns = api.namespace(JOB_NS, description="Mozart job operations")
-
-QUEUE_NS = "queue"
-queue_ns = api.namespace(QUEUE_NS, description="Mozart queue operations")
-
-ON_DEMAND_NS = "on-demand"
-on_demand_ns = api.namespace(ON_DEMAND_NS, description="For retrieving and submitting on-demand jobs for mozart")
-
-EVENT_NS = "event"
-event_ns = api.namespace(EVENT_NS, description="HySDS event stream operations")
-
-USER_TAGS_NS = "user-tags"
-user_tags_ns = api.namespace(USER_TAGS_NS, description="user tags for Mozart jobs")
-
-USER_RULES_TAGS = "user-rules-tags"
-user_rules_tags_ns = api.namespace(USER_RULES_TAGS, description="user tags for Mozart jobs")
-
-USER_RULE_NS = "user-rules"
-user_rule_ns = api.namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user rules")
+# user_rules.py
+api.add_namespace(user_rule_ns)

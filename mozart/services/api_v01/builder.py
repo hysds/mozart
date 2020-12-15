@@ -10,10 +10,19 @@ standard_library.install_aliases()
 import json
 
 from flask import request
-from flask_restx import Resource, fields
+from flask_restx import Namespace, Resource, fields
 
 from mozart import app, mozart_es
-from mozart.services.api_v01 import api, job_spec_ns, container_ns, hysds_io_ns
+
+
+JOB_SPEC_NS = "job_spec"
+job_spec_ns = Namespace(JOB_SPEC_NS, description="Mozart job-specification operations")
+
+CONTAINER_NS = "container"
+container_ns = Namespace(CONTAINER_NS, description="Mozart container operations")
+
+HYSDS_IO_NS = "hysds_io"
+hysds_io_ns = Namespace(HYSDS_IO_NS, description="HySDS IO operations")
 
 
 HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
@@ -23,11 +32,11 @@ CONTAINERS_INDEX = app.config['CONTAINERS_INDEX']
 
 
 @job_spec_ns.route('/list', endpoint='job_spec-list')
-@api.doc(responses={200: "Success", 500: "Query execution failed"},
-         description="Get list of registered job types and return as JSON.")
+@job_spec_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+                 description="Get list of registered job types and return as JSON.")
 class GetJobTypes(Resource):
     """Get list of registered job types and return as JSON."""
-    resp_model_job_types = api.model('Job Type List Response(JSON)', {
+    resp_model_job_types = job_spec_ns.model('Job Type List Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -35,7 +44,7 @@ class GetJobTypes(Resource):
         'result':  fields.List(fields.String, required=True, description="list of job types")
     })
 
-    @api.marshal_with(resp_model_job_types)
+    @job_spec_ns.marshal_with(resp_model_job_types)
     def get(self):
         """Gets a list of Job Type specifications"""
         query = {
@@ -53,13 +62,12 @@ class GetJobTypes(Resource):
 
 
 @job_spec_ns.route('/type', endpoint='job_spec-type')
-@api.doc(responses={200: "Success",
-                    500: "Queue listing failed"},
-         description="Get a full JSON specification of job type from id.")
+@job_spec_ns.doc(responses={200: "Success", 500: "Queue listing failed"},
+                 description="Get a full JSON specification of job type from id.")
 class GetJobSpecType(Resource):
     """Get list of job queues and return as JSON."""
 
-    resp_model = api.model('Job Type Specification Response(JSON)', {
+    resp_model = job_spec_ns.model('Job Type Specification Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -67,11 +75,11 @@ class GetJobSpecType(Resource):
                                  "success or failure"),
         'result':  fields.Raw(required=True, description="Job Type Specification")
     })
-    parser = api.parser()
+    parser = job_spec_ns.parser()
     parser.add_argument('id', required=True, type=str, help="Job Type ID")
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @job_spec_ns.expect(parser)
+    @job_spec_ns.marshal_with(resp_model)
     def get(self):
         """Gets a Job Type specification object for the given ID."""
         _id = request.form.get('id', request.args.get('id', None))
@@ -94,13 +102,12 @@ class GetJobSpecType(Resource):
 
 
 @job_spec_ns.route('/add', endpoint='job_spec-add')
-@api.doc(responses={200: "Success",
-                    500: "Adding JSON failed"},
-         description="Adds a job type specification from JSON.")
+@job_spec_ns.doc(responses={200: "Success", 500: "Adding JSON failed"},
+                 description="Adds a job type specification from JSON.")
 class AddJobSpecType(Resource):
     """Add job spec"""
 
-    resp_model = api.model('Job Type Specification Addition Response(JSON)', {
+    resp_model = job_spec_ns.model('Job Type Specification Addition Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -108,11 +115,11 @@ class AddJobSpecType(Resource):
                                  "success or failure"),
         'result':  fields.String(required=True, description="Job Type Specification ID")
     })
-    parser = api.parser()
+    parser = job_spec_ns.parser()
     parser.add_argument('spec', required=True, type=str, help="Job Type Specification JSON Object")
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @job_spec_ns.expect(parser)
+    @job_spec_ns.marshal_with(resp_model)
     def post(self):
         """Add a Job Type specification JSON object."""
         spec = request.form.get('spec', request.args.get('spec', None))
@@ -134,24 +141,23 @@ class AddJobSpecType(Resource):
 
 
 @job_spec_ns.route('/remove', endpoint='job_spec-remove')
-@api.doc(responses={200: "Success",
-                    500: "Remove JSON failed"},
-         description="Removes a job type specification.")
+@job_spec_ns.doc(responses={200: "Success", 500: "Remove JSON failed"},
+                 description="Removes a job type specification.")
 class RemoveJobSpecType(Resource):
     """Remove job spec"""
 
-    resp_model = api.model('Job Type Specification Removal Response(JSON)', {
+    resp_model = job_spec_ns.model('Job Type Specification Removal Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
         'message': fields.String(required=True, description="message describing " +
                                  "success or failure"),
     })
-    parser = api.parser()
+    parser = job_spec_ns.parser()
     parser.add_argument('id', required=True, type=str, help="Job Type Specification ID")
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @job_spec_ns.expect(parser)
+    @job_spec_ns.marshal_with(resp_model)
     def get(self):
         """Remove Job Spec for the given ID"""
         _id = request.form.get('id', request.args.get('id', None))
@@ -170,12 +176,11 @@ class RemoveJobSpecType(Resource):
 
 
 @container_ns.route('/list', endpoint='container-list')
-@api.doc(responses={200: "Success",
-                    500: "Query execution failed"},
-         description="Get list of registered containers and return as JSON.")
+@container_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+                  description="Get list of registered containers and return as JSON.")
 class GetContainerTypes(Resource):
     """Get list of registered containers and return as JSON."""
-    resp_model_job_types = api.model('Container List Response(JSON)', {
+    resp_model_job_types = container_ns.model('Container List Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -185,7 +190,7 @@ class GetContainerTypes(Resource):
                                description="list of hysds-io types")
     })
 
-    @api.marshal_with(resp_model_job_types)
+    @container_ns.marshal_with(resp_model_job_types)
     def get(self):
         """Get a list of containers managed by Mozart"""
         containers = mozart_es.query(index=CONTAINERS_INDEX, _source=False)
@@ -199,13 +204,12 @@ class GetContainerTypes(Resource):
 
 
 @container_ns.route('/add', endpoint='container-add')
-@api.doc(responses={200: "Success",
-                    500: "Query execution failed"},
-         description="Add a new container.")
+@container_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+                  description="Add a new container.")
 class GetContainerAdd(Resource):
     """Add a container"""
 
-    resp_model = api.model('Container Add Response(JSON)', {
+    resp_model = container_ns.model('Container Add Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -213,14 +217,14 @@ class GetContainerAdd(Resource):
                                  "success or failure"),
         'result':  fields.String(required=True, description="Container ID")
     })
-    parser = api.parser()
+    parser = container_ns.parser()
     parser.add_argument('name', required=True, type=str, help="Container Name")
     parser.add_argument('url', required=True, type=str, help="Container URL")
     parser.add_argument('version', required=True, type=str, help="Container Version")
     parser.add_argument('digest', required=True, type=str, help="Container Digest")
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @container_ns.expect(parser)
+    @container_ns.marshal_with(resp_model)
     def post(self):
         """Add a container specification to Mozart"""
         name = request.form.get('name', request.args.get('name', None))
@@ -250,22 +254,22 @@ class GetContainerAdd(Resource):
 
 
 @container_ns.route('/remove', endpoint='container-remove')
-@api.doc(responses={200: "Success", 500: "Query execution failed"}, description="Remove a container.")
+@container_ns.doc(responses={200: "Success", 500: "Query execution failed"}, description="Remove a container.")
 class GetContainerRemove(Resource):
     """Remove a container"""
 
-    resp_model = api.model('Container Removal Response(JSON)', {
+    resp_model = container_ns.model('Container Removal Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
         'message': fields.String(required=True, description="message describing " +
                                  "success or failure")
     })
-    parser = api.parser()
+    parser = container_ns.parser()
     parser.add_argument('id', required=True, type=str, help="Container ID")
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @container_ns.expect(parser)
+    @container_ns.marshal_with(resp_model)
     def get(self):
         """Remove container based on ID"""
         _id = request.form.get('id', request.args.get('id', None))
@@ -284,13 +288,12 @@ class GetContainerRemove(Resource):
 
 
 @container_ns.route('/info', endpoint='container-info')
-@api.doc(responses={200: "Success",
-                    500: "Query execution failed"},
-         description="Get info on a container.")
+@container_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+                  description="Get info on a container.")
 class GetContainerInfo(Resource):
     """Info a container"""
 
-    resp_model = api.model('Container Info Response(JSON)', {
+    resp_model = container_ns.model('Container Info Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -298,11 +301,11 @@ class GetContainerInfo(Resource):
                                  "success or failure"),
         'result':  fields.Raw(required=True, description="Container Info")
     })
-    parser = api.parser()
+    parser = container_ns.parser()
     parser.add_argument('id', required=True, type=str, help="Container ID")
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @container_ns.expect(parser)
+    @container_ns.marshal_with(resp_model)
     def get(self):
         """Get information on container by ID"""
         _id = request.form.get('id', request.args.get('id', None))
@@ -322,12 +325,11 @@ class GetContainerInfo(Resource):
 
 
 @hysds_io_ns.route('/list', endpoint='hysds_io-list')
-@api.doc(responses={200: "Success",
-                    500: "Query execution failed"},
-         description="Gets list of registered hysds-io specifications and return as JSON.")
+@container_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+                  description="Gets list of registered hysds-io specifications and return as JSON.")
 class GetHySDSIOTypes(Resource):
     """Get list of registered hysds-io and return as JSON."""
-    resp_model_job_types = api.model('HySDS IO List Response(JSON)', {
+    resp_model_job_types = container_ns.model('HySDS IO List Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -337,7 +339,7 @@ class GetHySDSIOTypes(Resource):
                                description="list of hysds-io types")
     })
 
-    @api.marshal_with(resp_model_job_types)
+    @container_ns.marshal_with(resp_model_job_types)
     def get(self):
         """List HySDS IO specifications"""
         hysds_ios = mozart_es.query(index=HYSDS_IOS_INDEX, _source=False)
@@ -350,13 +352,12 @@ class GetHySDSIOTypes(Resource):
 
 
 @hysds_io_ns.route('/type', endpoint='hysds_io-type')
-@api.doc(responses={200: "Success",
-                    500: "Queue listing failed"},
-         description="Gets info on a hysds-io specification.")
+@hysds_io_ns.doc(responses={200: "Success", 500: "Queue listing failed"},
+                 description="Gets info on a hysds-io specification.")
 class GetHySDSIOType(Resource):
     """Get list of job queues and return as JSON."""
 
-    resp_model = api.model('HySDS IO Response(JSON)', {
+    resp_model = hysds_io_ns.model('HySDS IO Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -364,11 +365,11 @@ class GetHySDSIOType(Resource):
                                  "success or failure"),
         'result':  fields.Raw(required=True, description="HySDS IO Object")
     })
-    parser = api.parser()
+    parser = hysds_io_ns.parser()
     parser.add_argument('id', required=True, type=str, help="HySDS IO Type ID")
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @hysds_io_ns.expect(parser)
+    @hysds_io_ns.marshal_with(resp_model)
     def get(self):
         """Gets a HySDS-IO specification by ID"""
         _id = request.form.get('id', request.args.get('id', None))
@@ -387,13 +388,11 @@ class GetHySDSIOType(Resource):
 
 
 @hysds_io_ns.route('/add', endpoint='hysds_io-add')
-@api.doc(responses={200: "Success",
-                    500: "Adding JSON failed"},
-         description="Adds a hysds-io specification")
+@hysds_io_ns.doc(responses={200: "Success", 500: "Adding JSON failed"}, description="Adds a hysds-io specification")
 class AddHySDSIOType(Resource):
     """Add job spec"""
 
-    resp_model = api.model('HySDS IO Addition Response(JSON)', {
+    resp_model = hysds_io_ns.model('HySDS IO Addition Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -401,11 +400,11 @@ class AddHySDSIOType(Resource):
                                  "success or failure"),
         'result':  fields.String(required=True, description="HySDS IO ID")
     })
-    parser = api.parser()
+    parser = hysds_io_ns.parser()
     parser.add_argument('spec', required=True, type=str, help="HySDS IO JSON Object")
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @hysds_io_ns.expect(parser)
+    @hysds_io_ns.marshal_with(resp_model)
     def post(self):
         """Add a HySDS IO specification"""
         spec = request.form.get('spec', request.args.get('spec', None))
@@ -431,24 +430,23 @@ class AddHySDSIOType(Resource):
 
 
 @hysds_io_ns.route('/remove', endpoint='hysds_io-remove')
-@api.doc(responses={200: "Success",
-                    500: "Remove JSON failed"},
-         description="Removes a hysds-io specification.")
+@hysds_io_ns.doc(responses={200: "Success", 500: "Remove JSON failed"},
+                 description="Removes a hysds-io specification.")
 class RemoveHySDSIOType(Resource):
     """Remove job spec"""
 
-    resp_model = api.model('HySDS IO Removal Response(JSON)', {
+    resp_model = hysds_io_ns.model('HySDS IO Removal Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
         'message': fields.String(required=True, description="message describing " +
                                  "success or failure"),
     })
-    parser = api.parser()
+    parser = hysds_io_ns.parser()
     parser.add_argument('id', required=True, type=str, help="HySDS IO ID")
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @hysds_io_ns.expect(parser)
+    @hysds_io_ns.marshal_with(resp_model)
     def get(self):
         """Remove HySDS IO for the given ID"""
         _id = request.form.get('id', request.args.get('id', None))

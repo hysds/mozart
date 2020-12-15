@@ -8,14 +8,20 @@ from future import standard_library
 standard_library.install_aliases()
 
 from flask import request
-from flask_restx import Resource
+from flask_restx import Namespace, Resource
 
 from mozart import app, mozart_es
-from mozart.services.api_v01 import api, user_tags_ns, user_rules_tags_ns
+
+
+USER_TAGS_NS = "user-tags"
+user_tags_ns = Namespace(USER_TAGS_NS, description="user tags for Mozart jobs")
+
+USER_RULES_TAGS = "user-rules-tags"
+user_rules_tags_ns = Namespace(USER_RULES_TAGS, description="user tags for Mozart jobs")
 
 
 @user_tags_ns.route('', endpoint='user-tags')
-@api.doc(responses={200: "Success", 500: "Execution failed"}, description="User tags for Mozart jobs")
+@user_tags_ns.doc(responses={200: "Success", 500: "Execution failed"}, description="User tags for Mozart jobs")
 class UserTags(Resource):
     def put(self):
         request_data = request.json or request.form
@@ -116,7 +122,7 @@ class UserTags(Resource):
 
 
 @user_rules_tags_ns.route('', endpoint='user-rules-tags')
-@api.doc(responses={200: "Success", 500: "Execution failed"}, description="User tags for Mozart user rules")
+@user_rules_tags_ns.doc(responses={200: "Success", 500: "Execution failed"}, description="User tags for Mozart user rules")
 class UserRulesTags(Resource):
     def get(self):
         index = app.config['USER_RULES_INDEX']
@@ -150,4 +156,3 @@ class UserRulesTags(Resource):
                 'count': tag['doc_count']
             } for tag in buckets]
         }
-

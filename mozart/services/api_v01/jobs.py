@@ -11,17 +11,28 @@ import json
 import traceback
 
 from flask import request
-from flask_restx import Resource, fields
+from flask_restx import Namespace, Resource, fields
 
+from hysds.celery import app as celery_app
+from hysds.task_worker import do_submit_task
 import hysds_commons.job_utils
+from hysds_commons.action_utils import check_passthrough_query
 
 from mozart import app, mozart_es
-from mozart.services.api_v01 import api, job_ns, queue_ns, on_demand_ns
 
 # Library backend imports
 import mozart.lib.job_utils
 import mozart.lib.queue_utils
 
+
+JOB_NS = "job"
+job_ns = Namespace(JOB_NS, description="Mozart job operations")
+
+QUEUE_NS = "queue"
+queue_ns = Namespace(QUEUE_NS, description="Mozart queue operations")
+
+ON_DEMAND_NS = "on-demand"
+on_demand_ns = Namespace(ON_DEMAND_NS, description="For retrieving and submitting on-demand jobs for mozart")
 
 HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
 JOB_SPECS_INDEX = app.config['JOB_SPECS_INDEX']
@@ -30,13 +41,12 @@ CONTAINERS_INDEX = app.config['CONTAINERS_INDEX']
 
 
 @job_ns.route('/list', endpoint='job-list')
-@api.doc(responses={200: "Success",
-                    500: "Query execution failed"},
-         description="Get list of submitted job IDs.")
+@job_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+            description="Get list of submitted job IDs.")
 class GetJobs(Resource):
     """Get list of job IDs."""
 
-    resp_model = api.model('Jobs Listing Response(JSON)', {
+    resp_model = job_ns.model('Jobs Listing Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -45,14 +55,14 @@ class GetJobs(Resource):
         'result':  fields.List(fields.String, required=True,
                                description="list of job IDs")
     })
-    parser = api.parser()
+    parser = job_ns.parser()
     parser.add_argument('page_size', required=False, type=str,
                         help="Job Listing Pagination Size")
-    parser = api.parser()
+    parser = job_ns.parser()
     parser.add_argument('offset', required=False, type=str,
                         help="Job Listing Pagination Offset")
 
-    @api.marshal_with(resp_model)
+    @job_ns.marshal_with(resp_model)
     def get(self):
         """Paginated list submitted jobs"""
         jobs = mozart_es.query(index=JOB_STATUS_INDEX, _source=False)
@@ -64,14 +74,12 @@ class GetJobs(Resource):
 
 
 @job_ns.route('/submit', endpoint='job-submit')
-@api.doc(responses={200: "Success",
-                    400: "Invalid parameters",
-                    500: "Job submission failed"},
-         description="Submit job for execution in HySDS.")
+@job_ns.doc(responses={200: "Success", 400: "Invalid parameters", 500: "Job submission failed"},
+            description="Submit job for execution in HySDS.")
 class SubmitJob(Resource):
     """Submit job for execution in HySDS."""
 
-    resp_model = api.model('SubmitJobResponse', {
+    resp_model = job_ns.model('SubmitJobResponse', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -80,7 +88,7 @@ class SubmitJob(Resource):
         'result':  fields.String(required=True, description="HySDS job ID")
     })
 
-    parser = api.parser()
+    parser = job_ns.parser()
     parser.add_argument('type', required=True, type=str,
                         help="a job type from jobspec/list")
     parser.add_argument('queue', required=True, type=str,
@@ -108,8 +116,8 @@ class SubmitJob(Resource):
                              "max_sleep": 10
                             }""")
 
-    @api.marshal_with(resp_model)
-    @api.expect(parser, validate=True)
+    @job_ns.marshal_with(resp_model)
+    @job_ns.expect(parser, validate=True)
     def post(self):
         """Submits a job to run inside HySDS"""
         job_type = request.form.get('type', request.args.get('type', None))
@@ -166,13 +174,12 @@ class SubmitJob(Resource):
 
 
 @queue_ns.route('/list', endpoint='queue-list')
-@api.doc(responses={200: "Success",
-                    500: "Queue listing failed"},
-         description="Get list of available job queues and return as JSON.")
+@queue_ns.doc(responses={200: "Success", 500: "Queue listing failed"},
+              description="Get list of available job queues and return as JSON.")
 class GetQueueNames(Resource):
     """Get list of job queues and return as JSON."""
 
-    resp_model = api.model('Queue Listing Response(JSON)', {
+    resp_model = queue_ns.model('Queue Listing Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -180,12 +187,12 @@ class GetQueueNames(Resource):
                                  "success or failure"),
         'result':  fields.Raw(required=True, description="queue response")
     })
-    parser = api.parser()
+    parser = queue_ns.parser()
     parser.add_argument('id', required=False, type=str,
                         help="Job Type Specification ID")
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @queue_ns.expect(parser)
+    @queue_ns.marshal_with(resp_model)
     def get(self):
         """Gets a listing of non-celery queues handling jobs."""
         try:
@@ -205,13 +212,12 @@ class GetQueueNames(Resource):
 
 
 @job_ns.route('/status', endpoint='job-status')
-@api.doc(responses={200: "Success",
-                    500: "Query execution failed"},
-         description="Get status of job by ID.")
+@job_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+            description="Get status of job by ID.")
 class GetJobStatus(Resource):
     """Get status of job ID."""
 
-    resp_model = api.model('Job Status Response(JSON)', {
+    resp_model = job_ns.model('Job Status Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -223,11 +229,11 @@ class GetJobStatus(Resource):
                                  description='job status')
     })
 
-    parser = api.parser()
+    parser = job_ns.parser()
     parser.add_argument('id', required=True, type=str, help="Job ID")
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @job_ns.expect(parser)
+    @job_ns.marshal_with(resp_model)
     def get(self):
         """Gets the status of a submitted job based on job id"""
         _id = request.form.get('id', request.args.get('id', None))
@@ -249,13 +255,12 @@ class GetJobStatus(Resource):
 
 
 @job_ns.route('/info', endpoint='job-info')
-@api.doc(responses={200: "Success",
-                    500: "Query execution failed"},
-         description="Gets the complete info for a job.")
+@job_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+            description="Gets the complete info for a job.")
 class GetJobInfo(Resource):
     """Get info of job IDs."""
 
-    resp_model = api.model('Job Info Response(JSON)', {
+    resp_model = job_ns.model('Job Info Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -263,11 +268,11 @@ class GetJobInfo(Resource):
                                  "success or failure"),
         'result':  fields.Raw(required=True, description="Job Info Object")
     })
-    parser = api.parser()
+    parser = job_ns.parser()
     parser.add_argument('id', required=True, type=str, help="Job ID")
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @job_ns.expect(parser)
+    @job_ns.marshal_with(resp_model)
     def get(self):
         """Get complete info for submitted job based on id"""
         _id = request.form.get('id', request.args.get('id', None))
@@ -289,13 +294,12 @@ class GetJobInfo(Resource):
 
 
 @on_demand_ns.route('', endpoint='on-demand')
-@api.doc(responses={200: "Success",
-                    500: "Execution failed"},
-         description="Retrieve on demand jobs")
+@on_demand_ns.doc(responses={200: "Success", 500: "Execution failed"},
+                  description="Retrieve on demand jobs")
 class OnDemandJobs(Resource):
     """On Demand Jobs API."""
 
-    resp_model = api.model('JsonResponse', {
+    resp_model = on_demand_ns.model('JsonResponse', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -305,7 +309,7 @@ class OnDemandJobs(Resource):
         'index': fields.String(required=True, description="dataset index name"),
     })
 
-    parser = api.parser()
+    parser = on_demand_ns.parser()
 
     # @api.marshal_with(resp_model)
     def get(self):
@@ -433,13 +437,12 @@ class OnDemandJobs(Resource):
 
 
 @on_demand_ns.route('/job-params', endpoint='job-params')
-@api.doc(responses={200: "Success",
-                    500: "Execution failed"},
-         description="Retrieve on job params for specific jobs")
+@on_demand_ns.doc(responses={200: "Success", 500: "Execution failed"},
+                  description="Retrieve on job params for specific jobs")
 class JobParams(Resource):
     """Job Params API."""
 
-    resp_model = api.model('JsonResponse', {
+    resp_model = on_demand_ns.model('JsonResponse', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -449,7 +452,7 @@ class JobParams(Resource):
         'index': fields.String(required=True, description="dataset index name"),
     })
 
-    parser = api.parser()
+    parser = on_demand_ns.parser()
 
     # @api.marshal_with(resp_model)
     def get(self):
@@ -490,4 +493,3 @@ class JobParams(Resource):
             'soft_time_limit': job_spec['_source']['soft_time_limit'],
             'disk_usage': job_spec['_source']['disk_usage']
         }
-

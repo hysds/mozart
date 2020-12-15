@@ -11,22 +11,24 @@ import json
 import traceback
 
 from flask import request
-from flask_restx import Resource, fields
+from flask_restx import Namespace, Resource, fields
 
 from hysds.log_utils import log_custom_event
 
 from mozart import app
-from mozart.services.api_v01 import api, event_ns
+
+
+EVENT_NS = "event"
+event_ns = Namespace(EVENT_NS, description="HySDS event stream operations")
 
 
 @event_ns.route('/add', endpoint='event-add', methods=['POST'])
-@api.doc(responses={200: "Success",
-                    500: "Event log failed"},
-         description="Logs a HySDS custom event")
+@event_ns.doc(responses={200: "Success", 500: "Event log failed"},
+              description="Logs a HySDS custom event")
 class AddLogEvent(Resource):
     """Add log event."""
 
-    resp_model = api.model('HySDS Event Log Response(JSON)', {
+    resp_model = event_ns.model('HySDS Event Log Response(JSON)', {
         'success': fields.Boolean(required=True, description="if 'false', " +
                                   "encountered exception; otherwise no errors " +
                                   "occurred"),
@@ -34,7 +36,7 @@ class AddLogEvent(Resource):
                                  "success or failure"),
         'result':  fields.String(required=True, description="HySDS custom event log ID")
     })
-    parser = api.parser()
+    parser = event_ns.parser()
     parser.add_argument('type', required=True, type=str,
                         help="Event type, e.g. aws_autoscaling, verdi_anomalies")
     parser.add_argument('status', required=True, type=str,
@@ -52,8 +54,8 @@ class AddLogEvent(Resource):
     parser.add_argument('hostname', required=False, type=str,
                         help='Event-related hostname, e.g. "job.hysds.net", "192.168.0.1"')
 
-    @api.expect(parser)
-    @api.marshal_with(resp_model)
+    @event_ns.expect(parser)
+    @event_ns.marshal_with(resp_model)
     def post(self):
         """Log HySDS custom event."""
 

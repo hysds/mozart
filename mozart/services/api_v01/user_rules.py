@@ -11,19 +11,22 @@ import json
 from datetime import datetime
 
 from flask import request
-from flask_restx import Resource
+from flask_restx import Namespace, Resource
 
 from hysds_commons.action_utils import check_passthrough_query
 
 from mozart import app, mozart_es
-from mozart.services.api_v01 import api, user_rule_ns
 
+
+USER_RULE_NS = "user-rules"
+user_rule_ns = Namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user rules")
 
 HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
 
 
 @user_rule_ns.route('', endpoint='user-rules')
-@api.doc(responses={200: "Success", 500: "Execution failed"}, description="Retrieve on job params for specific jobs")
+@user_rule_ns.doc(responses={200: "Success", 500: "Execution failed"},
+                  description="Retrieve on job params for specific jobs")
 class UserRules(Resource):
     """User Rules API"""
 
@@ -239,7 +242,7 @@ class UserRules(Resource):
         soft_time_limit = request_data.get('soft_time_limit', None)
         disk_usage = request_data.get('disk_usage', None)
 
-        # check if job_type (hysds_io) exists in elasticsearch (only if we're updating job_type)
+        # check if job_type (hysds_io) exists in ElasticSearch (only if we're updating job_type)
         if hysds_io:
             job_type = mozart_es.get_by_id(index=HYSDS_IOS_INDEX, id=hysds_io, ignore=404)
             if job_type.get("found", False) is False:
@@ -397,4 +400,3 @@ class UserRules(Resource):
                 'message': 'user rule deleted',
                 'rule_name': _rule_name
             }
-
