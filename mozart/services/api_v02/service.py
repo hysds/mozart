@@ -10,9 +10,9 @@ standard_library.install_aliases()
 from flask import Blueprint
 from flask_restx import Api, apidoc
 
-from mozart.services.api_v01.builder import job_spec_ns, container_ns, hysds_io_ns
-from mozart.services.api_v01.events import event_ns
-from mozart.services.api_v01.jobs import job_ns, queue_ns, on_demand_ns
+from mozart.services.api_v02.builder import job_spec_ns, container_ns, hysds_io_ns
+from mozart.services.api_v02.events import event_ns
+from mozart.services.api_v02.jobs import job_ns, queue_ns, on_demand_ns
 from mozart.services.api_v02.tags import user_tags_ns, user_rules_tags_ns
 from mozart.services.api_v02.user_rules import user_rule_ns
 
