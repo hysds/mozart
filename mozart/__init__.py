@@ -4,8 +4,9 @@ from __future__ import division
 from __future__ import absolute_import
 from future import standard_library
 standard_library.install_aliases()
+
 import os
-from flask import Flask
+from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_cors import CORS  # TODO: will remove this once we figure out the proper host for the UI
@@ -74,6 +75,13 @@ class ReverseProxied(object):
         return self.app(environ, start_response)
 
 
+def resource_not_found(e):
+    return jsonify({
+        'status_code': 404,
+        'message': str(e)
+    }), 404
+
+
 app = Flask(__name__)
 app.wsgi_app = ReverseProxied(app.wsgi_app)
 app.config.from_pyfile('../settings.cfg')
@@ -91,6 +99,9 @@ db = SQLAlchemy(app)
 lm = LoginManager()
 lm.init_app(app)
 lm.login_view = 'views/main.login'
+
+# handle global errors
+app.register_error_handler(404, resource_not_found)
 
 # Mozart's connection to Elasticsearch
 mozart_es = ElasticsearchUtility(app.config['ES_URL'], app.logger)
