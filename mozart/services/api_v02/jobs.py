@@ -477,4 +477,3 @@ class JobParams(Resource):
             'soft_time_limit': job_spec['_source']['soft_time_limit'],
             'disk_usage': job_spec['_source']['disk_usage']
         }
-
