@@ -31,7 +31,6 @@ setup(
         'boto>=2.38.0',
         'python-dateutil',
         'elasticsearch>=7.0.0,<8.0.0',
-        'elasticsearch-dsl>=7.0.0,<8.0.0',
         'pytz',
         'numpy',
         'flask-restx>=0.2.0',
