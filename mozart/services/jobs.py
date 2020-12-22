@@ -6,7 +6,6 @@ from builtins import str
 from future import standard_library
 standard_library.install_aliases()
 
-import json
 import re
 import requests
 import traceback
@@ -39,7 +38,7 @@ def job_count():
         }
     }
     results = mozart_es.search(index="job_status-*", body=body)
-    app.logger.info(json.dumps(results, indent=2))
+    app.logger.info(results)
 
     buckets = results['aggregations']['result']['buckets']
 
@@ -62,7 +61,7 @@ def get_text():
 
     # check file param
     url_file = request.args.get('file', None)
-    if url_file == None:
+    if url_file is None:
         return jsonify({
             'success': False,
             'content': 'No job file specified'

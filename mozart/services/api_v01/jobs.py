@@ -293,6 +293,43 @@ class GetJobInfo(Resource):
         }
 
 
+@job_ns.route('/products/<_id>', endpoint='products')
+@job_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+            description="Gets products staged for a job")
+class ProductsStaged(Resource):
+    def get(self, _id):
+        doc_fields = ['status', 'job.job_info.metrics.products_staged']
+        prod = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, _source_includes=doc_fields, ignore=404)
+        app.logger.info('fetch products staged for %s' % _id)
+
+        if prod['found'] is False:
+            return {
+                'success': False,
+                'message': 'Job id not found: %s' % _id
+            }, 404
+
+        doc = prod['_source']
+        status = doc['status']
+        if status not in {'job-failed', 'job-completed'}:
+            return {
+                'success': False,
+                'message': 'job has not been completed'
+            }
+        try:
+            return {
+                'success': True,
+                'message': status,
+                'results': doc['job']['job_info']['metrics']['products_staged']
+            }
+        except (KeyError, Exception):
+            app.logger.warning('%s does not have any products_staged' % _id)
+            return {
+                'success': True,
+                'message': status,
+                'results': []
+            }
+
+
 @on_demand_ns.route('', endpoint='on-demand')
 @on_demand_ns.doc(responses={200: "Success", 500: "Execution failed"},
                   description="Retrieve on demand jobs")
