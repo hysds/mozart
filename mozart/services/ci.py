@@ -26,7 +26,7 @@ api = Api(services, ui=False, version="0.1", title="Mozart API",
 job_registration_ns = api.namespace('register', description="Register Jenkins jobs")
 job_builder_ns = api.namespace('build', description="Build Jenkins jobs")
 
-VENUE = app.config['VENUE']
+VENUE = app.config.get('VENUE', '')
 REPO_RE = re.compile(r'.+//.*?/(.*?)/(.*?)(?:\.git)?$')
 
 
@@ -115,7 +115,8 @@ class JobRegistration(Resource):
             job_found = jenkins_wrapper.job_exists(job_name)
             if not job_found:
                 raise NotFoundException
-        except NotFoundException:
+        except NotFoundException as e:
+            app.logger.error(str(e))
             return {
                 'success': False,
                 'message': 'jenkins job not found: %s' % job_name
@@ -143,6 +144,11 @@ class JobBuilder(Resource):
     Job build management using the Jenkins rest API
     """
 
+    parser = job_builder_ns.parser()
+    parser.add_argument('repo', required=True, type=str, location="form", help="Code repository (Github, etc.")
+    parser.add_argument('branch', required=False, type=str, location="form", help="Code repository branch")
+
+    @job_builder_ns.expect(parser)
     def post(self):
         """build jobs in jenkins (using a regular curl command)"""
         if not app.config.get('JENKINS_ENABLED', False):
@@ -172,7 +178,8 @@ class JobBuilder(Resource):
             job_found = jenkins_wrapper.job_exists(job_name)
             if not job_found:
                 raise NotFoundException
-        except NotFoundException:
+        except NotFoundException as e:
+            app.logger.error(str(e))
             return {
                 'success': False,
                 'message': 'jenkins job not found: %s' % job_name
@@ -221,6 +228,7 @@ class JobBuilder(Resource):
                 'message': 'job failed to submit build %s' % job_name
             }, 400
 
+    @job_builder_ns.expect(parser)
     def delete(self):
         """
         Maybe we can stop builds through the use of the jenkins rest api
@@ -244,7 +252,8 @@ class JobBuilder(Resource):
             job_found = jenkins_wrapper.job_exists(job_name)
             if not job_found:
                 raise NotFoundException
-        except NotFoundException:
+        except NotFoundException as e:
+            app.logger.error(str(e))
             return {
                 'success': False,
                 'message': 'jenkins job not found: %s' % job_name

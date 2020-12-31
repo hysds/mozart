@@ -108,7 +108,7 @@ app.register_error_handler(404, resource_not_found)
 mozart_es = ElasticsearchUtility(app.config['ES_URL'], app.logger)
 
 # add jenkins connection
-if app.config['JENKINS_HOST']:
+if app.config.get('JENKINS_ENABLED', False):
     jenkins_wrapper = Jenkins(app.config['JENKINS_HOST'], username=app.config['JENKINS_USER'],
                               password=app.config['JENKINS_API_KEY'])
 else:
