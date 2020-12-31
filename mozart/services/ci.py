@@ -19,7 +19,7 @@ from jenkins import NotFoundException, JenkinsException
 from mozart import app, jenkins_wrapper
 
 
-services = Blueprint('jenkins', __name__, url_prefix='/api/jenkins')
+services = Blueprint('ci', __name__, url_prefix='/api/ci')
 api = Api(services, ui=False, version="0.1", title="Mozart API",
           description="API for HySDS job submission and building (Jenkins)")
 
