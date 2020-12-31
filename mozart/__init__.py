@@ -109,10 +109,10 @@ mozart_es = ElasticsearchUtility(app.config['ES_URL'], app.logger)
 
 # add jenkins connection
 if app.config['JENKINS_HOST']:
-    jenkins = Jenkins(app.config['JENKINS_HOST'],
-                      username=app.config['JENKINS_USER'], password=app.config['JENKINS_API_KEY'])
+    jenkins_wrapper = Jenkins(app.config['JENKINS_HOST'], username=app.config['JENKINS_USER'],
+                              password=app.config['JENKINS_API_KEY'])
 else:
-    jenkins = None
+    jenkins_wrapper = None
 
 # views blueprints
 from mozart.views.main import mod as views_module
