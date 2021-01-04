@@ -1,0 +1,360 @@
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import division
+from __future__ import absolute_import
+from builtins import int
+from builtins import str
+from future import standard_library
+standard_library.install_aliases()
+
+import json
+
+from flask import request
+from flask_restx import Namespace, Resource, fields
+
+from mozart import app, mozart_es
+
+
+JOB_SPEC_NS = "job_spec"
+job_spec_ns = Namespace(JOB_SPEC_NS, description="Mozart job-specification operations")
+
+CONTAINER_NS = "container"
+container_ns = Namespace(CONTAINER_NS, description="Mozart container operations")
+
+HYSDS_IO_NS = "hysds_io"
+hysds_io_ns = Namespace(HYSDS_IO_NS, description="HySDS IO operations")
+
+
+HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
+JOB_SPECS_INDEX = app.config['JOB_SPECS_INDEX']
+JOB_STATUS_INDEX = app.config['JOB_STATUS_INDEX']
+CONTAINERS_INDEX = app.config['CONTAINERS_INDEX']
+
+
+@job_spec_ns.route('', endpoint='job_spec')
+@job_spec_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+                 description="Get list of registered job types and return as JSON.")
+class JobSpecs(Resource):
+    """Rest APIs for all job_specs (GET, POST, DELETE)"""
+
+    resp_model_job_spec = job_spec_ns.model('Job Specification List Response(JSON)', {
+        'success': fields.Boolean(required=True, description="Boolean, whether the API was successful"),
+        'message': fields.String(required=True, description="message describing success or failure"),
+        'result': fields.Raw(required=True, description="list of job types")
+    })
+
+    job_spec_parser = job_spec_ns.parser()
+    job_spec_parser.add_argument('id', required=False, type=str, help="Job Type ID")
+
+    post_job_spec_parser = job_spec_ns.parser()
+    post_job_spec_parser.add_argument('spec', required=True, type=str, help="Job Type Specification JSON Object")
+
+    @job_spec_ns.expect(job_spec_parser)
+    @job_spec_ns.marshal_with(resp_model_job_spec)
+    def get(self):
+        """Gets a Job Type specification object for the given ID."""
+        _id = request.form.get('id', request.args.get('id', None))
+        if _id is None:
+            return {'success': False, 'message': 'missing parameter: id'}, 400
+
+        job_spec = mozart_es.get_by_id(index=JOB_SPECS_INDEX, id=_id, ignore=404)
+        app.logger.info(job_spec)
+        if job_spec['found'] is False:
+            app.logger.error('job_spec not found %s' % _id)
+            return {
+                'success': False,
+                'message': 'Failed to retrieve job_spec: %s' % _id,
+                'result': None
+            }, 404
+
+        return {
+            'success': True,
+            'message': "job spec for %s" % _id,
+            'result': job_spec['_source']
+        }
+
+    @job_spec_ns.expect(post_job_spec_parser)
+    @job_spec_ns.marshal_with(resp_model_job_spec)
+    def post(self):
+        """Add a Job Type specification JSON object."""
+        spec = request.form.get('spec', request.args.get('spec', None))
+        if spec is None:
+            return {'success': False, 'message': 'spec object missing'}, 400
+
+        try:
+            obj = json.loads(spec)
+            _id = obj['id']
+        except (ValueError, KeyError, json.decoder.JSONDecodeError, Exception) as e:
+            return {'success': False, 'message': e}, 400
+
+        mozart_es.index_document(index=JOB_SPECS_INDEX, body=obj, id=_id)
+        return {
+            'success': True,
+            'message': "job_spec %s added to index %s" % (_id, HYSDS_IOS_INDEX),
+            'result': _id
+        }
+
+    @job_spec_ns.marshal_with(resp_model_job_spec)
+    @job_spec_ns.expect(job_spec_parser)
+    def delete(self):
+        """Remove Job Spec for the given ID"""
+        _id = request.form.get('id', request.args.get('id', None))
+        if _id is None:
+            return {
+                'success': False,
+                'message': 'id parameter not included'
+            }, 400
+
+        mozart_es.delete_by_id(index=JOB_SPECS_INDEX, id=_id)
+        app.logger.info('Deleted job_spec %s from index: %s' % (_id, JOB_SPECS_INDEX))
+        return {
+            'success': True,
+            'message': ""
+        }
+
+
+@job_spec_ns.route('/list', endpoint='job_specs')
+@job_spec_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+                 description="Get list of registered job types and return as JSON.")
+class GetJobTypes(Resource):
+    """Get list of registered job types and return as JSON."""
+    resp_model_job_types = job_spec_ns.model('Job Type List Response(JSON)', {
+        'success': fields.Boolean(required=True, description="Boolean, whether the API was successful"),
+        'message': fields.String(required=True, description="message describing success or failure"),
+        'result':  fields.List(fields.String, required=True, description="list of job types")
+    })
+
+    @job_spec_ns.marshal_with(resp_model_job_types)
+    def get(self):
+        """Gets a list of Job Type specifications"""
+        query = {
+            "query": {
+                "match_all": {}
+            }
+        }
+        job_specs = mozart_es.query(index=JOB_SPECS_INDEX, body=query)
+        ids = [job_spec['_id'] for job_spec in job_specs]
+        return {
+            'success': True,
+            'message': "",
+            'result': ids
+        }
+
+
+@container_ns.route('/list', endpoint='containers')
+@container_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+                  description="Get list of registered containers and return as JSON.")
+class ContainerTypes(Resource):
+    """Get list of registered containers and return as JSON."""
+    resp_model_job_types = container_ns.model('Container List Response(JSON)', {
+        'success': fields.Boolean(required=True, description="Boolean, whether the API was successful"),
+        'message': fields.String(required=True, description="message describing success or failure"),
+        'result':  fields.List(fields.String, required=True, description="list of hysds-io types")
+    })
+
+    @container_ns.marshal_with(resp_model_job_types)
+    def get(self):
+        """Get a list of containers managed by Mozart"""
+        containers = mozart_es.query(index=CONTAINERS_INDEX, _source=False)
+        ids = [container['_id'] for container in containers]
+
+        return {
+            'success': True,
+            'message': "",
+            'result': ids
+        }
+
+
+@container_ns.route('', endpoint='container')
+@container_ns.doc(responses={200: "Success", 500: "Query execution failed"}, description="Containers endpoint")
+class Containers(Resource):
+    """Container Rest APIs (GET, POST, DELETE)"""
+
+    resp_model = container_ns.model('Job Info Response(JSON)', {
+        'success': fields.Boolean(required=True, description="Boolean, whether the API was successful"),
+        'message': fields.String(required=True, description="message describing success or failure"),
+        'result': fields.Raw(required=True, description="Container information or ID")
+    })
+
+    parser = container_ns.parser()
+    parser.add_argument('id', required=True, type=str, help="Container ID")
+
+    post_parser = container_ns.parser()
+    post_parser.add_argument('name', required=True, type=str, help="Container Name")
+    post_parser.add_argument('url', required=True, type=str, help="Container URL")
+    post_parser.add_argument('version', required=True, type=str, help="Container Version")
+    post_parser.add_argument('digest', required=True, type=str, help="Container Digest")
+
+    @container_ns.expect(parser)
+    @container_ns.marshal_with(resp_model)
+    def get(self):
+        """Get information on container by ID"""
+        _id = request.form.get('id', request.args.get('id', None))
+        if _id is None:
+            return {
+                'success': False,
+                'message': 'id must be supplied',
+                'result': None
+            }
+
+        container = mozart_es.get_by_id(index=CONTAINERS_INDEX, id=_id, ignore=404)
+        if container['found'] is False:
+            return {
+                'success': False,
+                'message': "container not found: %s" % _id,
+                'result': None
+            }, 404
+
+        return {
+            'success': True,
+            'message': "",
+            'result': container['_source']
+        }
+
+    @container_ns.expect(post_parser)
+    @container_ns.marshal_with(resp_model)
+    def post(self):
+        """Add a container specification to Mozart"""
+        name = request.form.get('name', request.args.get('name', None))
+        url = request.form.get('url', request.args.get('url', None))
+        version = request.form.get('version', request.args.get('version', None))
+        digest = request.form.get('digest', request.args.get('digest', None))
+
+        if not all((name, url, version, digest)):
+            return {
+                'success': False,
+                'message': 'Parameters (name, url, version, digest) must be supplied'
+            }, 400
+
+        container_obj = {
+            'id': name,
+            'digest': digest,
+            'url': url,
+            'version': version
+        }
+        mozart_es.index_document(index=CONTAINERS_INDEX, body=container_obj, id=name)
+
+        return {
+            'success': True,
+            'message': "%s added to index %s" % (name, CONTAINERS_INDEX),
+            'result': name
+        }
+
+    @container_ns.expect(parser)
+    @container_ns.marshal_with(resp_model)
+    def delete(self):
+        """Remove container based on ID"""
+        _id = request.form.get('id', request.args.get('id', None))
+        if _id is None:
+            return {
+                'success': False,
+                'message': 'id must be supplied',
+                'result': None
+            }, 400
+
+        mozart_es.delete_by_id(index=CONTAINERS_INDEX, id=_id)
+        app.logger.info('Deleted container %s from index: %s' % (_id, CONTAINERS_INDEX))
+        return {
+            'success': True,
+            'message': "job_spec deleted: %s" % _id,
+            'result': _id
+        }
+
+
+@hysds_io_ns.route('/list', endpoint='hysds_ios')
+@hysds_io_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+                 description="Gets list of registered hysds-io specifications and return as JSON.")
+class HySDSIOTypes(Resource):
+    """Get list of registered hysds-io and return as JSON."""
+    resp_model_job_types = hysds_io_ns.model('HySDS IO List Response(JSON)', {
+        'success': fields.Boolean(required=True, description="Boolean, whether the API was successful"),
+        'message': fields.String(required=True, description="message describing success or failure"),
+        'result':  fields.List(fields.String, required=True, description="list of hysds-io types")
+    })
+
+    @hysds_io_ns.marshal_with(resp_model_job_types)
+    def get(self):
+        """List HySDS IO specifications"""
+        hysds_ios = mozart_es.query(index=HYSDS_IOS_INDEX, _source=False)
+        ids = [hysds_io['_id'] for hysds_io in hysds_ios]
+        return {
+            'success': True,
+            'message': "",
+            'result': ids
+        }
+
+
+@hysds_io_ns.route('', endpoint='hysds_io')
+@hysds_io_ns.doc(responses={200: "Success", 500: "Query execution failed"},
+                 description="Gets list of registered hysds-io specifications and return as JSON.")
+class HySDSio(Resource):
+    resp_model = hysds_io_ns.model('HySDS IO Response(JSON)', {
+        'success': fields.Boolean(required=True, description="Boolean, whether the API was successful"),
+        'message': fields.String(required=True, description="message describing success or failure"),
+        'result': fields.Raw(required=True, description="HySDS IO Object or ID")
+    })
+
+    parser = hysds_io_ns.parser()
+    parser.add_argument('id', required=True, type=str, help="HySDS IO Type ID")
+
+    post_parser = hysds_io_ns.parser()
+    post_parser.add_argument('spec', required=True, type=dict, help="HySDS IO JSON Object")
+
+    @hysds_io_ns.expect(parser)
+    @hysds_io_ns.marshal_with(resp_model)
+    def get(self):
+        """Gets a HySDS-IO specification by ID"""
+        _id = request.form.get('id', request.args.get('id', None))
+        if _id is None:
+            return {'success': False, 'message': 'missing parameter: id'}, 400
+
+        hysds_io = mozart_es.get_by_id(index=HYSDS_IOS_INDEX, id=_id, ignore=404)
+        if hysds_io['found'] is False:
+            return {'success': False, 'message': ""}, 404
+
+        return {
+            'success': True,
+            'message': "",
+            'result': hysds_io['_source']
+        }
+
+    @hysds_io_ns.expect(post_parser)
+    @hysds_io_ns.marshal_with(resp_model)
+    def post(self):
+        """Add a HySDS IO specification"""
+        spec = request.form.get('spec', request.args.get('spec', None))
+        if spec is None:
+            app.logger.error("spec not specified")
+            raise Exception("'spec' must be supplied")
+
+        try:
+            obj = json.loads(spec)
+            _id = obj['id']
+        except (ValueError, KeyError, json.decoder.JSONDecodeError, Exception) as e:
+            return {
+                'success': False,
+                'message': e
+            }, 400
+
+        mozart_es.index_document(index=HYSDS_IOS_INDEX, body=obj, id=_id)
+        return {
+            'success': True,
+            'message': "%s added to index %s" % (_id, HYSDS_IOS_INDEX),
+            'result': _id
+        }
+
+    @hysds_io_ns.expect(parser)
+    @hysds_io_ns.marshal_with(resp_model)
+    def delete(self):
+        """Remove HySDS IO for the given ID"""
+        _id = request.form.get('id', request.args.get('id', None))
+        if _id is None:
+            return {'success': False, 'message': 'id parameter not included'}, 400
+
+        mozart_es.delete_by_id(index=HYSDS_IOS_INDEX, id=_id)
+        app.logger.info('deleted %s from index: %s' % (_id, HYSDS_IOS_INDEX))
+
+        return {
+            'success': True,
+            'message': "deleted hysds_io: %s" % _id
+        }

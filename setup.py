@@ -8,7 +8,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='mozart',
-    version='2.0.8',
+    version='2.0.9',
     long_description='HySDS job orchestration/worker web interface',
     packages=find_packages(),
     include_package_data=True,
@@ -31,7 +31,6 @@ setup(
         'boto>=2.38.0',
         'python-dateutil',
         'elasticsearch>=7.0.0,<8.0.0',
-        'elasticsearch-dsl>=7.0.0,<8.0.0',
         'pytz',
         'numpy',
         'flask-restx>=0.2.0',
