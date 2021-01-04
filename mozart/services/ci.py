@@ -71,7 +71,11 @@ class JobRegistration(Resource):
     sdscli wrapper to register jobs in jenkins:
     sds -d ci add_job -b <branch> --token <github link> s3
     """
+    parser = job_builder_ns.parser()
+    parser.add_argument('repo', required=True, type=str, help="Code repository (Github, etc.)")
+    parser.add_argument('branch', required=False, type=str, help="Code repository branch")
 
+    @job_registration_ns.expect(parser)
     def post(self):
         """Register jobs in jenkins"""
         request_data = request.json or request.form
@@ -97,6 +101,7 @@ class JobRegistration(Resource):
         resp.headers['Connection'] = 'keep-alive'
         return resp
 
+    @job_registration_ns.expect(parser)
     def delete(self):
         """
         deletes Jenkins job
@@ -148,7 +153,7 @@ class JobBuilder(Resource):
     """Job build management using the Jenkins rest API"""
 
     parser = job_builder_ns.parser()
-    parser.add_argument('repo', required=True, type=str, location="form", help="Code repository (Github, etc.)")
+    parser.add_argument('repo', required=False, type=str, location="form", help="Code repository (Github, etc.)")
     parser.add_argument('branch', required=False, type=str, location="form", help="Code repository branch")
 
     @job_builder_ns.expect(parser)
