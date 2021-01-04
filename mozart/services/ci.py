@@ -13,7 +13,6 @@ from flask import Blueprint, Response, request
 from flask_restx import Api, apidoc, Resource
 
 from subprocess import Popen, PIPE, STDOUT
-
 from jenkins import NotFoundException, JenkinsException
 
 from mozart import app, jenkins_wrapper
@@ -25,6 +24,7 @@ api = Api(services, ui=False, version="0.1", title="Mozart API",
 
 job_registration_ns = api.namespace('register', description="Register Jenkins jobs")
 job_builder_ns = api.namespace('build', description="Build Jenkins jobs")
+job_status_ns = api.namespace('status', description="Check Jenkins build status")
 
 VENUE = app.config.get('VENUE', '')
 REPO_RE = re.compile(r'.+//.*?/(.*?)/(.*?)(?:\.git)?$')
@@ -33,7 +33,7 @@ REPO_RE = re.compile(r'.+//.*?/(.*?)/(.*?)(?:\.git)?$')
 def get_ci_job_name(repo, branch=None):  # taken from sdscli
     match = REPO_RE.search(repo)
     if not match:
-        raise RuntimeError("Failed to parse repo owner and name: %s" % repo)
+        return None
     owner, name = match.groups()
     if branch is None:
         job_name = "%s_container-builder_%s_%s" % (VENUE, owner, name)
@@ -68,8 +68,7 @@ def swagger_ui():
 @api.doc(responses={200: "Success", 500: "Query execution failed"}, description="Register and build jenkins jobs")
 class JobRegistration(Resource):
     """
-    sdscli wrapper to register jobs in jenkins
-
+    sdscli wrapper to register jobs in jenkins:
     sds -d ci add_job -b <branch> --token <github link> s3
     """
 
@@ -109,6 +108,11 @@ class JobRegistration(Resource):
         app.logger.info("branch: %s" % branch)
 
         job_name = get_ci_job_name(repo, branch)
+        if job_name is None:
+            return {
+                'success': False,
+                'message': "Failed to parse repo owner and name: %s" % repo
+            }, 400
         app.logger.info("jenkins job name: %s" % job_name)
 
         try:
@@ -137,19 +141,18 @@ class JobRegistration(Resource):
         }
 
 
-@job_builder_ns.route('', endpoint='build')
+@job_builder_ns.route('/<job_name>', endpoint='build')
+@job_builder_ns.route('')
 @api.doc(responses={200: "Success", 500: "Query execution failed"}, description="Register and build jenkins jobs")
 class JobBuilder(Resource):
-    """
-    Job build management using the Jenkins rest API
-    """
+    """Job build management using the Jenkins rest API"""
 
     parser = job_builder_ns.parser()
-    parser.add_argument('repo', required=True, type=str, location="form", help="Code repository (Github, etc.")
+    parser.add_argument('repo', required=True, type=str, location="form", help="Code repository (Github, etc.)")
     parser.add_argument('branch', required=False, type=str, location="form", help="Code repository branch")
 
     @job_builder_ns.expect(parser)
-    def post(self):
+    def post(self, job_name=None):
         """build jobs in jenkins (using a regular curl command)"""
         if not app.config.get('JENKINS_ENABLED', False):
             return {
@@ -158,21 +161,27 @@ class JobBuilder(Resource):
             }, 404
 
         request_data = request.json or request.form
-        repo = request_data.get('repo')
-        branch = request_data.get('branch')
-        input_params = request_data.get('parameters', {})
-        app.logger.info("repo: %s" % repo)
-        app.logger.info("branch: %s" % branch)
-        app.logger.info("parameters: %s" % input_params)
 
-        if repo is None:
-            return {
-                'success': False,
-                'message': 'repo must be supplied'
-            }, 400
+        if job_name is None:
+            repo = request_data.get('repo')
+            branch = request_data.get('branch')
+            if repo is None:
+                return {
+                    'success': False,
+                    'message': 'repo must be supplied if Jenkins job_name not given'
+                }, 400
 
-        job_name = get_ci_job_name(repo, branch)
+            app.logger.info("repo: %s" % repo)
+            app.logger.info("branch: %s" % branch)
+            job_name = get_ci_job_name(repo, branch)
+            if job_name is None:
+                return {
+                    'success': False,
+                    'message': "Failed to parse repo owner and name: %s" % repo
+                }, 400
         app.logger.info("jenkins job name: %s" % job_name)
+        input_params = request_data.get('parameters', {})
+        app.logger.info("parameters: %s" % input_params)
 
         try:
             job_found = jenkins_wrapper.job_exists(job_name)
@@ -229,10 +238,7 @@ class JobBuilder(Resource):
             }, 400
 
     @job_builder_ns.expect(parser)
-    def delete(self):
-        """
-        Maybe we can stop builds through the use of the jenkins rest api
-        """
+    def delete(self, job_name=None):
         if not app.config.get('JENKINS_ENABLED', False):
             return {
                 'success': False,
@@ -240,12 +246,23 @@ class JobBuilder(Resource):
             }, 404
 
         request_data = request.json or request.form
-        repo = request_data.get('repo')
-        branch = request_data.get('branch')
-        app.logger.info("repo: %s" % repo)
-        app.logger.info("branch: %s" % branch)
+        if job_name is None:
+            repo = request_data.get('repo')
+            branch = request_data.get('branch')
+            if repo is None:
+                return {
+                    'success': False,
+                    'message': 'repo must be supplied if Jenkins job_name not given'
+                }, 400
 
-        job_name = get_ci_job_name(repo, branch)
+            app.logger.info("repo: %s" % repo)
+            app.logger.info("branch: %s" % branch)
+            job_name = get_ci_job_name(repo, branch)
+            if job_name is None:
+                return {
+                    'success': False,
+                    'message': "Failed to parse repo owner and name: %s" % repo
+                }, 400
         app.logger.info("jenkins job name: %s" % job_name)
 
         try:
@@ -282,10 +299,83 @@ class JobBuilder(Resource):
             else:  # job is currently not building (or already finished building)
                 return {
                     'success': True,
-                    'message': 'job is currently not running: %s' % job_name
+                    'message': 'job is currently not building: %s' % job_name
                 }
 
         return {
             'success': False,
             'message': 'job has no previous and current builds'
         }, 303
+
+
+@job_status_ns.route('/<job_name>/<int:build_number>', endpoint='status')
+@job_status_ns.route('/<job_name>')
+@job_status_ns.route('')
+class JobStatus(Resource):
+    """Checking the job build status for Jenkins jobs"""
+    parser = job_builder_ns.parser()
+    parser.add_argument('repo', required=False, type=str, help="Code repo if job_name is not supplied (Github, etc.)")
+    parser.add_argument('branch', required=False, type=str, help="Code repository branch")
+
+    @job_status_ns.expect(parser)
+    def get(self, job_name=None, build_number=None):
+        if not app.config.get('JENKINS_ENABLED', False):
+            return {
+                'success': False,
+                'message': 'set JENKINS_ENABLED (settings.cfg) to True to enable this endpoint'
+            }, 404
+
+        if job_name is None:
+            # get job_name from request query parameters if not supplied in url
+            repo = request.args.get("repo", None)
+            branch = request.args.get("branch", None)
+            app.logger.info("repo %s" % repo)
+            app.logger.info("branch %s" % branch)
+            if repo is None:
+                return {
+                    'success': False,
+                    'message': 'repo must be supplied if job_name is not given (url parameter)'
+                }, 400
+
+            job_name = get_ci_job_name(repo, branch)
+            if job_name is None:
+                return {
+                    'success': False,
+                    'message': "Failed to parse repo owner and name: %s" % repo
+                }, 400
+            app.logger.info("jenkins job name: %s" % job_name)
+
+        try:
+            job_found = jenkins_wrapper.job_exists(job_name)
+            if not job_found:
+                raise NotFoundException
+        except NotFoundException as e:
+            app.logger.error(str(e))
+            return {
+                'success': False,
+                'message': 'jenkins job not found: %s' % job_name
+            }, 404
+
+        if build_number is None:  # get most recent build number if not supplied
+            app.logger.info("build_number not supplied for %s, will look for latest build_number" % job_name)
+            job_info = jenkins_wrapper.get_job_info(job_name)
+            last_build = job_info['lastBuild']
+            if not last_build:
+                return {
+                    'success': False,
+                    'message': 'job has never been built %s, submit a build with /build (POST)' % job_name
+                }, 404
+            build_number = last_build['number']
+        app.logger.info("build number %d" % build_number)
+
+        build_info = jenkins_wrapper.get_build_info(job_name, build_number)
+
+        return {
+            'job_name': job_name,
+            'build_number': build_number,
+            'result': build_info.get('result', None),
+            'timestamp': build_info.get('timestamp', None),
+            'url': build_info.get('url', None),
+            'duration': build_info.get('duration', None),
+            'building': build_info.get('building', None),
+        }
