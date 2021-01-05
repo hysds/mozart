@@ -7,8 +7,9 @@ from builtins import str
 from future import standard_library
 standard_library.install_aliases()
 
+import os
 import re
-from requests.exceptions import HTTPError
+import requests
 from flask import Blueprint, Response, request
 from flask_restx import Api, apidoc, Resource
 
@@ -23,8 +24,8 @@ api = Api(services, ui=False, version="0.1", title="Mozart API",
           description="API for HySDS job submission and building (Jenkins)")
 
 job_registration_ns = api.namespace('register', description="Register Jenkins jobs")
-job_builder_ns = api.namespace('build', description="Build Jenkins jobs")
-job_status_ns = api.namespace('status', description="Check Jenkins build status")
+build_job_ns = api.namespace('job-builder', description="Build Jenkins jobs")
+job_build_ns = api.namespace('build', description="Check Jenkins build status")
 
 VENUE = app.config.get('VENUE', '')
 REPO_RE = re.compile(r'.+//.*?/(.*?)/(.*?)(?:\.git)?$')
@@ -71,9 +72,13 @@ class JobRegistration(Resource):
     sdscli wrapper to register jobs in jenkins:
     sds -d ci add_job -b <branch> --token <github link> s3
     """
-    parser = job_builder_ns.parser()
-    parser.add_argument('repo', required=True, type=str, help="Code repository (Github, etc.)")
-    parser.add_argument('branch', required=False, type=str, help="Code repository branch")
+    parser = job_registration_ns.parser()
+    parser.add_argument('repo', required=True, type=str, location="form", help="Code repository (Github, etc.)")
+    parser.add_argument('branch', required=False, type=str, location="form", help="Code repository branch")
+
+    delete_parser = job_registration_ns.parser()
+    delete_parser.add_argument('repo', required=True, type=str, help="Code repository (Github, etc.)")
+    delete_parser.add_argument('branch', required=False, type=str, help="Code repository branch")
 
     @job_registration_ns.expect(parser)
     def post(self):
@@ -101,11 +106,9 @@ class JobRegistration(Resource):
         resp.headers['Connection'] = 'keep-alive'
         return resp
 
-    @job_registration_ns.expect(parser)
+    @job_registration_ns.expect(delete_parser)
     def delete(self):
-        """
-        deletes Jenkins job
-        """
+        """deletes Jenkins job"""
         request_data = request.json or request.form
         repo = request_data.get('repo')
         branch = request_data.get('branch')
@@ -146,25 +149,23 @@ class JobRegistration(Resource):
         }
 
 
-@job_builder_ns.route('/<job_name>', endpoint='build')
-@job_builder_ns.route('')
+@build_job_ns.route('/<job_name>', endpoint='build')
+@build_job_ns.route('')
 @api.doc(responses={200: "Success", 500: "Query execution failed"}, description="Register and build jenkins jobs")
-class JobBuilder(Resource):
+class JobBuild(Resource):
     """Job build management using the Jenkins rest API"""
 
-    parser = job_builder_ns.parser()
+    parser = build_job_ns.parser()
     parser.add_argument('repo', required=False, type=str, location="form", help="Code repository (Github, etc.)")
     parser.add_argument('branch', required=False, type=str, location="form", help="Code repository branch")
 
-    @job_builder_ns.expect(parser)
-    def post(self, job_name=None):
-        """build jobs in jenkins (using a regular curl command)"""
-        if not app.config.get('JENKINS_ENABLED', False):
-            return {
-                'success': False,
-                'message': 'set JENKINS_ENABLED (settings.cfg) to True to enable this endpoint'
-            }, 404
+    delete_parser = build_job_ns.parser()
+    delete_parser.add_argument('repo', required=False, type=str, help="Code repository (Github, etc.)")
+    delete_parser.add_argument('branch', required=False, type=str, help="Code repository branch")
 
+    @build_job_ns.expect(parser)
+    def post(self, job_name=None):
+        """start Jenkins build"""
         request_data = request.json or request.form
 
         if job_name is None:
@@ -206,7 +207,7 @@ class JobBuilder(Resource):
             return {
                 'success': True,
                 'message': 'job is currently in queue: %s (%d)' % (job_name, next_build_number)
-            }, 303
+            }, 203
 
         # check if job is running
         if job_info['lastBuild'] is not None:
@@ -216,7 +217,7 @@ class JobBuilder(Resource):
                 return {
                     'success': True,
                     'message': 'job is already building: %s (%d)' % (job_name, build_number)
-                }, 303
+                }, 203
 
         default_params = {}
         for prop in job_info['property']:
@@ -233,27 +234,22 @@ class JobBuilder(Resource):
             return {
                 'success': True,
                 'message': 'job successfully submitted to build %s (%d)' % (job_name, next_build_number),
-                'queue': queue
+                'queue': queue,
+                'build_number': next_build_number
             }
-        except (HTTPError, Exception) as e:
+        except (requests.exceptions.HTTPError, Exception) as e:
             app.logger.error(str(e))
             return {
                 'success': False,
                 'message': 'job failed to submit build %s' % job_name
             }, 400
 
-    @job_builder_ns.expect(parser)
+    @build_job_ns.expect(delete_parser)
     def delete(self, job_name=None):
-        if not app.config.get('JENKINS_ENABLED', False):
-            return {
-                'success': False,
-                'message': 'set JENKINS_ENABLED in settings.cfg to True to use this functionality'
-            }, 404
-
-        request_data = request.json or request.form
+        """stop Jenkins build"""
         if job_name is None:
-            repo = request_data.get('repo')
-            branch = request_data.get('branch')
+            repo = request.args.get('repo')
+            branch = request.args.get('branch')
             if repo is None:
                 return {
                     'success': False,
@@ -310,28 +306,22 @@ class JobBuilder(Resource):
         return {
             'success': False,
             'message': 'job has no previous and current builds'
-        }, 303
+        }, 403
 
 
-@job_status_ns.route('/<job_name>/<int:build_number>', endpoint='status')
-@job_status_ns.route('/<job_name>')
-@job_status_ns.route('')
-class JobStatus(Resource):
+@job_build_ns.route('/<job_name>/<int:build_number>', endpoint='status')
+@job_build_ns.route('/<job_name>')
+@job_build_ns.route('')
+class JobBuilder(Resource):
     """Checking the job build status for Jenkins jobs"""
-    parser = job_builder_ns.parser()
+    parser = job_build_ns.parser()
     parser.add_argument('repo', required=False, type=str, help="Code repo if job_name is not supplied (Github, etc.)")
     parser.add_argument('branch', required=False, type=str, help="Code repository branch")
 
-    @job_status_ns.expect(parser)
+    @job_build_ns.expect(parser)
     def get(self, job_name=None, build_number=None):
-        if not app.config.get('JENKINS_ENABLED', False):
-            return {
-                'success': False,
-                'message': 'set JENKINS_ENABLED (settings.cfg) to True to enable this endpoint'
-            }, 404
-
-        if job_name is None:
-            # get job_name from request query parameters if not supplied in url
+        """Get current status of Jenkins build"""
+        if job_name is None:  # get job_name from request query parameters if not supplied in url
             repo = request.args.get("repo", None)
             branch = request.args.get("branch", None)
             app.logger.info("repo %s" % repo)
@@ -368,7 +358,7 @@ class JobStatus(Resource):
             if not last_build:
                 return {
                     'success': False,
-                    'message': 'job has never been built %s, submit a build with /build (POST)' % job_name
+                    'message': 'job has never been built %s, submit a build' % job_name
                 }, 404
             build_number = last_build['number']
         app.logger.info("build number %d" % build_number)
@@ -384,3 +374,93 @@ class JobStatus(Resource):
             'duration': build_info.get('duration', None),
             'building': build_info.get('building', None),
         }
+
+    @job_build_ns.expect(parser)
+    def delete(self, job_name=False, build_number=None):
+        """Remove Jenkins build"""
+        if job_name is None:  # get job_name from request query parameters if not supplied in url
+            repo = request.args.get("repo", None)
+            branch = request.args.get("branch", None)
+            app.logger.info("repo %s" % repo)
+            app.logger.info("branch %s" % branch)
+            if repo is None:
+                return {
+                    'success': False,
+                    'message': 'repo must be supplied if job_name is not given (url parameter)'
+                }, 400
+
+            job_name = get_ci_job_name(repo, branch)
+            if job_name is None:
+                return {
+                    'success': False,
+                    'message': "Failed to parse repo owner and name: %s" % repo
+                }, 400
+            app.logger.info("jenkins job name: %s" % job_name)
+
+        try:
+            job_found = jenkins_wrapper.job_exists(job_name)
+            if not job_found:
+                raise NotFoundException
+        except NotFoundException as e:
+            app.logger.error(str(e))
+            return {
+                'success': False,
+                'message': 'jenkins job not found: %s' % job_name
+            }, 404
+
+        job_info = jenkins_wrapper.get_job_info(job_name)
+
+        if build_number is None:  # get most recent build number if not supplied
+            app.logger.info("build_number not supplied for %s, will look for latest build_number" % job_name)
+            last_build = job_info['lastBuild']
+            if not last_build:
+                return {
+                    'success': False,
+                    'message': 'job has never been built %s, submit a build with /build (POST)' % job_name
+                }, 404
+            build_number = last_build['number']
+        app.logger.info("build number %d" % build_number)
+
+        try:
+            build_info = jenkins_wrapper.get_build_info(job_name, build_number)
+            if build_info['building'] is True:
+                return {
+                    'success': False,
+                    'message': 'job is building: %s (%d), please stop build before removing' % (job_name, build_number)
+                }, 400
+
+            """
+            python-jenkins delete_build() breaking, so will fallback to using a request in the meantime:
+                https://www.mail-archive.com/python-jenkins-developers@lists.launchpad.net/msg00533.html
+            curl -u <user>:<token> -X POST https://nisar-pcm-ci.jpl.nasa.gov/job/<job_name>/<build_number>/doDelete
+            """
+            jenkins_host = app.config.get('JENKINS_HOST', '')
+            jenkins_user = app.config.get('JENKINS_USER', '')
+            jenkins_token = app.config.get('JENKINS_API_KEY', '')
+            if not jenkins_host or not jenkins_user or not jenkins_token:
+                return {
+                    'success': False,
+                    'message': 'interval server error (missing configuration)'
+                }, 500
+
+            base_endpoint = os.path.join(jenkins_host, 'job')
+            endpoint = '%s/%s/%d/doDelete' % (base_endpoint, job_name, build_number)
+            req = requests.post(endpoint, auth=(jenkins_user, jenkins_token))
+            req.raise_for_status()
+            return {
+                'success': True,
+                'message': 'job build deleted %s (%d)' % (job_name, build_number)
+            }
+        except (NotFoundException, JenkinsException) as e:
+            app.logger.error(str(e))
+            return {
+                'success': False,
+                'message': 'job build not found %s (%d)' % (job_name, build_number)
+            }, 404
+        except (requests.exceptions.HTTPError, Exception) as e:
+            app.logger.error('unable to delete job build %s (%d)' % (job_name, build_number))
+            app.logger.error(str(e))
+            return {
+                'success': False,
+                'message': 'unable to delete job build %s (%d)' % (job_name, build_number)
+            }, 500

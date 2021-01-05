@@ -111,6 +111,8 @@ mozart_es = ElasticsearchUtility(app.config['ES_URL'], app.logger)
 if app.config.get('JENKINS_ENABLED', False):
     jenkins_wrapper = Jenkins(app.config['JENKINS_HOST'], username=app.config['JENKINS_USER'],
                               password=app.config['JENKINS_API_KEY'])
+    from mozart.services.ci import services as ci_services
+    app.register_blueprint(ci_services)
 else:
     jenkins_wrapper = None
 
@@ -141,5 +143,6 @@ app.register_blueprint(api_v01_services)
 from mozart.services.api_v02.service import services as api_v02_services
 app.register_blueprint(api_v02_services)
 
-from mozart.services.ci import services as ci_services
-app.register_blueprint(ci_services)
+# if app.config.get('JENKINS_ENABLED', False) is True:
+#     from mozart.services.ci import services as ci_services
+#     app.register_blueprint(ci_services)
