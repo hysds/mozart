@@ -66,7 +66,7 @@ def swagger_ui():
 
 
 @job_registration_ns.route('', endpoint='register')
-@api.doc(responses={200: "Success", 500: "Query execution failed"}, description="Register and build jenkins jobs")
+@api.doc(responses={200: "Success", 500: "Query execution failed"}, description="jenkins job registration")
 class JobRegistration(Resource):
     """
     sdscli wrapper to register jobs in jenkins:
@@ -79,6 +79,14 @@ class JobRegistration(Resource):
     delete_parser = job_registration_ns.parser()
     delete_parser.add_argument('repo', required=True, type=str, help="Code repository (Github, etc.)")
     delete_parser.add_argument('branch', required=False, type=str, help="Code repository branch")
+
+    def get(self):
+        """list of all registered Jenkins jobs"""
+        jobs = jenkins_wrapper.get_jobs()
+        return {
+            'success': True,
+            'results': [job['name'] for job in jobs if job.get('name') and job['name'].startswith(VENUE)]
+        }
 
     @job_registration_ns.expect(parser)
     def post(self):
