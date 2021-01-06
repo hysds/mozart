@@ -18,8 +18,7 @@ from hysds_commons.action_utils import check_passthrough_query
 from mozart import app, mozart_es
 
 
-USER_RULE_NS = "user-rules"
-user_rule_ns = Namespace(USER_RULE_NS, description="C.R.U.D. for Mozart user rules")
+user_rule_ns = Namespace("user-rules", description="C.R.U.D. for Mozart user rules")
 
 HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
 
@@ -48,7 +47,6 @@ class UserRules(Resource):
     put_parser = user_rule_ns.parser()
     put_parser.add_argument('id', type=str, help="rule id")
     put_parser.add_argument('rule_name', type=str, help="rule name (fallback if id is not provided)")
-    put_parser.add_argument('rule_name', type=str, location='form', help='rule name')
     put_parser.add_argument('hysds_io', type=str, location='form', help='hysds io')
     put_parser.add_argument('job_spec', type=str, location='form', help='queue')
     put_parser.add_argument('priority', type=int, location='form', help='RabbitMQ job priority (0-9)')
