@@ -160,8 +160,8 @@ class JobRegistration(Resource):
 @build_job_ns.route('/<job_name>', endpoint='build')
 @build_job_ns.route('')
 @api.doc(responses={200: "Success", 500: "Query execution failed"}, description="Register and build jenkins jobs")
-class JobBuild(Resource):
-    """Job build management using the Jenkins rest API"""
+class JobBuilder(Resource):
+    """Job build management using the Jenkins rest API (start and stop builds)"""
 
     parser = build_job_ns.parser()
     parser.add_argument('repo', required=False, type=str, location="form", help="Code repository (Github, etc.)")
@@ -320,8 +320,8 @@ class JobBuild(Resource):
 @job_build_ns.route('/<job_name>/<int:build_number>', endpoint='status')
 @job_build_ns.route('/<job_name>')
 @job_build_ns.route('')
-class JobBuilder(Resource):
-    """Checking the job build status for Jenkins jobs"""
+class Build(Resource):
+    """Checking the job build status for Jenkins jobs (and deleting job builds)"""
     parser = job_build_ns.parser()
     parser.add_argument('repo', required=False, type=str, help="Code repo if job_name is not supplied (Github, etc.)")
     parser.add_argument('branch', required=False, type=str, help="Code repository branch")
@@ -366,7 +366,7 @@ class JobBuilder(Resource):
             if not last_build:
                 return {
                     'success': False,
-                    'message': 'job has never been built %s, submit a build' % job_name
+                    'message': 'no builds listed for %s, submit a build' % job_name
                 }, 404
             build_number = last_build['number']
         app.logger.info("build number %d" % build_number)

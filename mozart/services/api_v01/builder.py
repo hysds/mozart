@@ -37,9 +37,8 @@ CONTAINERS_INDEX = app.config['CONTAINERS_INDEX']
 class GetJobTypes(Resource):
     """Get list of registered job types and return as JSON."""
     resp_model_job_types = job_spec_ns.model('Job Type List Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
+                                                             "otherwise no errors occurred"),
         'message': fields.String(required=True, description="message describing " + "success or failure"),
         'result':  fields.List(fields.String, required=True, description="list of job types")
     })
@@ -68,11 +67,9 @@ class GetJobSpecType(Resource):
     """Get list of job queues and return as JSON."""
 
     resp_model = job_spec_ns.model('Job Type Specification Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'result':  fields.Raw(required=True, description="Job Type Specification")
     })
     parser = job_spec_ns.parser()
@@ -108,11 +105,9 @@ class AddJobSpecType(Resource):
     """Add job spec"""
 
     resp_model = job_spec_ns.model('Job Type Specification Addition Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'result':  fields.String(required=True, description="Job Type Specification ID")
     })
     parser = job_spec_ns.parser()
@@ -145,13 +140,10 @@ class AddJobSpecType(Resource):
                  description="Removes a job type specification.")
 class RemoveJobSpecType(Resource):
     """Remove job spec"""
-
     resp_model = job_spec_ns.model('Job Type Specification Removal Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
     })
     parser = job_spec_ns.parser()
     parser.add_argument('id', required=True, type=str, help="Job Type Specification ID")
@@ -171,7 +163,7 @@ class RemoveJobSpecType(Resource):
         app.logger.info('Deleted job_spec %s from index: %s' % (_id, JOB_SPECS_INDEX))
         return {
             'success': True,
-            'message': ""
+            'message': "job spec removed: %s" % _id
         }
 
 
@@ -181,13 +173,10 @@ class RemoveJobSpecType(Resource):
 class GetContainerTypes(Resource):
     """Get list of registered containers and return as JSON."""
     resp_model_job_types = container_ns.model('Container List Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
-        'result':  fields.List(fields.String, required=True,
-                               description="list of hysds-io types")
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
+        'result':  fields.List(fields.String, required=True, description="list of hysds-io types")
     })
 
     @container_ns.marshal_with(resp_model_job_types)
@@ -259,11 +248,9 @@ class GetContainerRemove(Resource):
     """Remove a container"""
 
     resp_model = container_ns.model('Container Removal Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure")
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure")
     })
     parser = container_ns.parser()
     parser.add_argument('id', required=True, type=str, help="Container ID")
@@ -294,11 +281,9 @@ class GetContainerInfo(Resource):
     """Info a container"""
 
     resp_model = container_ns.model('Container Info Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'result':  fields.Raw(required=True, description="Container Info")
     })
     parser = container_ns.parser()
@@ -330,11 +315,9 @@ class GetContainerInfo(Resource):
 class GetHySDSIOTypes(Resource):
     """Get list of registered hysds-io and return as JSON."""
     resp_model_job_types = container_ns.model('HySDS IO List Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'result':  fields.List(fields.String, required=True,
                                description="list of hysds-io types")
     })
@@ -358,11 +341,9 @@ class GetHySDSIOType(Resource):
     """Get list of job queues and return as JSON."""
 
     resp_model = hysds_io_ns.model('HySDS IO Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'result':  fields.Raw(required=True, description="HySDS IO Object")
     })
     parser = hysds_io_ns.parser()
@@ -378,7 +359,10 @@ class GetHySDSIOType(Resource):
 
         hysds_io = mozart_es.get_by_id(index=HYSDS_IOS_INDEX, id=_id, ignore=404)
         if hysds_io['found'] is False:
-            return {'success': False, 'message': ""}, 404
+            return {
+                'success': False,
+                'message': "hysds io not found: %s" % _id
+            }, 404
 
         return {
             'success': True,
@@ -393,11 +377,9 @@ class AddHySDSIOType(Resource):
     """Add job spec"""
 
     resp_model = hysds_io_ns.model('HySDS IO Addition Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'result':  fields.String(required=True, description="HySDS IO ID")
     })
     parser = hysds_io_ns.parser()
@@ -436,11 +418,9 @@ class RemoveHySDSIOType(Resource):
     """Remove job spec"""
 
     resp_model = hysds_io_ns.model('HySDS IO Removal Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
     })
     parser = hysds_io_ns.parser()
     parser.add_argument('id', required=True, type=str, help="HySDS IO ID")

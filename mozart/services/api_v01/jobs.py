@@ -21,7 +21,7 @@ from hysds_commons.action_utils import check_passthrough_query
 from mozart import app, mozart_es
 
 # Library backend imports
-import mozart.lib.job_utils
+import mozart.lib.job_utils  # TODO: unsure if this import is needed
 import mozart.lib.queue_utils
 
 
@@ -47,20 +47,14 @@ class GetJobs(Resource):
     """Get list of job IDs."""
 
     resp_model = job_ns.model('Jobs Listing Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
-        'result':  fields.List(fields.String, required=True,
-                               description="list of job IDs")
+        'success': fields.Boolean(required=True, description="if 'false' encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
+        'result':  fields.List(fields.String, required=True, description="list of job IDs")
     })
     parser = job_ns.parser()
-    parser.add_argument('page_size', required=False, type=str,
-                        help="Job Listing Pagination Size")
-    parser = job_ns.parser()
-    parser.add_argument('offset', required=False, type=str,
-                        help="Job Listing Pagination Offset")
+    parser.add_argument('page_size', type=str, help="Job Listing Pagination Size")
+    parser.add_argument('offset', type=str, help="Job Listing Pagination Offset")
 
     @job_ns.marshal_with(resp_model)
     def get(self):
@@ -80,11 +74,9 @@ class SubmitJob(Resource):
     """Submit job for execution in HySDS."""
 
     resp_model = job_ns.model('SubmitJobResponse', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false' encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'result':  fields.String(required=True, description="HySDS job ID")
     })
 
@@ -93,17 +85,12 @@ class SubmitJob(Resource):
                         help="a job type from jobspec/list")
     parser.add_argument('queue', required=True, type=str,
                         help="Job queue from /queue/list e.g. grfn-job_worker-small")
-    parser.add_argument('priority', required=False, type=int,
-                        help='Job priority in the range of 0 to 9')
-    parser.add_argument('tags', required=False, type=str,
-                        help='JSON list of tags, e.g. ["dumby", "test_job"]')
-    parser.add_argument('name', required=False,
-                        type=str, help='base job name override; defaults to job type')
-    parser.add_argument('payload_hash', required=False,
-                        type=str, help='user-generated payload hash')
-    parser.add_argument('enable_dedup', required=False,
-                        type=bool, help='flag to enable/disable job dedup')
-    parser.add_argument('params', required=False, type=str,
+    parser.add_argument('priority', type=int, help='Job priority in the range of 0 to 9')
+    parser.add_argument('tags', type=str, help='JSON list of tags, e.g. ["dumby", "test_job"]')
+    parser.add_argument('name', type=str, help='base job name override; defaults to job type')
+    parser.add_argument('payload_hash', type=str, help='user-generated payload hash')
+    parser.add_argument('enable_dedup', type=bool, help='flag to enable/disable job dedup')
+    parser.add_argument('params', type=str,
                         help="""JSON job context, e.g. {
                              "entity_id": "LC80101172015002LGN00",
                              "min_lat": -79.09923,
@@ -143,6 +130,7 @@ class SubmitJob(Resource):
                 if not tags is None:
                     tags = json.loads(tags)
             except Exception as e:
+                app.logger.error(str(e))
                 raise Exception("Failed to parse input tags. '{0}' is malformed".format(tags))
 
             params = request.form.get('params', request.args.get('params', "{}"))
@@ -151,6 +139,7 @@ class SubmitJob(Resource):
                 if not params is None:
                     params = json.loads(params)
             except Exception as e:
+                app.logger.error(str(e))
                 raise Exception("Failed to parse input params. '{0}' is malformed".format(params))
 
             app.logger.warning(job_type)
@@ -180,16 +169,13 @@ class GetQueueNames(Resource):
     """Get list of job queues and return as JSON."""
 
     resp_model = queue_ns.model('Queue Listing Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false' encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'result':  fields.Raw(required=True, description="queue response")
     })
     parser = queue_ns.parser()
-    parser.add_argument('id', required=False, type=str,
-                        help="Job Type Specification ID")
+    parser.add_argument('id', type=str, help="Job Type Specification ID")
 
     @queue_ns.expect(parser)
     @queue_ns.marshal_with(resp_model)
@@ -218,11 +204,9 @@ class GetJobStatus(Resource):
     """Get status of job ID."""
 
     resp_model = job_ns.model('Job Status Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false' encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'status':  fields.String(required=True,
                                  enum=['job-queued', 'job-started', 'job-failed',
                                        'job-completed', 'job-offline', 'job-revoked'],
@@ -261,23 +245,24 @@ class GetJobInfo(Resource):
     """Get info of job IDs."""
 
     resp_model = job_ns.model('Job Info Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false' encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'result':  fields.Raw(required=True, description="Job Info Object")
     })
     parser = job_ns.parser()
-    parser.add_argument('id', required=True, type=str, help="Job ID")
+    parser.add_argument('id', type=str, required=True, help="Job ID")
 
     @job_ns.expect(parser)
     @job_ns.marshal_with(resp_model)
     def get(self):
         """Get complete info for submitted job based on id"""
-        _id = request.form.get('id', request.args.get('id', None))
+        _id = request.args.get('id')
         if _id is None:
-            return {'success': False, 'message': 'id must be supplied'}, 400
+            return {
+                'success': False,
+                'message': 'id must be supplied (as query param or url param)'
+            }, 400
 
         info = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404)
         if info['found'] is False:
@@ -331,24 +316,30 @@ class ProductsStaged(Resource):
 
 
 @on_demand_ns.route('', endpoint='on-demand')
-@on_demand_ns.doc(responses={200: "Success", 500: "Execution failed"},
-                  description="Retrieve on demand jobs")
+@on_demand_ns.doc(responses={200: "Success", 500: "Execution failed"}, description="Retrieve on demand jobs")
 class OnDemandJobs(Resource):
-    """On Demand Jobs API."""
+    """On Demand Jobs API. (jobs retrieval and job submission)"""
 
     resp_model = on_demand_ns.model('JsonResponse', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'objectid': fields.String(required=True, description="ID of indexed dataset"),
         'index': fields.String(required=True, description="dataset index name"),
     })
 
     parser = on_demand_ns.parser()
+    parser.add_argument('tag', type=str, location="form", required=True, help='job tag')
+    parser.add_argument('job_type', type=str, location="form", required=True, help='job spec name')
+    parser.add_argument('hysds_io', type=str, location="form", required=True, help='hysds io name')
+    parser.add_argument('queue', type=str, location="form", required=True, help='queue')
+    parser.add_argument('priority', type=int, location="form", required=True, help='RabbitMQ job priority (0-9)')
+    parser.add_argument('query_string', type=str, location="form", required=True, help='elasticsearch query')
+    parser.add_argument('kwargs', type=str, location="form", required=True, help='keyword arguments for PGE')
+    parser.add_argument('time_limit', type=int, location="form", help='time limit for PGE job')
+    parser.add_argument('soft_time_limit', type=int, location="form", help='soft time limit for PGE job')
+    parser.add_argument('disk_usage', type=str, location="form", help='memory usage required for jon (KB, MB, GB)')
 
-    # @api.marshal_with(resp_model)
     def get(self):
         """List available on demand jobs"""
         query = {
@@ -374,12 +365,12 @@ class OnDemandJobs(Resource):
             'result': documents
         }
 
+    @on_demand_ns.expect(parser)
     def post(self):
         """
         submits on demand job
         :return: submit job id
         """
-        # TODO: add user auth and permissions
         request_data = request.json
         if not request_data:
             request_data = request.form
@@ -480,18 +471,17 @@ class JobParams(Resource):
     """Job Params API."""
 
     resp_model = on_demand_ns.model('JsonResponse', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false' encountered exception;"
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'objectid': fields.String(required=True, description="ID of indexed dataset"),
         'index': fields.String(required=True, description="dataset index name"),
     })
 
     parser = on_demand_ns.parser()
+    parser.add_argument('job_type', type=str, required=True, help='job tag')
 
-    # @api.marshal_with(resp_model)
+    @on_demand_ns.expect(parser)
     def get(self):
         job_type = request.args.get('job_type')
         if not job_type:

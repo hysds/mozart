@@ -15,15 +15,9 @@ from flask_restx import Namespace, Resource, fields
 from mozart import app, mozart_es
 
 
-JOB_SPEC_NS = "job_spec"
-job_spec_ns = Namespace(JOB_SPEC_NS, description="Mozart job-specification operations")
-
-CONTAINER_NS = "container"
-container_ns = Namespace(CONTAINER_NS, description="Mozart container operations")
-
-HYSDS_IO_NS = "hysds_io"
-hysds_io_ns = Namespace(HYSDS_IO_NS, description="HySDS IO operations")
-
+job_spec_ns = Namespace("job_spec", description="Mozart job-specification operations")
+container_ns = Namespace("container", description="Mozart container operations")
+hysds_io_ns = Namespace("hysds_io", description="HySDS IO operations")
 
 HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
 JOB_SPECS_INDEX = app.config['JOB_SPECS_INDEX']
