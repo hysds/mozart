@@ -86,7 +86,7 @@ def resource_not_found(e):
 app = Flask(__name__)
 app.wsgi_app = ReverseProxied(app.wsgi_app)
 app.config.from_pyfile('../settings.cfg')
-app.logger.propagate = False  # prevents duplicate logging
+# app.logger.propagate = False  # prevents duplicate logging
 
 # TODO: will remove this when ready for actual release, need to figure out the right host
 CORS(app)

@@ -257,7 +257,7 @@ class GetJobInfo(Resource):
     @job_ns.marshal_with(resp_model)
     def get(self):
         """Get complete info for submitted job based on id"""
-        _id = request.args.get('id')
+        _id = request.form.get('id', request.args.get('id', None))
         if _id is None:
             return {
                 'success': False,

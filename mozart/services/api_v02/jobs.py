@@ -216,7 +216,8 @@ class Jobs(Resource):
         }
 
 
-@job_ns.route('/info', endpoint='job-info')
+@job_ns.route('/info/<_id>', endpoint='job-info')
+@job_ns.route('/info')
 @job_ns.doc(responses={200: "Success", 500: "Query execution failed"}, description="Gets the complete info for a job.")
 class JobInfo(Resource):
     """Get info of job IDs."""
