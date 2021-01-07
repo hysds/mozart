@@ -440,7 +440,7 @@ class Build(Resource):
             """
             python-jenkins delete_build() breaking, so will fallback to using a request in the meantime:
                 https://www.mail-archive.com/python-jenkins-developers@lists.launchpad.net/msg00533.html
-            curl -u <user>:<token> -X POST https://nisar-pcm-ci.jpl.nasa.gov/job/<job_name>/<build_number>/doDelete
+            curl -u <user>:<token> -X POST https://<jenkins_url>/job/<job_name>/<build_number>/doDelete
             """
             jenkins_host = app.config.get('JENKINS_HOST', '')
             jenkins_user = app.config.get('JENKINS_USER', '')
