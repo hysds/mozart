@@ -359,16 +359,20 @@ class Build(Resource):
                 'message': 'jenkins job not found: %s' % job_name
             }, 404
 
-        if build_number is None:  # get most recent build number if not supplied
-            app.logger.info("build_number not supplied for %s, will look for latest build_number" % job_name)
-            job_info = jenkins_wrapper.get_job_info(job_name)
-            last_build = job_info['lastBuild']
-            if not last_build:
-                return {
-                    'success': False,
-                    'message': 'no builds listed for %s, submit a build' % job_name
-                }, 404
-            build_number = last_build['number']
+        # build_number = build_number or request.args.get('build_number')
+
+        if build_number is None:
+            build_number = request.args.get('build_number')
+            if build_number is None:  # get most recent build number if not supplied
+                app.logger.info("build_number not supplied for %s, will look for latest build_number" % job_name)
+                job_info = jenkins_wrapper.get_job_info(job_name)
+                last_build = job_info['lastBuild']
+                if not last_build:
+                    return {
+                        'success': False,
+                        'message': 'no builds listed for %s, submit a build' % job_name
+                    }, 404
+                build_number = last_build['number']
         app.logger.info("build number %d" % build_number)
 
         build_info = jenkins_wrapper.get_build_info(job_name, build_number)
@@ -418,15 +422,17 @@ class Build(Resource):
 
         job_info = jenkins_wrapper.get_job_info(job_name)
 
-        if build_number is None:  # get most recent build number if not supplied
-            app.logger.info("build_number not supplied for %s, will look for latest build_number" % job_name)
-            last_build = job_info['lastBuild']
-            if not last_build:
-                return {
-                    'success': False,
-                    'message': 'job has never been built %s, submit a build with /build (POST)' % job_name
-                }, 404
-            build_number = last_build['number']
+        if build_number is None:
+            build_number = request.args.get('build_number')
+            if build_number is None:  # get most recent build number if not supplied
+                app.logger.info("build_number not supplied for %s, will look for latest build_number" % job_name)
+                last_build = job_info['lastBuild']
+                if not last_build:
+                    return {
+                        'success': False,
+                        'message': 'job has never been built %s, submit a build with /build (POST)' % job_name
+                    }, 404
+                build_number = last_build['number']
         app.logger.info("build number %d" % build_number)
 
         try:
