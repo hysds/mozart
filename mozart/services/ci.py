@@ -167,9 +167,45 @@ class JobBuilder(Resource):
     parser.add_argument('repo', required=False, type=str, location="form", help="Code repository (Github, etc.)")
     parser.add_argument('branch', required=False, type=str, location="form", help="Code repository branch")
 
-    delete_parser = build_job_ns.parser()
-    delete_parser.add_argument('repo', required=False, type=str, help="Code repository (Github, etc.)")
-    delete_parser.add_argument('branch', required=False, type=str, help="Code repository branch")
+    arg_parser = build_job_ns.parser()
+    arg_parser.add_argument('repo', required=False, type=str, help="Code repository (Github, etc.)")
+    arg_parser.add_argument('branch', required=False, type=str, help="Code repository branch")
+
+    @build_job_ns.expect(arg_parser)
+    def get(self, job_name=None):
+        """Checks if Jenkins job exists"""
+        if job_name is None:
+            repo = request.args.get('repo')
+            branch = request.args.get('branch')
+            if repo is None:
+                return {
+                    'success': False,
+                    'message': 'repo must be supplied if Jenkins job_name not given'
+                }, 400
+
+            app.logger.info("repo: %s" % repo)
+            app.logger.info("branch: %s" % branch)
+            job_name = get_ci_job_name(repo, branch)
+            if job_name is None:
+                return {
+                    'success': False,
+                    'message': "Failed to parse repo owner and name: %s" % repo
+                }, 400
+
+        try:
+            job_found = jenkins_wrapper.job_exists(job_name)
+            if not job_found:
+                raise NotFoundException
+            return {
+                'success': True,
+                'message': 'job found: %s' % job_name
+            }
+        except NotFoundException as e:
+            app.logger.error(str(e))
+            return {
+                'success': False,
+                'message': 'jenkins job not found: %s' % job_name
+            }, 404
 
     @build_job_ns.expect(parser)
     def post(self, job_name=None):
@@ -252,7 +288,7 @@ class JobBuilder(Resource):
                 'message': 'job failed to submit build %s' % job_name
             }, 400
 
-    @build_job_ns.expect(delete_parser)
+    @build_job_ns.expect(arg_parser)
     def delete(self, job_name=None):
         """stop Jenkins build"""
         if job_name is None:
