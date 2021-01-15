@@ -152,9 +152,9 @@ class JobQueues(Resource):
         }
 
 
-@job_ns.route('', endpoint='job-status')
-@job_ns.doc(responses={200: "Success", 500: "Query execution failed"},
-            description="Get status of job by ID.")
+@job_ns.route('/status/<_id>', endpoint='job-status')
+@job_ns.route('/status')
+@job_ns.doc(responses={200: "Success", 500: "Query execution failed"}, description="Get status of job by ID.")
 class JobStatus(Resource):
     """Get status of job ID."""
 
@@ -170,13 +170,13 @@ class JobStatus(Resource):
 
     @job_ns.expect(parser)
     @job_ns.marshal_with(resp_model)
-    def get(self):
+    def get(self, _id=None):
         """Gets the status of a submitted job based on job id"""
-        _id = request.args.get('id', None)
+        _id = _id or request.args.get('id', None)
         if _id is None:
             return {'success': False, 'message': 'id not supplied'}, 400
 
-        job_status = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404)
+        job_status = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404, _source=['status'])
         if job_status['found'] is False:
             return {
                 'success': False,

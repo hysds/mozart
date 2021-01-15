@@ -198,8 +198,7 @@ class GetQueueNames(Resource):
 
 
 @job_ns.route('/status', endpoint='job-status')
-@job_ns.doc(responses={200: "Success", 500: "Query execution failed"},
-            description="Get status of job by ID.")
+@job_ns.doc(responses={200: "Success", 500: "Query execution failed"}, description="Get status of job by ID.")
 class GetJobStatus(Resource):
     """Get status of job ID."""
 
@@ -224,7 +223,7 @@ class GetJobStatus(Resource):
         if _id is None:
             return {'success': False, 'message': 'id not supplied'}, 400
 
-        job_status = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404)
+        job_status = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404, _source=['status'])
         if job_status['found'] is False:
             return {
                 'success': False,
