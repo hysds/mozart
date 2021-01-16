@@ -382,7 +382,7 @@ class Build(Resource):
                     'success': False,
                     'message': "Failed to parse repo owner and name: %s" % repo
                 }, 400
-            app.logger.info("jenkins job name: %s" % job_name)
+        app.logger.info("jenkins job name: %s" % job_name)
 
         try:
             job_found = jenkins_wrapper.job_exists(job_name)
@@ -394,8 +394,6 @@ class Build(Resource):
                 'success': False,
                 'message': 'jenkins job not found: %s' % job_name
             }, 404
-
-        # build_number = build_number or request.args.get('build_number')
 
         if build_number is None:
             build_number = request.args.get('build_number')
@@ -409,6 +407,14 @@ class Build(Resource):
                         'message': 'no builds listed for %s, submit a build' % job_name
                     }, 404
                 build_number = last_build['number']
+            else:
+                if build_number.isdigit():
+                    build_number = int(build_number)
+                else:
+                    return {
+                        'success': False,
+                        'message': 'build_number is not an integer'
+                    }, 400
         app.logger.info("build number %d" % build_number)
 
         build_info = jenkins_wrapper.get_build_info(job_name, build_number)
@@ -424,7 +430,7 @@ class Build(Resource):
         }
 
     @job_build_ns.expect(parser)
-    def delete(self, job_name=False, build_number=None):
+    def delete(self, job_name=None, build_number=None):
         """Remove Jenkins build"""
         if job_name is None:  # get job_name from request query parameters if not supplied in url
             repo = request.args.get("repo", None)
@@ -443,7 +449,7 @@ class Build(Resource):
                     'success': False,
                     'message': "Failed to parse repo owner and name: %s" % repo
                 }, 400
-            app.logger.info("jenkins job name: %s" % job_name)
+        app.logger.info("jenkins job name: %s" % job_name)
 
         try:
             job_found = jenkins_wrapper.job_exists(job_name)
@@ -469,6 +475,14 @@ class Build(Resource):
                         'message': 'job has never been built %s, submit a build with /build (POST)' % job_name
                     }, 404
                 build_number = last_build['number']
+            else:
+                if build_number.isdigit():
+                    build_number = int(build_number)
+                else:
+                    return {
+                        'success': False,
+                        'message': 'build_number is not an integer'
+                    }, 400
         app.logger.info("build number %d" % build_number)
 
         try:
