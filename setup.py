@@ -35,5 +35,6 @@ setup(
         'pytz',
         'numpy',
         'flask-restx>=0.2.0',
+        'python-jenkins>=1.7.0',
         'future>=0.17.1']
 )
