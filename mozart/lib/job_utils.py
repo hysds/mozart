@@ -27,7 +27,7 @@ def get_job_status(ident):
     return hysds_commons.request_utils.get_requests_json_response(full_url)["_source"]["status"]
 
 
-def get_job_list(page_size=100, offset=0, username=None, detailed=False):
+def get_job_list(page_size=100, offset=0, username=None, detailed=False, paginate=False):
     '''
     Get a listing of jobs
     @param page_size - page size for pagination of jobs
@@ -39,11 +39,14 @@ def get_job_list(page_size=100, offset=0, username=None, detailed=False):
     else:
         data = {"query": {"bool": {"must": [{"term": {"job.job.username": username}}]}}}
 
+    data["from"] = offset
+    data["size"] = page_size
+
     es_url = app.config['ES_URL']
     es_index = "job_status-current"
     full_url = "{0}/{1}/_search".format(es_url, es_index)
     results = hysds_commons.request_utils.post_scrolled_json_responses(
-        full_url, "{0}/_search".format(es_url), data=json.dumps(data))
+        full_url, "{0}/_search".format(es_url), data=json.dumps(data), paginate=paginate)
     if detailed is False:
         return ([result["_id"] for result in results])
     else:
