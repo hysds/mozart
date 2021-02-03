@@ -115,10 +115,10 @@ class UserRules(Resource):
                 'result': None,
             }, 400
 
-        if len(rule_name) > 32:
+        if len(rule_name) > 64:
             return {
                 "success": False,
-                "message": "rule_name needs to be less than 32 characters",
+                "message": "rule_name needs to be less than 64 characters",
                 "result": None,
             }, 400
 
@@ -272,10 +272,10 @@ class UserRules(Resource):
 
         update_doc = {}
         if rule_name:
-            if len(rule_name) > 32:
+            if len(rule_name) > 64:
                 return {
                            "success": False,
-                           "message": "rule_name needs to be less than 32 characters",
+                           "message": "rule_name needs to be less than 64 characters",
                            "result": None,
                        }, 400
             update_doc['rule_name'] = rule_name
