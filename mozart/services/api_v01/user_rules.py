@@ -25,13 +25,43 @@ HYSDS_IOS_INDEX = app.config['HYSDS_IOS_INDEX']
 
 
 @user_rule_ns.route('', endpoint='user-rules')
-@user_rule_ns.doc(responses={200: "Success", 500: "Execution failed"},
-                  description="Retrieve on job params for specific jobs")
+@user_rule_ns.doc(responses={200: "Success", 500: "Execution failed"}, description="user rule return status")
 class UserRules(Resource):
     """User Rules API"""
+    parser = user_rule_ns.parser()
+    parser.add_argument('id', type=str, help="rule id")
+    parser.add_argument('rule_name', type=str, help="rule name (fallback if id is not provided)")
 
+    post_parser = user_rule_ns.parser()
+    post_parser.add_argument('rule_name', type=str, required=True, location='form', help='rule name')
+    post_parser.add_argument('hysds_io', type=str, required=True, location='form', help='hysds io')
+    post_parser.add_argument('job_spec', type=str, required=True, location='form', help='queue')
+    post_parser.add_argument('priority', type=int, required=True, location='form', help='RabbitMQ job priority (0-9)')
+    post_parser.add_argument('query_string', type=str, required=True, location='form', help='elasticsearch query')
+    post_parser.add_argument('kwargs', type=str, required=True, location='form', help='keyword arguments for PGE')
+    post_parser.add_argument('queue', type=str, required=True, location='form', help='RabbitMQ job queue')
+    post_parser.add_argument('tags', type=list, location='form', help='user defined tags for trigger rule')
+    post_parser.add_argument('time_limit', type=int, location='form', help='time limit for PGE job')
+    post_parser.add_argument('soft_time_limit', type=int, location='form', help='soft time limit for PGE job')
+    post_parser.add_argument('disk_usage', type=str, location='form', help='memory usage required for jon (KB, MB, GB)')
+
+    put_parser = user_rule_ns.parser()
+    put_parser.add_argument('id', type=str, help="rule id")
+    put_parser.add_argument('rule_name', type=str, help="rule name (fallback if id is not provided)")
+    put_parser.add_argument('hysds_io', type=str, location='form', help='hysds io')
+    put_parser.add_argument('job_spec', type=str, location='form', help='queue')
+    put_parser.add_argument('priority', type=int, location='form', help='RabbitMQ job priority (0-9)')
+    put_parser.add_argument('query_string', type=str, location='form', help='elasticsearch query')
+    put_parser.add_argument('kwargs', type=str, location='form', help='keyword arguments for PGE')
+    put_parser.add_argument('queue', type=str, location='form', help='RabbitMQ job queue')
+    put_parser.add_argument('tags', type=list, location='form', help='user defined tags for trigger rule')
+    put_parser.add_argument('time_limit', type=int, location='form', help='time limit for PGE job')
+    put_parser.add_argument('soft_time_limit', type=int, location='form', help='soft time limit for PGE job')
+    put_parser.add_argument('disk_usage', type=str, location='form', help='memory usage required for jon (KB, MB, GB)')
+
+    @user_rule_ns.expect(parser)
     def get(self):
-        # TODO: add user role and permissions
+        """Retrieve user rule(s)"""
         _id = request.args.get("id", None)
         _rule_name = request.args.get("rule_name", None)
         user_rules_index = app.config['USER_RULES_INDEX']
@@ -79,7 +109,9 @@ class UserRules(Resource):
             'rules': parsed_user_rules
         }
 
+    @user_rule_ns.expect(post_parser)
     def post(self):
+        """create new user rule"""
         user_rules_index = app.config['USER_RULES_INDEX']
 
         request_data = request.json or request.form
@@ -216,7 +248,9 @@ class UserRules(Resource):
             'result': result
         }
 
-    def put(self):  # TODO: add user role and permissions
+    @user_rule_ns.expect(put_parser)
+    def put(self):
+        """edit existing user rule"""
         request_data = request.json or request.form
         _id = request_data.get("id", None)
         _rule_name = request_data.get("rule_name", None)
@@ -366,8 +400,9 @@ class UserRules(Resource):
             'updated': update_doc
         }
 
+    @user_rule_ns.expect(parser)
     def delete(self):
-        # TODO: need to add user rules and permissions
+        """remove user rule"""
         user_rules_index = app.config['USER_RULES_INDEX']
         _id = request.args.get("id", None)
         _rule_name = request.args.get("rule_name", None)

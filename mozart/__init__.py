@@ -12,6 +12,7 @@ from flask_login import LoginManager
 from flask_cors import CORS  # TODO: will remove this once we figure out the proper host for the UI
 
 from hysds_commons.elasticsearch_utils import ElasticsearchUtility
+from jenkins import Jenkins
 
 
 class ReverseProxied(object):
@@ -85,6 +86,7 @@ def resource_not_found(e):
 app = Flask(__name__)
 app.wsgi_app = ReverseProxied(app.wsgi_app)
 app.config.from_pyfile('../settings.cfg')
+# app.logger.propagate = False  # prevents duplicate logging
 
 # TODO: will remove this when ready for actual release, need to figure out the right host
 CORS(app)
@@ -105,6 +107,15 @@ app.register_error_handler(404, resource_not_found)
 
 # Mozart's connection to Elasticsearch
 mozart_es = ElasticsearchUtility(app.config['ES_URL'], app.logger)
+
+# add jenkins connection
+if app.config.get('JENKINS_ENABLED', False):
+    jenkins_wrapper = Jenkins(app.config['JENKINS_HOST'], username=app.config['JENKINS_USER'],
+                              password=app.config['JENKINS_API_KEY'])
+    from mozart.services.ci import services as ci_services
+    app.register_blueprint(ci_services)
+else:
+    jenkins_wrapper = None
 
 # views blueprints
 from mozart.views.main import mod as views_module

@@ -29,16 +29,13 @@ class AddLogEvent(Resource):
     """Add log event."""
 
     resp_model = event_ns.model('HySDS Event Log Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception;"
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'result':  fields.String(required=True, description="HySDS custom event log ID")
     })
     parser = event_ns.parser()
-    parser.add_argument('type', required=True, type=str,
-                        help="Event type, e.g. aws_autoscaling, verdi_anomalies")
+    parser.add_argument('type', required=True, type=str, help="Event type, e.g. aws_autoscaling, verdi_anomalies")
     parser.add_argument('status', required=True, type=str,
                         help="Event status, e.g. spot_termination, docker_daemon_failed")
     parser.add_argument('event', required=True, type=str,
@@ -49,8 +46,7 @@ class AddLogEvent(Resource):
                             "reservation": "r-02fd006170749a0a8",
                             "termination_date": "2015-01-02T15:49:05.571384"
                         }""")
-    parser.add_argument('tags', required=False, type=str,
-                        help='JSON list of tags, e.g. ["dumby", "test_job"]')
+    parser.add_argument('tags', required=False, type=str, help='JSON list of tags, e.g. ["dumby", "test_job"]')
     parser.add_argument('hostname', required=False, type=str,
                         help='Event-related hostname, e.g. "job.hysds.net", "192.168.0.1"')
 
@@ -76,6 +72,7 @@ class AddLogEvent(Resource):
                 if event is not None and not isinstance(event, dict):
                     event = json.loads(event)
             except Exception as e:
+                app.logger.error(e)
                 raise Exception("Failed to parse input event. '{0}' is malformed JSON".format(event))
 
             tags = form.get('tags', request.args.get('tags', None))

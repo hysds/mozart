@@ -6,6 +6,7 @@ from future import standard_library
 standard_library.install_aliases()
 from setuptools import setup, find_packages
 
+
 setup(
     name='mozart',
     version='2.0.10',
@@ -34,5 +35,6 @@ setup(
         'pytz',
         'numpy',
         'flask-restx>=0.2.0',
+        'python-jenkins>=1.7.0',
         'future>=0.17.1']
 )

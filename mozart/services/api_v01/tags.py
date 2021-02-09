@@ -23,7 +23,15 @@ user_rules_tags_ns = Namespace(USER_RULES_TAGS, description="user tags for Mozar
 @user_tags_ns.route('', endpoint='user-tags')
 @user_tags_ns.doc(responses={200: "Success", 500: "Execution failed"}, description="User tags for Mozart jobs")
 class UserTags(Resource):
+    """user defined tags for job records"""
+    parser = user_tags_ns.parser()
+    parser.add_argument('id', type=str, required=True, help="job id")
+    parser.add_argument('index', type=str, required=True, help="job index (job_status-current)")
+    parser.add_argument('tag', type=str, required=True, help="user defined tag")
+
+    @user_tags_ns.expect(parser)
     def put(self):
+        """add user defined tag for job record"""
         request_data = request.json or request.form
         _id = request_data.get('id')
         _index = request_data.get('index')
@@ -71,7 +79,9 @@ class UserTags(Resource):
             'tags': user_tags
         }
 
+    @user_tags_ns.expect(parser)
     def delete(self):
+        """remove user defined tag for job record"""
         _id = request.args.get('id')
         _index = request.args.get('index')
         tag = request.args.get('tag')
@@ -122,9 +132,12 @@ class UserTags(Resource):
 
 
 @user_rules_tags_ns.route('', endpoint='user-rules-tags')
-@user_rules_tags_ns.doc(responses={200: "Success", 500: "Execution failed"}, description="User tags for Mozart user rules")
+@user_rules_tags_ns.doc(responses={200: "Success", 500: "Execution failed"},
+                        description="User tags for Mozart user rules")
 class UserRulesTags(Resource):
+    """user defined tags for trigger rules"""
     def get(self):
+        """retrieve user defined tags for trigger rules"""
         index = app.config['USER_RULES_INDEX']
         body = {
             "size": 0,

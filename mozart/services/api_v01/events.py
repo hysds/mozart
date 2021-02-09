@@ -29,11 +29,9 @@ class AddLogEvent(Resource):
     """Add log event."""
 
     resp_model = event_ns.model('HySDS Event Log Response(JSON)', {
-        'success': fields.Boolean(required=True, description="if 'false', " +
-                                  "encountered exception; otherwise no errors " +
-                                  "occurred"),
-        'message': fields.String(required=True, description="message describing " +
-                                 "success or failure"),
+        'success': fields.Boolean(required=True, description="if 'false', encountered exception;"
+                                                             "otherwise no errors occurred"),
+        'message': fields.String(required=True, description="message describing success or failure"),
         'result':  fields.String(required=True, description="HySDS custom event log ID")
     })
     parser = event_ns.parser()
@@ -49,8 +47,7 @@ class AddLogEvent(Resource):
                             "reservation": "r-02fd006170749a0a8",
                             "termination_date": "2015-01-02T15:49:05.571384"
                         }""")
-    parser.add_argument('tags', required=False, type=str,
-                        help='JSON list of tags, e.g. ["dumby", "test_job"]')
+    parser.add_argument('tags', required=False, type=str, help='JSON list of tags, e.g. ["dumby", "test_job"]')
     parser.add_argument('hostname', required=False, type=str,
                         help='Event-related hostname, e.g. "job.hysds.net", "192.168.0.1"')
 
@@ -64,8 +61,8 @@ class AddLogEvent(Resource):
                 try:
                     form = json.loads(request.data)
                 except Exception as e:
-                    raise Exception(
-                        "Failed to parse request data. '{0}' is malformed JSON".format(request.data))
+                    app.logger.error(e)
+                    raise Exception("Failed to parse request data. '{0}' is malformed JSON".format(request.data))
             else:
                 form = request.form
 
