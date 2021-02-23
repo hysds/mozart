@@ -20,7 +20,7 @@ from hysds_commons.action_utils import check_passthrough_query
 
 from mozart import app, mozart_es
 
-import mozart.lib.job_utils  # TODO: unsure if this import is still needed
+# import mozart.lib.job_utils  # TODO: unsure if this import is still needed
 import mozart.lib.queue_utils
 
 
@@ -53,6 +53,7 @@ class SubmitJob(Resource):
     parser.add_argument('tags', required=False, type=str, help='JSON list of tags, e.g. ["dumby", "test_job"]')
     parser.add_argument('name', required=False, type=str, help='base job name override; defaults to job type')
     parser.add_argument('payload_hash', required=False, type=str, help='user-generated payload hash')
+    parser.add_argument('username', type=str, help='user to submit job')
     parser.add_argument('enable_dedup', required=False, type=bool, help='flag to enable/disable job dedup')
     parser.add_argument('params', required=False, type=str, help="JSON job context for PGE")
 
@@ -64,8 +65,10 @@ class SubmitJob(Resource):
         job_queue = request.form.get('queue', request.args.get('queue', None))
 
         priority = int(request.form.get('priority', request.args.get('priority', 0)))
-
         tags = request.form.get('tags', request.args.get('tags', None))
+
+        username = request.form.get('username', request.args.get('username', None))
+
         job_name = request.form.get('name', request.args.get('name', None))
 
         payload_hash = request.form.get('payload_hash', request.args.get('payload_hash', None))
@@ -83,8 +86,7 @@ class SubmitJob(Resource):
                 if not tags is None:
                     tags = json.loads(tags)
             except Exception as e:
-                raise Exception(
-                    "Failed to parse input tags. '{0}' is malformed".format(tags))
+                raise Exception("Failed to parse input tags. '{0}' is malformed".format(tags))
 
             params = request.form.get(
                 'params', request.args.get('params', "{}"))
@@ -100,6 +102,7 @@ class SubmitJob(Resource):
             app.logger.warning(job_type)
             app.logger.warning(job_queue)
             job_json = hysds_commons.job_utils.resolve_hysds_job(job_type, job_queue, priority, tags, params,
+                                                                 username=username,
                                                                  job_name=job_name,
                                                                  payload_hash=payload_hash,
                                                                  enable_dedup=enable_dedup)

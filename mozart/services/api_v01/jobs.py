@@ -21,7 +21,7 @@ from hysds_commons.action_utils import check_passthrough_query
 from mozart import app, mozart_es
 
 # Library backend imports
-import mozart.lib.job_utils  # TODO: unsure if this import is needed
+# import mozart.lib.job_utils  # TODO: unsure if this import is needed
 import mozart.lib.queue_utils
 
 
@@ -120,13 +120,6 @@ class UserJobs(Resource):
             except (ValueError, TypeError):
                 return {'success': False, 'message': 'priority must be an int'}, 400
 
-        app.logger.info('offset %s %s' % (offset, type(offset)))
-        app.logger.info('page_size %s %s' % (page_size, type(page_size)))
-        app.logger.info('type %s %s' % (job_type, type(job_type)))
-        app.logger.info('tag %s %s' % (tag, type(tag)))
-        app.logger.info('queue %s %s' % (queue, type(queue)))
-        app.logger.info('priority %s %s' % (priority, type(priority)))
-        app.logger.info('status %s %s' % (status, type(status)))
         query = {
             "sort": [
                 {"@timestamp": {"order": "desc"}}
@@ -245,7 +238,7 @@ class SubmitJob(Resource):
             app.logger.warning(job_type)
             app.logger.warning(job_queue)
             job_json = hysds_commons.job_utils.resolve_hysds_job(job_type, job_queue, priority, tags, params,
-                                                                 sername=username,
+                                                                 username=username,
                                                                  job_name=job_name,
                                                                  payload_hash=payload_hash,
                                                                  enable_dedup=enable_dedup)
