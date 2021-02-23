@@ -355,7 +355,7 @@ class OnDemandJobs(Resource):
         is_passthrough_query = check_passthrough_query(params)
 
         rule = {
-            'username': 'example_user',
+            'username': 'ops',
             'workflow': hysds_io,
             'priority': priority,
             'enabled': True,

@@ -67,6 +67,105 @@ class GetJobs(Resource):
         }
 
 
+@job_ns.route('/user/<user>', endpoint='user-jobs')
+@job_ns.doc(responses={200: "Success", 500: "Query execution failed"}, description="Get list of user submitted job IDs")
+class UserJobs(Resource):
+    resp_model = job_ns.model('Jobs Listing Response(JSON)', {
+        'success': fields.Boolean(required=True, description="true/false, successful request"),
+        'message': fields.String(required=True, description="message describing success or failure"),
+        'result': fields.List(fields.String, required=True, description="list of job IDs")
+    })
+
+    parser = job_ns.parser()
+    parser.add_argument('offset', type=int, help="Job Listing Pagination Offset", default=0, required=False)
+    parser.add_argument('page_size', type=int, help="Job Listing Pagination Size", default=250, required=False)
+    parser.add_argument('type', type=str, help="job type + version (ie. topsapp:v1.0)", required=False)
+    parser.add_argument('tag', type=str, help="user defined job tag", required=False)
+    parser.add_argument('queue', type=str, help="submitted job queue", required=False)
+    parser.add_argument('priority', type=int, help="job priority, 0-9", required=False)
+    parser.add_argument('status', type=str, help="job status, ie. job-queued, job-started, job-completed, "
+                                                 "job-failed", required=False)
+
+    @job_ns.expect(parser)
+    @job_ns.marshal_with(resp_model)
+    def get(self, user):
+        """
+        return user submitted jobs from ElasticSearch (sorted by @timestamp desc)
+        """
+        offset = request.args.get('offset')
+        page_size = request.args.get('page_size')
+        job_type = request.args.get('type')
+        tag = request.args.get('tag')
+        queue = request.args.get('queue')
+        priority = request.args.get('priority')
+        status = request.args.get('status')
+
+        if offset:
+            try:
+                offset = int(offset)
+            except (ValueError, TypeError):
+                return {'success': False, 'message': 'offset must be an int'}, 400
+        if page_size:
+            try:
+                page_size = int(page_size)
+                if page_size > 250:
+                    page_size = 250
+            except (ValueError, TypeError):
+                return {'success': False, 'message': 'page_size must be an int'}, 400
+        if priority:
+            try:
+                priority = int(priority)
+                if priority > 9:
+                    priority = 9
+            except (ValueError, TypeError):
+                return {'success': False, 'message': 'priority must be an int'}, 400
+
+        app.logger.info('offset %s %s' % (offset, type(offset)))
+        app.logger.info('page_size %s %s' % (page_size, type(page_size)))
+        app.logger.info('type %s %s' % (job_type, type(job_type)))
+        app.logger.info('tag %s %s' % (tag, type(tag)))
+        app.logger.info('queue %s %s' % (queue, type(queue)))
+        app.logger.info('priority %s %s' % (priority, type(priority)))
+        app.logger.info('status %s %s' % (status, type(status)))
+        query = {
+            "sort": [
+                {"@timestamp": {"order": "desc"}}
+            ],
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "term": {
+                                "job.username": user
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+
+        if offset:
+            query['from'] = offset
+        if page_size:
+            query['size'] = page_size
+        if tag:
+            query['query']['bool']['must'].append({"term": {"tags.keyword": tag}})
+        if job_type:
+            query['query']['bool']['must'].append({"term": {"job.type": job_type}})
+        if priority:
+            query['query']['bool']['must'].append({"term": {"job.priority": priority}})
+        if status:
+            query['query']['bool']['must'].append({"term": {"status": status}})
+        if queue:
+            query['query']['bool']['must'].append({"term": {"job.job_info.job_queue": queue}})
+
+        res = mozart_es.search(index=JOB_STATUS_INDEX, body=query, _source=False)
+        return {
+            'success': True,
+            'result': [doc['_id'] for doc in res['hits']['hits']]
+        }
+
+
 @job_ns.route('/submit', endpoint='job-submit')
 @job_ns.doc(responses={200: "Success", 400: "Invalid parameters", 500: "Job submission failed"},
             description="Submit job for execution in HySDS.")
@@ -81,14 +180,13 @@ class SubmitJob(Resource):
     })
 
     parser = job_ns.parser()
-    parser.add_argument('type', required=True, type=str,
-                        help="a job type from jobspec/list")
-    parser.add_argument('queue', required=True, type=str,
-                        help="Job queue from /queue/list e.g. grfn-job_worker-small")
+    parser.add_argument('type', required=True, type=str, help="a job type from jobspec/list")
+    parser.add_argument('queue', required=True, type=str, help="Job queue from /queue/list e.g. grfn-job_worker-small")
     parser.add_argument('priority', type=int, help='Job priority in the range of 0 to 9')
     parser.add_argument('tags', type=str, help='JSON list of tags, e.g. ["dumby", "test_job"]')
     parser.add_argument('name', type=str, help='base job name override; defaults to job type')
     parser.add_argument('payload_hash', type=str, help='user-generated payload hash')
+    parser.add_argument('username', type=str, help='user to submit job')
     parser.add_argument('enable_dedup', type=bool, help='flag to enable/disable job dedup')
     parser.add_argument('params', type=str,
                         help="""JSON job context, e.g. {
@@ -112,6 +210,8 @@ class SubmitJob(Resource):
 
         priority = int(request.form.get('priority', request.args.get('priority', 0)))
         tags = request.form.get('tags', request.args.get('tags', None))
+
+        username = request.form.get('username', request.args.get('username', None))
 
         job_name = request.form.get('name', request.args.get('name', None))
 
@@ -145,6 +245,7 @@ class SubmitJob(Resource):
             app.logger.warning(job_type)
             app.logger.warning(job_queue)
             job_json = hysds_commons.job_utils.resolve_hysds_job(job_type, job_queue, priority, tags, params,
+                                                                 sername=username,
                                                                  job_name=job_name,
                                                                  payload_hash=payload_hash,
                                                                  enable_dedup=enable_dedup)
@@ -413,7 +514,7 @@ class OnDemandJobs(Resource):
         is_passthrough_query = check_passthrough_query(params)
 
         rule = {
-            'username': 'example_user',
+            'username': 'ops',
             'workflow': hysds_io,
             'priority': priority,
             'enabled': True,

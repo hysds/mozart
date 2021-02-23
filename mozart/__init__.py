@@ -86,7 +86,6 @@ def resource_not_found(e):
 app = Flask(__name__)
 app.wsgi_app = ReverseProxied(app.wsgi_app)
 app.config.from_pyfile('../settings.cfg')
-# app.logger.propagate = False  # prevents duplicate logging
 
 # TODO: will remove this when ready for actual release, need to figure out the right host
 CORS(app)
@@ -106,7 +105,7 @@ lm.login_view = 'views/main.login'
 app.register_error_handler(404, resource_not_found)
 
 # Mozart's connection to Elasticsearch
-mozart_es = ElasticsearchUtility(app.config['ES_URL'], app.logger)
+mozart_es = ElasticsearchUtility(app.config['ES_URL'])
 
 # add jenkins connection
 if app.config.get('JENKINS_ENABLED', False):
