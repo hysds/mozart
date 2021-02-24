@@ -80,21 +80,24 @@ class UserJobs(Resource):
     parser.add_argument('tag', type=str, help="user defined job tag", required=False)
     parser.add_argument('queue', type=str, help="submitted job queue", required=False)
     parser.add_argument('priority', type=int, help="job priority, 0-9", required=False)
+    parser.add_argument('start_time', type=str, help="start time of @timestamp field", required=False)
+    parser.add_argument('end_time', type=str, help="start time of @timestamp field", required=False)
     parser.add_argument('status', type=str, help="job status, ie. job-queued, job-started, job-completed, "
                                                  "job-failed", required=False)
 
     @job_ns.expect(parser)
-    @job_ns.marshal_with(resp_model)
     def get(self, user):
         """
         return user submitted jobs from ElasticSearch (sorted by @timestamp desc)
         """
         offset = request.args.get('offset')
         page_size = request.args.get('page_size')
-        job_type = request.args.get('type')
+        job_type = request.args.get('job_type')
         tag = request.args.get('tag')
         queue = request.args.get('queue')
         priority = request.args.get('priority')
+        start_time = request.args.get('start_time')
+        end_time = request.args.get('end_time')
         status = request.args.get('status')
 
         if offset:
@@ -148,8 +151,22 @@ class UserJobs(Resource):
             query['query']['bool']['must'].append({"term": {"status": status}})
         if queue:
             query['query']['bool']['must'].append({"term": {"job.job_info.job_queue": queue}})
+        if start_time is not None or end_time is not None:
+            datetime_filter = {'range': {'@timestamp': {}}}
+            if start_time:
+                if start_time.isdigit():
+                    start_time = int(start_time)
+                datetime_filter['range']['@timestamp']['gte'] = start_time
+            if end_time:
+                if end_time.isdigit():
+                    end_time = int(end_time)
+                datetime_filter['range']['@timestamp']['lte'] = end_time
+            query['query']['bool']['must'].append(datetime_filter)
 
-        res = mozart_es.search(index=JOB_STATUS_INDEX, body=query, _source=False)
+        try:
+            res = mozart_es.search(index=JOB_STATUS_INDEX, body=query, _source=False)
+        except Exception as e:
+            return {'success': False, 'message': str(e), 'result': []}, 400
         return {
             'success': True,
             'result': [doc['_id'] for doc in res['hits']['hits']]
