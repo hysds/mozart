@@ -19,9 +19,6 @@ import hysds_commons.job_utils
 from hysds_commons.action_utils import check_passthrough_query
 
 from mozart import app, mozart_es
-
-# Library backend imports
-import mozart.lib.job_utils  # TODO: unsure if this import is needed
 import mozart.lib.queue_utils
 
 
@@ -67,6 +64,109 @@ class GetJobs(Resource):
         }
 
 
+@job_ns.route('/user/<user>', endpoint='user-jobs')
+@job_ns.doc(responses={200: "Success", 500: "Query execution failed"}, description="Get list of user submitted job IDs")
+class UserJobs(Resource):
+    parser = job_ns.parser()
+    parser.add_argument('offset', type=int, help="Job Listing Pagination Offset", default=0, required=False)
+    parser.add_argument('page_size', type=int, help="Job Listing Pagination Size", default=250, required=False)
+    parser.add_argument('type', type=str, help="job type + version (ie. topsapp:v1.0)", required=False)
+    parser.add_argument('tag', type=str, help="user defined job tag", required=False)
+    parser.add_argument('queue', type=str, help="submitted job queue", required=False)
+    parser.add_argument('priority', type=int, help="job priority, 0-9", required=False)
+    parser.add_argument('start_time', type=str, help="start time of @timestamp field", required=False)
+    parser.add_argument('end_time', type=str, help="start time of @timestamp field", required=False)
+    parser.add_argument('status', type=str, help="job status, ie. job-queued, job-started, job-completed, "
+                                                 "job-failed", required=False)
+
+    @job_ns.expect(parser)
+    def get(self, user):
+        """
+        return user submitted jobs from ElasticSearch (sorted by @timestamp desc)
+        """
+        offset = request.args.get('offset')
+        page_size = request.args.get('page_size')
+        job_type = request.args.get('job_type')
+        tag = request.args.get('tag')
+        queue = request.args.get('queue')
+        priority = request.args.get('priority')
+        start_time = request.args.get('start_time')
+        end_time = request.args.get('end_time')
+        status = request.args.get('status')
+
+        if offset:
+            try:
+                offset = int(offset)
+            except (ValueError, TypeError):
+                return {'success': False, 'message': 'offset must be an int'}, 400
+        if page_size:
+            try:
+                page_size = int(page_size)
+                if page_size > 250:
+                    page_size = 250
+            except (ValueError, TypeError):
+                return {'success': False, 'message': 'page_size must be an int'}, 400
+        if priority:
+            try:
+                priority = int(priority)
+                if priority > 9:
+                    priority = 9
+            except (ValueError, TypeError):
+                return {'success': False, 'message': 'priority must be an int'}, 400
+
+        query = {
+            "sort": [
+                {"@timestamp": {"order": "desc"}}
+            ],
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "term": {
+                                "job.username": user
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+
+        if offset:
+            query['from'] = offset
+        if page_size:
+            query['size'] = page_size
+        if tag:
+            query['query']['bool']['must'].append({"term": {"tags.keyword": tag}})
+        if job_type:
+            query['query']['bool']['must'].append({"term": {"job.type": job_type}})
+        if priority:
+            query['query']['bool']['must'].append({"term": {"job.priority": priority}})
+        if status:
+            query['query']['bool']['must'].append({"term": {"status": status}})
+        if queue:
+            query['query']['bool']['must'].append({"term": {"job.job_info.job_queue": queue}})
+        if start_time is not None or end_time is not None:
+            datetime_filter = {'range': {'@timestamp': {}}}
+            if start_time:
+                if start_time.isdigit():
+                    start_time = int(start_time)
+                datetime_filter['range']['@timestamp']['gte'] = start_time
+            if end_time:
+                if end_time.isdigit():
+                    end_time = int(end_time)
+                datetime_filter['range']['@timestamp']['lte'] = end_time
+            query['query']['bool']['must'].append(datetime_filter)
+
+        try:
+            res = mozart_es.search(index=JOB_STATUS_INDEX, body=query, _source=False)
+        except Exception as e:
+            return {'success': False, 'message': str(e), 'result': []}, 400
+        return {
+            'success': True,
+            'result': [doc['_id'] for doc in res['hits']['hits']]
+        }
+
+
 @job_ns.route('/submit', endpoint='job-submit')
 @job_ns.doc(responses={200: "Success", 400: "Invalid parameters", 500: "Job submission failed"},
             description="Submit job for execution in HySDS.")
@@ -81,14 +181,13 @@ class SubmitJob(Resource):
     })
 
     parser = job_ns.parser()
-    parser.add_argument('type', required=True, type=str,
-                        help="a job type from jobspec/list")
-    parser.add_argument('queue', required=True, type=str,
-                        help="Job queue from /queue/list e.g. grfn-job_worker-small")
+    parser.add_argument('type', required=True, type=str, help="a job type from jobspec/list")
+    parser.add_argument('queue', required=True, type=str, help="Job queue from /queue/list e.g. grfn-job_worker-small")
     parser.add_argument('priority', type=int, help='Job priority in the range of 0 to 9')
     parser.add_argument('tags', type=str, help='JSON list of tags, e.g. ["dumby", "test_job"]')
     parser.add_argument('name', type=str, help='base job name override; defaults to job type')
     parser.add_argument('payload_hash', type=str, help='user-generated payload hash')
+    parser.add_argument('username', type=str, help='user to submit job')
     parser.add_argument('enable_dedup', type=bool, help='flag to enable/disable job dedup')
     parser.add_argument('params', type=str,
                         help="""JSON job context, e.g. {
@@ -113,6 +212,8 @@ class SubmitJob(Resource):
         priority = int(request.form.get('priority', request.args.get('priority', 0)))
         tags = request.form.get('tags', request.args.get('tags', None))
 
+        username = request.form.get('username', request.args.get('username', None))
+
         job_name = request.form.get('name', request.args.get('name', None))
 
         payload_hash = request.form.get('payload_hash', request.args.get('payload_hash', None))
@@ -127,7 +228,7 @@ class SubmitJob(Resource):
                 raise Exception("Invalid value for param 'enable_dedup': {0}".format(enable_dedup))
 
             try:
-                if not tags is None:
+                if tags is not None:
                     tags = json.loads(tags)
             except Exception as e:
                 app.logger.error(str(e))
@@ -136,7 +237,7 @@ class SubmitJob(Resource):
             params = request.form.get('params', request.args.get('params', "{}"))
             app.logger.warning(params)
             try:
-                if not params is None:
+                if params is not None:
                     params = json.loads(params)
             except Exception as e:
                 app.logger.error(str(e))
@@ -145,6 +246,7 @@ class SubmitJob(Resource):
             app.logger.warning(job_type)
             app.logger.warning(job_queue)
             job_json = hysds_commons.job_utils.resolve_hysds_job(job_type, job_queue, priority, tags, params,
+                                                                 username=username,
                                                                  job_name=job_name,
                                                                  payload_hash=payload_hash,
                                                                  enable_dedup=enable_dedup)
@@ -413,7 +515,7 @@ class OnDemandJobs(Resource):
         is_passthrough_query = check_passthrough_query(params)
 
         rule = {
-            'username': 'example_user',
+            'username': 'ops',
             'workflow': hysds_io,
             'priority': priority,
             'enabled': True,
