@@ -19,8 +19,6 @@ import hysds_commons.job_utils
 from hysds_commons.action_utils import check_passthrough_query
 
 from mozart import app, mozart_es
-
-# import mozart.lib.job_utils  # TODO: unsure if this import is still needed
 import mozart.lib.queue_utils
 
 
@@ -83,17 +81,16 @@ class SubmitJob(Resource):
                 raise Exception(
                     "Invalid value for param 'enable_dedup': {0}".format(enable_dedup))
             try:
-                if not tags is None:
+                if tags is not None:
                     tags = json.loads(tags)
             except Exception as e:
                 raise Exception("Failed to parse input tags. '{0}' is malformed".format(tags))
 
-            params = request.form.get(
-                'params', request.args.get('params', "{}"))
+            params = request.form.get('params', request.args.get('params', "{}"))
             app.logger.warning(params)
 
             try:
-                if not params is None:
+                if params is not None:
                     params = json.loads(params)
             except Exception as e:
                 app.logger.error(str(e))
