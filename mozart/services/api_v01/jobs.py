@@ -67,12 +67,6 @@ class GetJobs(Resource):
 @job_ns.route('/user/<user>', endpoint='user-jobs')
 @job_ns.doc(responses={200: "Success", 500: "Query execution failed"}, description="Get list of user submitted job IDs")
 class UserJobs(Resource):
-    resp_model = job_ns.model('Jobs Listing Response(JSON)', {
-        'success': fields.Boolean(required=True, description="true/false, successful request"),
-        'message': fields.String(required=True, description="message describing success or failure"),
-        'result': fields.List(fields.String, required=True, description="list of job IDs")
-    })
-
     parser = job_ns.parser()
     parser.add_argument('offset', type=int, help="Job Listing Pagination Offset", default=0, required=False)
     parser.add_argument('page_size', type=int, help="Job Listing Pagination Size", default=250, required=False)

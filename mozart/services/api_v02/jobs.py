@@ -117,6 +117,109 @@ class SubmitJob(Resource):
         }
 
 
+@job_ns.route('/user/<user>', endpoint='user-jobs')
+@job_ns.doc(responses={200: "Success", 500: "Query execution failed"}, description="Get list of user submitted job IDs")
+class UserJobs(Resource):
+    parser = job_ns.parser()
+    parser.add_argument('offset', type=int, help="Job Listing Pagination Offset", default=0, required=False)
+    parser.add_argument('page_size', type=int, help="Job Listing Pagination Size", default=250, required=False)
+    parser.add_argument('type', type=str, help="job type + version (ie. topsapp:v1.0)", required=False)
+    parser.add_argument('tag', type=str, help="user defined job tag", required=False)
+    parser.add_argument('queue', type=str, help="submitted job queue", required=False)
+    parser.add_argument('priority', type=int, help="job priority, 0-9", required=False)
+    parser.add_argument('start_time', type=str, help="start time of @timestamp field", required=False)
+    parser.add_argument('end_time', type=str, help="start time of @timestamp field", required=False)
+    parser.add_argument('status', type=str, help="job status, ie. job-queued, job-started, job-completed, "
+                                                 "job-failed", required=False)
+
+    @job_ns.expect(parser)
+    def get(self, user):
+        """
+        return user submitted jobs from ElasticSearch (sorted by @timestamp desc)
+        """
+        offset = request.args.get('offset')
+        page_size = request.args.get('page_size')
+        job_type = request.args.get('job_type')
+        tag = request.args.get('tag')
+        queue = request.args.get('queue')
+        priority = request.args.get('priority')
+        start_time = request.args.get('start_time')
+        end_time = request.args.get('end_time')
+        status = request.args.get('status')
+
+        if offset:
+            try:
+                offset = int(offset)
+            except (ValueError, TypeError):
+                return {'success': False, 'message': 'offset must be an int'}, 400
+        if page_size:
+            try:
+                page_size = int(page_size)
+                if page_size > 250:
+                    page_size = 250
+            except (ValueError, TypeError):
+                return {'success': False, 'message': 'page_size must be an int'}, 400
+        if priority:
+            try:
+                priority = int(priority)
+                if priority > 9:
+                    priority = 9
+            except (ValueError, TypeError):
+                return {'success': False, 'message': 'priority must be an int'}, 400
+
+        query = {
+            "sort": [
+                {"@timestamp": {"order": "desc"}}
+            ],
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "term": {
+                                "job.username": user
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+
+        if offset:
+            query['from'] = offset
+        if page_size:
+            query['size'] = page_size
+        if tag:
+            query['query']['bool']['must'].append({"term": {"tags.keyword": tag}})
+        if job_type:
+            query['query']['bool']['must'].append({"term": {"job.type": job_type}})
+        if priority:
+            query['query']['bool']['must'].append({"term": {"job.priority": priority}})
+        if status:
+            query['query']['bool']['must'].append({"term": {"status": status}})
+        if queue:
+            query['query']['bool']['must'].append({"term": {"job.job_info.job_queue": queue}})
+        if start_time is not None or end_time is not None:
+            datetime_filter = {'range': {'@timestamp': {}}}
+            if start_time:
+                if start_time.isdigit():
+                    start_time = int(start_time)
+                datetime_filter['range']['@timestamp']['gte'] = start_time
+            if end_time:
+                if end_time.isdigit():
+                    end_time = int(end_time)
+                datetime_filter['range']['@timestamp']['lte'] = end_time
+            query['query']['bool']['must'].append(datetime_filter)
+
+        try:
+            res = mozart_es.search(index=JOB_STATUS_INDEX, body=query, _source=False)
+        except Exception as e:
+            return {'success': False, 'message': str(e), 'result': []}, 400
+        return {
+            'success': True,
+            'result': [doc['_id'] for doc in res['hits']['hits']]
+        }
+
+
 @queue_ns.route('/list', endpoint='queue-list')
 @queue_ns.doc(responses={200: "Success", 500: "Queue listing failed"},
               description="Get list of available job queues and return as JSON.")
