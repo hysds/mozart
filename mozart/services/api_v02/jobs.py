@@ -11,7 +11,7 @@ import json
 import traceback
 
 from flask import request
-from flask_restx import Namespace, Resource, fields
+from flask_restx import Namespace, Resource, fields, inputs
 
 from hysds.celery import app as celery_app
 from hysds.task_worker import do_submit_task
@@ -419,16 +419,25 @@ class OnDemandJobs(Resource):
         if not request_data:
             request_data = request.form
 
-        tag = request_data.get('tags', None)
-        job_type = request_data.get('job_type', None)
-        hysds_io = request_data.get('hysds_io', None)
-        queue = request_data.get('queue', None)
+        tag = request_data.get('tags')
+        job_type = request_data.get('job_type')
+        hysds_io = request_data.get('hysds_io')
+        queue = request_data.get('queue')
         priority = int(request_data.get('priority', 0))
-        query_string = request_data.get('query', None)
+        query_string = request_data.get('query')
         kwargs = request_data.get('kwargs', '{}')
-        time_limit = request_data.get('time_limit', None)
-        soft_time_limit = request_data.get('soft_time_limit', None)
-        disk_usage = request_data.get('disk_usage', None)
+        time_limit = request_data.get('time_limit')
+        soft_time_limit = request_data.get('soft_time_limit')
+        disk_usage = request_data.get('disk_usage')
+        enable_dedup = request_data.get('enable_dedup')
+        if enable_dedup is not None:
+            try:
+                enable_dedup = inputs.boolean(enable_dedup)
+            except ValueError as e:
+                return {
+                    'success': True,
+                    'message': str(e)
+                }, 400
 
         try:
             query = json.loads(query_string)
@@ -492,6 +501,8 @@ class OnDemandJobs(Resource):
 
         if disk_usage:
             rule['disk_usage'] = disk_usage
+        if enable_dedup is not None:
+            rule['enable_dedup'] = enable_dedup
 
         payload = {
             'type': 'job_iterator',
@@ -504,6 +515,7 @@ class OnDemandJobs(Resource):
 
         return {
             'success': True,
+            'message': 'task submitted successfully',
             'result': celery_task.id
         }
 
