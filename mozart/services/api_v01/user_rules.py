@@ -11,7 +11,7 @@ import json
 from datetime import datetime
 
 from flask import request
-from flask_restx import Namespace, Resource
+from flask_restx import Namespace, Resource, inputs
 
 from hysds_commons.action_utils import check_passthrough_query
 
@@ -44,6 +44,7 @@ class UserRules(Resource):
     post_parser.add_argument('time_limit', type=int, location='form', help='time limit for PGE job')
     post_parser.add_argument('soft_time_limit', type=int, location='form', help='soft time limit for PGE job')
     post_parser.add_argument('disk_usage', type=str, location='form', help='memory usage required for jon (KB, MB, GB)')
+    post_parser.add_argument('enable_dedup', type=inputs.boolean, location="form", help='enable job de-duplication')
 
     put_parser = user_rule_ns.parser()
     put_parser.add_argument('id', type=str, help="rule id")
@@ -58,6 +59,7 @@ class UserRules(Resource):
     put_parser.add_argument('time_limit', type=int, location='form', help='time limit for PGE job')
     put_parser.add_argument('soft_time_limit', type=int, location='form', help='soft time limit for PGE job')
     put_parser.add_argument('disk_usage', type=str, location='form', help='memory usage required for jon (KB, MB, GB)')
+    put_parser.add_argument('enable_dedup', type=inputs.boolean, location="form", help='enable job de-duplication')
 
     @user_rule_ns.expect(parser)
     def get(self):
@@ -126,6 +128,15 @@ class UserRules(Resource):
         time_limit = request_data.get('time_limit', None)
         soft_time_limit = request_data.get('soft_time_limit', None)
         disk_usage = request_data.get('disk_usage', None)
+        enable_dedup = request_data.get('enable_dedup')
+        if enable_dedup is not None:
+            try:
+                enable_dedup = inputs.boolean(enable_dedup)
+            except ValueError as e:
+                return {
+                    'success': False,
+                    'message': str(e)
+                }, 400
 
         username = "ops"  # TODO: add user role and permissions, hard coded to "ops" for now
 
@@ -240,6 +251,8 @@ class UserRules(Resource):
 
         if disk_usage:
             new_doc['disk_usage'] = disk_usage
+        if enable_dedup is not None:
+            new_doc['enable_dedup'] = enable_dedup
 
         result = mozart_es.index_document(index=user_rules_index, body=new_doc, refresh=True)
         return {
@@ -275,6 +288,15 @@ class UserRules(Resource):
         time_limit = request_data.get('time_limit', None)
         soft_time_limit = request_data.get('soft_time_limit', None)
         disk_usage = request_data.get('disk_usage', None)
+        enable_dedup = request_data.get('enable_dedup')
+        if enable_dedup is not None:
+            try:
+                enable_dedup = inputs.boolean(enable_dedup)
+            except ValueError as e:
+                return {
+                    'success': False,
+                    'message': str(e)
+                }, 400
 
         # check if job_type (hysds_io) exists in ElasticSearch (only if we're updating job_type)
         if hysds_io:
@@ -383,6 +405,8 @@ class UserRules(Resource):
 
         if 'disk_usage' in request_data:
             update_doc['disk_usage'] = disk_usage
+        if 'enable_dedup' in request_data:
+            update_doc['enable_dedup'] = enable_dedup
 
         app.logger.info('editing document id %s in user_rule index' % _id)
 

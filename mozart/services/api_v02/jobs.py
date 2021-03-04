@@ -360,16 +360,13 @@ class JobInfo(Resource):
 
 
 @on_demand_ns.route('', endpoint='on-demand')
-@on_demand_ns.doc(responses={200: "Success", 500: "Execution failed"}, description="Retrieve on demand jobs")
+@on_demand_ns.doc(responses={200: "Success", 500: "Execution failed"}, description="Retrieve/submit on demand jobs")
 class OnDemandJobs(Resource):
     """On Demand Jobs API."""
 
     resp_model = on_demand_ns.model('JsonResponse', {
-        'success': fields.Boolean(required=True, description="if 'false', encountered exception;"
-                                                             "otherwise no errors occurred"),
-        'message': fields.String(required=True, description="message describing success or failure"),
-        'objectid': fields.String(required=True, description="ID of indexed dataset"),
-        'index': fields.String(required=True, description="dataset index name"),
+        'success': fields.Boolean(required=True, description="if request was successful"),
+        'message': fields.String(required=True, description="message describing success or failure")
     })
 
     parser = on_demand_ns.parser()
@@ -383,6 +380,7 @@ class OnDemandJobs(Resource):
     parser.add_argument('time_limit', type=int, location="form", help='time limit for PGE job')
     parser.add_argument('soft_time_limit', type=int, location="form", help='soft time limit for PGE job')
     parser.add_argument('disk_usage', type=str, location="form", help='memory usage required for jon (KB, MB, GB)')
+    parser.add_argument('enable_dedup', type=inputs.boolean, location="form", help='enable job de-duplication')
 
     def get(self):
         """List available on demand jobs"""
@@ -435,7 +433,7 @@ class OnDemandJobs(Resource):
                 enable_dedup = inputs.boolean(enable_dedup)
             except ValueError as e:
                 return {
-                    'success': True,
+                    'success': False,
                     'message': str(e)
                 }, 400
 
