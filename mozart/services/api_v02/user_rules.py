@@ -374,7 +374,7 @@ class UserRules(Resource):
                 update_doc['soft_time_limit'] = None
             else:
                 if isinstance(soft_time_limit, int) and 0 < soft_time_limit <= 86400 * 7:
-                    update_doc['soft_time_limit'] = time_limit
+                    update_doc['soft_time_limit'] = soft_time_limit
                 else:
                     return {
                         'success': False,
