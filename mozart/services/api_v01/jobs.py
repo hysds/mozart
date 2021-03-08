@@ -255,8 +255,7 @@ class SubmitJob(Resource):
             ident = hysds_commons.job_utils.submit_hysds_job(job_json)
         except Exception as e:
             message = "Failed to submit job. {0}:{1}".format(type(e), str(e))
-            app.logger.warning(message)
-            app.logger.warning(traceback.format_exc(e))
+            app.logger.error(message)
             return {'success': False, 'message': message}, 500
 
         return {

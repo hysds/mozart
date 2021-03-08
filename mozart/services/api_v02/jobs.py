@@ -79,8 +79,7 @@ class SubmitJob(Resource):
             elif enable_dedup.strip().lower() == "false":
                 enable_dedup = False
             else:
-                raise Exception(
-                    "Invalid value for param 'enable_dedup': {0}".format(enable_dedup))
+                raise Exception("Invalid value for param 'enable_dedup': {0}".format(enable_dedup))
             try:
                 if tags is not None:
                     tags = json.loads(tags)
@@ -105,8 +104,7 @@ class SubmitJob(Resource):
             ident = hysds_commons.job_utils.submit_hysds_job(job_json)
         except Exception as e:
             message = "Failed to submit job. {0}:{1}".format(type(e), str(e))
-            app.logger.warning(message)
-            app.logger.warning(traceback.format_exc(e))
+            app.logger.error(message)
             return {'success': False, 'message': message}, 500
 
         return {
