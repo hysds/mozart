@@ -158,12 +158,15 @@ class UserJobs(Resource):
             query['query']['bool']['must'].append(datetime_filter)
 
         try:
-            res = mozart_es.search(index=JOB_STATUS_INDEX, body=query, _source=False)
+            res = mozart_es.search(index=JOB_STATUS_INDEX, body=query, _source=['tags'])
         except Exception as e:
             return {'success': False, 'message': str(e), 'result': []}, 400
         return {
             'success': True,
-            'result': [doc['_id'] for doc in res['hits']['hits']]
+            'result': [{
+                'id': doc['_id'],
+                'tags': doc['_source']['tags']
+            } for doc in res['hits']['hits']]
         }
 
 
@@ -177,7 +180,8 @@ class SubmitJob(Resource):
         'success': fields.Boolean(required=True, description="if 'false' encountered exception; "
                                                              "otherwise no errors occurred"),
         'message': fields.String(required=True, description="message describing success or failure"),
-        'result':  fields.String(required=True, description="HySDS job ID")
+        'result':  fields.String(required=True, description="HySDS job ID"),
+        'tags': fields.Raw(required=True, description='Submitted job tag')
     })
 
     parser = job_ns.parser()
@@ -246,10 +250,8 @@ class SubmitJob(Resource):
             app.logger.warning(job_type)
             app.logger.warning(job_queue)
             job_json = hysds_commons.job_utils.resolve_hysds_job(job_type, job_queue, priority, tags, params,
-                                                                 username=username,
-                                                                 job_name=job_name,
-                                                                 payload_hash=payload_hash,
-                                                                 enable_dedup=enable_dedup)
+                                                                 username=username, job_name=job_name,
+                                                                 payload_hash=payload_hash, enable_dedup=enable_dedup)
             ident = hysds_commons.job_utils.submit_hysds_job(job_json)
         except Exception as e:
             message = "Failed to submit job. {0}:{1}".format(type(e), str(e))
@@ -260,7 +262,8 @@ class SubmitJob(Resource):
         return {
             'success': True,
             'message': '',
-            'result': ident
+            'result': ident,
+            'tags': tags
         }
 
 
