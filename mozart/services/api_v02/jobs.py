@@ -525,8 +525,7 @@ class JobParams(Resource):
     """Job Params API."""
 
     resp_model = on_demand_ns.model('JsonResponse', {
-        'success': fields.Boolean(required=True, description="if 'false' encountered exception; "
-                                                             "otherwise no errors occurred"),
+        'success': fields.Boolean(required=True, description="if request was processed successfully"),
         'message': fields.String(required=True, description="message describing success or failure"),
         'objectid': fields.String(required=True, description="ID of indexed dataset"),
         'index': fields.String(required=True, description="dataset index name"),
@@ -572,5 +571,6 @@ class JobParams(Resource):
             'params': job_params,
             'time_limit': job_spec['_source']['time_limit'],
             'soft_time_limit': job_spec['_source']['soft_time_limit'],
-            'disk_usage': job_spec['_source']['disk_usage']
+            'disk_usage': job_spec['_source']['disk_usage'],
+            'enable_dedup': hysds_io['_source'].get('enable_dedup', True)
         }
