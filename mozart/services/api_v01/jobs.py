@@ -11,7 +11,7 @@ import json
 import traceback
 
 from flask import request
-from flask_restx import Namespace, Resource, fields
+from flask_restx import Namespace, Resource, fields, inputs
 
 from hysds.celery import app as celery_app
 from hysds.task_worker import do_submit_task
@@ -417,16 +417,13 @@ class ProductsStaged(Resource):
 
 
 @on_demand_ns.route('', endpoint='on-demand')
-@on_demand_ns.doc(responses={200: "Success", 500: "Execution failed"}, description="Retrieve on demand jobs")
+@on_demand_ns.doc(responses={200: "Success", 500: "Execution failed"}, description="Retrieve/submit on demand jobs")
 class OnDemandJobs(Resource):
     """On Demand Jobs API. (jobs retrieval and job submission)"""
 
     resp_model = on_demand_ns.model('JsonResponse', {
-        'success': fields.Boolean(required=True, description="if 'false', encountered exception; "
-                                                             "otherwise no errors occurred"),
-        'message': fields.String(required=True, description="message describing success or failure"),
-        'objectid': fields.String(required=True, description="ID of indexed dataset"),
-        'index': fields.String(required=True, description="dataset index name"),
+        'success': fields.Boolean(required=True, description="if request was successful"),
+        'message': fields.String(required=True, description="message describing success or failure")
     })
 
     parser = on_demand_ns.parser()
@@ -440,6 +437,7 @@ class OnDemandJobs(Resource):
     parser.add_argument('time_limit', type=int, location="form", help='time limit for PGE job')
     parser.add_argument('soft_time_limit', type=int, location="form", help='soft time limit for PGE job')
     parser.add_argument('disk_usage', type=str, location="form", help='memory usage required for jon (KB, MB, GB)')
+    parser.add_argument('enable_dedup', type=inputs.boolean, location="form", help='enable job de-duplication')
 
     def get(self):
         """List available on demand jobs"""
@@ -476,16 +474,25 @@ class OnDemandJobs(Resource):
         if not request_data:
             request_data = request.form
 
-        tag = request_data.get('tags', None)
-        job_type = request_data.get('job_type', None)
-        hysds_io = request_data.get('hysds_io', None)
-        queue = request_data.get('queue', None)
+        tag = request_data.get('tags')
+        job_type = request_data.get('job_type')
+        hysds_io = request_data.get('hysds_io')
+        queue = request_data.get('queue')
         priority = int(request_data.get('priority', 0))
-        query_string = request_data.get('query', None)
+        query_string = request_data.get('query')
         kwargs = request_data.get('kwargs', '{}')
-        time_limit = request_data.get('time_limit', None)
-        soft_time_limit = request_data.get('soft_time_limit', None)
-        disk_usage = request_data.get('disk_usage', None)
+        time_limit = request_data.get('time_limit')
+        soft_time_limit = request_data.get('soft_time_limit')
+        disk_usage = request_data.get('disk_usage')
+        enable_dedup = request_data.get('enable_dedup')
+        if enable_dedup is not None:
+            try:
+                enable_dedup = inputs.boolean(enable_dedup)
+            except ValueError as e:
+                return {
+                    'success': False,
+                    'message': str(e)
+                }, 400
 
         try:
             query = json.loads(query_string)
@@ -549,6 +556,8 @@ class OnDemandJobs(Resource):
 
         if disk_usage:
             rule['disk_usage'] = disk_usage
+        if enable_dedup is not None:
+            rule['enable_dedup'] = enable_dedup
 
         payload = {
             'type': 'job_iterator',
@@ -561,6 +570,7 @@ class OnDemandJobs(Resource):
 
         return {
             'success': True,
+            'message': 'task submitted successfully',
             'result': celery_task.id
         }
 
@@ -572,8 +582,7 @@ class JobParams(Resource):
     """Job Params API."""
 
     resp_model = on_demand_ns.model('JsonResponse', {
-        'success': fields.Boolean(required=True, description="if 'false' encountered exception;"
-                                                             "otherwise no errors occurred"),
+        'success': fields.Boolean(required=True, description="if request was processed successfully"),
         'message': fields.String(required=True, description="message describing success or failure"),
         'objectid': fields.String(required=True, description="ID of indexed dataset"),
         'index': fields.String(required=True, description="dataset index name"),
@@ -619,5 +628,6 @@ class JobParams(Resource):
             'params': job_params,
             'time_limit': job_spec['_source']['time_limit'],
             'soft_time_limit': job_spec['_source']['soft_time_limit'],
-            'disk_usage': job_spec['_source']['disk_usage']
+            'disk_usage': job_spec['_source']['disk_usage'],
+            'enable_dedup': hysds_io['_source'].get('enable_dedup', True)
         }

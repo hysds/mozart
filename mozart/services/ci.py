@@ -117,11 +117,13 @@ class JobRegistration(Resource):
     @job_registration_ns.expect(delete_parser)
     def delete(self):
         """deletes Jenkins job"""
-        request_data = request.json or request.form
-        repo = request_data.get('repo')
-        branch = request_data.get('branch')
+        repo = request.args.get('repo')
+        branch = request.args.get('branch')
         app.logger.info("repo: %s" % repo)
         app.logger.info("branch: %s" % branch)
+
+        if repo is None:
+            return {'success': True, 'message': 'repo not supplied'}, 400
 
         job_name = get_ci_job_name(repo, branch)
         if job_name is None:
