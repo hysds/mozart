@@ -15,6 +15,9 @@ setup(
     include_package_data=True,
     zip_safe=False,
     install_requires=[
+        # TODO: remove this pin on click once this celery issue is resolved:
+        # https://github.com/celery/celery/issues/6768
+        'click>=7.0,<8.0',
         'flask-restx>=0.4.0',
         'gunicorn>=19.1.1',
         'gevent>=1.1.1',
