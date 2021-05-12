@@ -15,7 +15,7 @@ setup(
     include_package_data=True,
     zip_safe=False,
     install_requires=[
-        'Flask>=0.10.1',
+        'flask-restx>=0.4.0',
         'gunicorn>=19.1.1',
         'gevent>=1.1.1',
         'eventlet>=0.17.4',
@@ -32,9 +32,8 @@ setup(
         'boto>=2.38.0',
         'python-dateutil',
         'elasticsearch>=7.0.0,<8.0.0',
-        'pytz',
-        'numpy',
-        'flask-restx>=0.4.0',
         'python-jenkins>=1.7.0',
-        'future>=0.17.1']
+        'future>=0.17.1',
+        'pytz',
+        'numpy']
 )
