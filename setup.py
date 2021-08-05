@@ -35,7 +35,7 @@ setup(
         'pymongo>=2.7.2',
         'boto>=2.38.0',
         'python-dateutil',
-        'elasticsearch>=7.0.0,<8.0.0',
+        'elasticsearch>=7.0.0,<7.14.0',
         'python-jenkins>=1.7.0',
         'future>=0.17.1',
         'pytz',
