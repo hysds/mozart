@@ -19,12 +19,13 @@ setup(
         # https://github.com/celery/celery/issues/6768
         'click>=7.0,<8.0',
         # TODO: remove these pins on flask/extensions once the celery issue above is resolved
-        'flask-restx>=0.4.0',
+        'flask-restx>=0.5.1',
+        'Flask>2.0.0,<3.0.0',
         'Flask-SQLAlchemy>=2.5.1,<3.0.0',
-        'Flask-WTF>=0.14.3,<1.0.0',
+        'Flask-WTF>=0.15.1,<1.0.0',
         'Flask-DebugToolbar>=0.11.0,<1.0.0',
         'Flask-Login>=0.5.0,<1.0.0',
-        'gunicorn>=19.1.1',
+        'gunicorn>=20.1.0',
         'gevent>=1.1.1',
         'eventlet>=0.17.4',
         'requests>=2.7.0',
