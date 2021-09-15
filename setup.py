@@ -17,10 +17,10 @@ setup(
     install_requires=[
         # TODO: remove this pin on click once this celery issue is resolved:
         # https://github.com/celery/celery/issues/6768
-        'click>=7.0,<8.0',
+        # 'click>=7.0,<8.0',  # don't think we need click here because its nto used by mozart
         # TODO: remove these pins on flask/extensions once the celery issue above is resolved
-        'flask-restx>=0.5.1',
         'Flask>2.0.0,<3.0.0',
+        'flask-restx>=0.5.1',
         'Flask-SQLAlchemy>=2.5.1,<3.0.0',
         'Flask-WTF>=0.15.1,<1.0.0',
         'Flask-DebugToolbar>=0.11.0,<1.0.0',
