@@ -36,5 +36,7 @@ setup(
         'python-jenkins>=1.7.0',
         'future>=0.17.1',
         'pytz',
-        'numpy']
+        'numpy',
+        "werkzeug==2.1.2",  # TODO: remove this pin after fix has been made https://stackoverflow.com/a/73105878
+    ]
 )
