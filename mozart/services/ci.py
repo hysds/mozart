@@ -91,9 +91,33 @@ class JobRegistration(Resource):
     @job_registration_ns.expect(parser)
     def post(self):
         """Register jobs in jenkins"""
-        request_data = request.json or request.form
+        request_data = request.form
         repo = request_data.get('repo')
         branch = request_data.get('branch')
+
+        # if repo is None at this point, the request body may have come in as JSON - see Otello issue #14
+        #
+        # Note that the python requests module does some magic with json payloads passed as data but which 
+        # does not set "Content-type:application/json". In this case, the request data is available as 
+        # request.form above. 
+        #
+        # However, in the event the endpoint is reached by another means (e.g. curl), Content-type must be 
+        # specified for JSON. In this event, request.form will not be None, but 'repo' and 'branch' will be 
+        # and the request data is accessed via request.json. 
+        #
+        # It is an error to pass the data as JSON w/o specifying Content-type in all cases
+        # besides using python requests as described above. Nothing can be done here for that
+        # case.
+        #
+        if repo is None:
+            try:
+                 request_data = request.json
+                 repo = request_data.get('repo')
+                 branch = request_data.get('branch')
+            except Exception as e:
+                 # fall through to empty repo/branch
+                 app.logger.warning(f"no JSON data found {e}")
+
         app.logger.info("repo: %s" % repo)
         app.logger.info("branch: %s" % branch)
 
@@ -212,11 +236,22 @@ class JobBuilder(Resource):
     @build_job_ns.expect(parser)
     def post(self, job_name=None):
         """start Jenkins build"""
-        request_data = request.json or request.form
+        request_data = request.form
 
         if job_name is None:
             repo = request_data.get('repo')
             branch = request_data.get('branch')
+
+            # Check json if repo not found - see JobRegistration.post() above.
+            if repo is None:
+                try:
+                     request_data = request.json
+                     repo = request_data.get('repo')
+                     branch = request_data.get('branch')
+                except Exception as e:
+                     # fall through to empty repo/branch
+                     app.logger.warning(f"no JSON data found {e}")
+
             if repo is None:
                 return {
                     'success': False,
