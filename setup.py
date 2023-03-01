@@ -38,5 +38,6 @@ setup(
         'pytz',
         'numpy',
         "werkzeug>=2.2.0",  # TODO: remove this pin after fix has been made https://stackoverflow.com/a/73105878
+        "cryptography>=39.0.0"
     ]
 )
