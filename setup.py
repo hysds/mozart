@@ -20,6 +20,7 @@ setup(
         'click>=7.0,<8.0',
         # TODO: remove these pins on flask/extensions once the celery issue above is resolved
         'flask-restx>=0.4.0',
+        'SQLAlchemy<=1.4',
         'Flask-SQLAlchemy>=2.5.1,<3.0.0',
         'Flask-WTF>=0.14.3,<1.0.0',
         'Flask-DebugToolbar>=0.11.0,<1.0.0',
