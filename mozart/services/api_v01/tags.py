@@ -38,17 +38,17 @@ class UserTags(Resource):
         tag = request_data.get('tag')
         app.logger.info('_id: %s\n _index: %s\n tag: %s' % (_id, _index, tag))
 
-        if _index != 'job_status-current':
-            app.logger.error('user tags only for index: job_status-current')
-            return {
-                'success': False,
-                'message': 'user tags only for index: job_status-current'
-            }, 400
-
         if _id is None or _index is None or tag is None:
             return {
                 'success': False,
                 'message': 'id, index and tag must be supplied'
+            }, 400
+
+        if not _index.startswith("job_status-"):
+            app.logger.error('user tags only for index: job_status-*')
+            return {
+                'success': False,
+                'message': 'user tags only for index: job_status-*'
             }, 400
 
         dataset = mozart_es.get_by_id(index=_index, id=_id, ignore=404)
