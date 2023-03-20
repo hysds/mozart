@@ -327,7 +327,7 @@ class GetJobStatus(Resource):
         if _id is None:
             return {'success': False, 'message': 'id not supplied'}, 400
 
-        job_status = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404, _source=['status'])
+        job_status = mozart_es.search_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404, _source=['status'])
         if job_status['found'] is False:
             return {
                 'success': False,
@@ -367,7 +367,7 @@ class GetJobInfo(Resource):
                 'message': 'id must be supplied (as query param or url param)'
             }, 400
 
-        info = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404)
+        info = mozart_es.search_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404)
         if info['found'] is False:
             return {
                 'success': False,
@@ -387,7 +387,7 @@ class GetJobInfo(Resource):
 class ProductsStaged(Resource):
     def get(self, _id):
         doc_fields = ['status', 'job.job_info.metrics.products_staged']
-        prod = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, _source_includes=doc_fields, ignore=404)
+        prod = mozart_es.search_by_id(index=JOB_STATUS_INDEX, id=_id, _source_includes=doc_fields, ignore=404)
         app.logger.info('fetch products staged for %s' % _id)
 
         if prod['found'] is False:

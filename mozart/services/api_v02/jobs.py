@@ -280,7 +280,7 @@ class JobStatus(Resource):
         if _id is None:
             return {'success': False, 'message': 'id not supplied'}, 400
 
-        job_status = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404, _source=['status'])
+        job_status = mozart_es.search_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404, _source=['status'])
         if job_status['found'] is False:
             return {
                 'success': False,
@@ -346,7 +346,7 @@ class JobInfo(Resource):
                 }, 400
             _id = request.args.get('id')
 
-        info = mozart_es.get_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404)
+        info = mozart_es.search_by_id(index=JOB_STATUS_INDEX, id=_id, ignore=404)
         if info['found'] is False:
             return {
                 'success': False,

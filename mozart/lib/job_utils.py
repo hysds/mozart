@@ -17,7 +17,7 @@ def get_job_status(_id):
         raise Exception("'id' must be supplied by request")
 
     es_index = "job_status-current"
-    status = mozart_es.get_by_id(index=es_index, id=_id, _source_includes=['status'], ignore=404)
+    status = mozart_es.search_by_id(index=es_index, id=_id, _source_includes=['status'], ignore=404)
     if status['found'] is False:
         raise Exception("job _id not found")
 
@@ -45,7 +45,7 @@ def get_job_info(_id):
         raise Exception("'id' must be supplied by request")
 
     es_index = "job_status-current"
-    result = mozart_es.get_by_id(index=es_index, id=_id, ignore=404)
+    result = mozart_es.search_by_id(index=es_index, id=_id, ignore=404)
     if result['found'] is False:
         raise Exception('job _id not found: %s' % _id)
 
