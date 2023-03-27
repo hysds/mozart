@@ -9,7 +9,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='mozart',
-    version='2.1.0',
+    version='2.2.0',
     long_description='HySDS job orchestration/worker web interface',
     packages=find_packages(),
     include_package_data=True,
@@ -33,7 +33,7 @@ setup(
         'boto>=2.38.0',
         'python-dateutil',
         'elasticsearch>=7.0.0,<7.14.0',
-        'python-jenkins>=1.7.0',
+        'python-jenkins==1.7.0',
         'future>=0.17.1',
         'pytz',
         'numpy',
