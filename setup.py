@@ -9,13 +9,13 @@ from setuptools import setup, find_packages
 
 setup(
     name='mozart',
-    version='2.2.0',
+    version='2.2.1',
     long_description='HySDS job orchestration/worker web interface',
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
     install_requires=[
-        'Flask>=2.2.0',
+        'Flask<2.3.0',  # TODO: remove kluge when Flask-DebugToolbar fixes import error
         'flask-restx>=0.5.1',
         'Flask-SQLAlchemy>=3.0.0',
         'Flask-WTF>=0.15.1',
