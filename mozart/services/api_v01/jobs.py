@@ -193,6 +193,9 @@ class SubmitJob(Resource):
     parser.add_argument('payload_hash', type=str, help='user-generated payload hash')
     parser.add_argument('username', type=str, help='user to submit job')
     parser.add_argument('enable_dedup', type=bool, help='flag to enable/disable job dedup')
+    parser.add_argument('soft_time_limit', type=str, help='soft time limit for job execution')
+    parser.add_argument('time_limit', type=str, help='hard time limit for job execution')
+    parser.add_argument('disk_usage', type=str, help='disk usage for PGE (KB, MB, GB, etc)')
     parser.add_argument('params', type=str,
                         help="""JSON job context, e.g. {
                              "entity_id": "LC80101172015002LGN00",
@@ -223,6 +226,10 @@ class SubmitJob(Resource):
         payload_hash = request.form.get('payload_hash', request.args.get('payload_hash', None))
         enable_dedup = str(request.form.get('enable_dedup', request.args.get('enable_dedup', "true")))
 
+        soft_time_limit = request.form.get('soft_time_limit', request.args.get('soft_time_limit', None))
+        time_limit = request.form.get('time_limit', request.args.get('time_limit', None))
+        disk_usage = request.form.get('disk_usage', request.args.get('disk_usage', None))
+
         try:
             if enable_dedup.strip().lower() == "true":
                 enable_dedup = True
@@ -230,6 +237,11 @@ class SubmitJob(Resource):
                 enable_dedup = False
             else:
                 raise Exception("Invalid value for param 'enable_dedup': {0}".format(enable_dedup))
+
+            if soft_time_limit is not None:
+                soft_time_limit = int(soft_time_limit)
+            if time_limit is not None:
+                time_limit = int(time_limit)
 
             try:
                 if tags is not None:
@@ -251,13 +263,14 @@ class SubmitJob(Resource):
             app.logger.warning(job_queue)
             job_json = hysds_commons.job_utils.resolve_hysds_job(job_type, job_queue, priority, tags, params,
                                                                  username=username, job_name=job_name,
-                                                                 payload_hash=payload_hash, enable_dedup=enable_dedup)
+                                                                 payload_hash=payload_hash, enable_dedup=enable_dedup,
+                                                                 soft_time_limit=soft_time_limit, time_limit=time_limit,
+                                                                 disk_usage=disk_usage)
             ident = hysds_commons.job_utils.submit_hysds_job(job_json)
         except Exception as e:
             message = "Failed to submit job. {0}:{1}".format(type(e), str(e))
             app.logger.error(message)
             return {'success': False, 'message': message}, 500
-
         return {
             'success': True,
             'message': '',
