@@ -240,8 +240,18 @@ class SubmitJob(Resource):
 
             if soft_time_limit is not None:
                 soft_time_limit = int(soft_time_limit)
+                if soft_time_limit < 1:
+                    return {
+                        'success': False,
+                        'message': "soft_time_limit must be greater than 0"
+                    }, 400
             if time_limit is not None:
                 time_limit = int(time_limit)
+                if time_limit < 1:
+                    return {
+                        'success': False,
+                        'message': "time_limit must be greater than 0"
+                    }, 400
 
             try:
                 if tags is not None:
