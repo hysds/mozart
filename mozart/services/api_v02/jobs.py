@@ -54,7 +54,21 @@ class SubmitJob(Resource):
     parser.add_argument('payload_hash', required=False, type=str, help='user-generated payload hash')
     parser.add_argument('username', type=str, help='user to submit job')
     parser.add_argument('enable_dedup', required=False, type=bool, help='flag to enable/disable job dedup')
-    parser.add_argument('params', required=False, type=str, help="JSON job context for PGE")
+    parser.add_argument('soft_time_limit', type=str, help='soft time limit for job execution')
+    parser.add_argument('time_limit', type=str, help='hard time limit for job execution')
+    parser.add_argument('disk_usage', type=str, help='disk usage for PGE (KB, MB, GB, etc)')
+    parser.add_argument('params', required=False, type=str,
+                        help="""JSON job context for PGE, e.g. {
+                            "entity_id": "LC80101172015002LGN00",
+                            "min_lat": -79.09923,
+                            "max_lon": -125.09297,
+                            "id": "dumby-product-20161114180506209624",
+                            "acq_time": "2015-01-02T15:49:05.571384",
+                            "min_sleep": 1,
+                            "max_lat": -77.7544,
+                            "min_lon": -139.66082,
+                            "max_sleep": 10
+                        }""")
 
     @job_ns.marshal_with(resp_model)
     @job_ns.expect(parser, validate=True)
@@ -73,6 +87,10 @@ class SubmitJob(Resource):
         payload_hash = request.form.get('payload_hash', request.args.get('payload_hash', None))
         enable_dedup = str(request.form.get('enable_dedup', request.args.get('enable_dedup', "true")))
 
+        soft_time_limit = request.form.get('soft_time_limit', request.args.get('soft_time_limit', None))
+        time_limit = request.form.get('time_limit', request.args.get('time_limit', None))
+        disk_usage = request.form.get('disk_usage', request.args.get('disk_usage', None))
+
         try:
             if enable_dedup.strip().lower() == "true":
                 enable_dedup = True
@@ -80,6 +98,22 @@ class SubmitJob(Resource):
                 enable_dedup = False
             else:
                 raise Exception("Invalid value for param 'enable_dedup': {0}".format(enable_dedup))
+
+            if soft_time_limit is not None:
+                soft_time_limit = int(soft_time_limit)
+                if soft_time_limit < 1:
+                    return {
+                        'success': False,
+                        'message': "soft_time_limit must be greater than 0"
+                    }, 400
+            if time_limit is not None:
+                time_limit = int(time_limit)
+                if time_limit < 1:
+                    return {
+                        'success': False,
+                        'message': "time_limit must be greater than 0"
+                    }, 400
+
             try:
                 if tags is not None:
                     tags = json.loads(tags)
@@ -100,13 +134,14 @@ class SubmitJob(Resource):
             app.logger.warning(job_queue)
             job_json = hysds_commons.job_utils.resolve_hysds_job(job_type, job_queue, priority, tags, params,
                                                                  username=username, job_name=job_name,
-                                                                 payload_hash=payload_hash, enable_dedup=enable_dedup)
+                                                                 payload_hash=payload_hash, enable_dedup=enable_dedup,
+                                                                 soft_time_limit=soft_time_limit, time_limit=time_limit,
+                                                                 disk_usage=disk_usage)
             ident = hysds_commons.job_utils.submit_hysds_job(job_json)
         except Exception as e:
             message = "Failed to submit job. {0}:{1}".format(type(e), str(e))
             app.logger.error(message)
             return {'success': False, 'message': message}, 500
-
         return {
             'success': True,
             'message': '',
