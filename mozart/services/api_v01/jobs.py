@@ -196,7 +196,7 @@ class SubmitJob(Resource):
     parser.add_argument('soft_time_limit', type=str, help='soft time limit for job execution')
     parser.add_argument('time_limit', type=str, help='hard time limit for job execution')
     parser.add_argument('disk_usage', type=str, help='disk usage for PGE (KB, MB, GB, etc)')
-    parser.add_argument('publish_override_ok', type=int, help='enable a job to override an existing dataset on publish')
+    parser.add_argument('publish_overwrite_ok', type=int, help='enable a job to overwrite an existing dataset on publish')
     parser.add_argument('params', type=str,
                         help="""JSON job context, e.g. {
                              "entity_id": "LC80101172015002LGN00",
@@ -231,7 +231,7 @@ class SubmitJob(Resource):
         time_limit = request.form.get('time_limit', request.args.get('time_limit', None))
         disk_usage = request.form.get('disk_usage', request.args.get('disk_usage', None))
 
-        publish_override_ok = request.form.get('publish_override_ok', request.args.get('publish_override_ok', False))
+        publish_overwrite_ok = request.form.get('publish_overwrite_ok', request.args.get('publish_overwrite_ok', False))
 
         try:
             if enable_dedup.strip().lower() == "true":
@@ -278,7 +278,7 @@ class SubmitJob(Resource):
                                                                  username=username, job_name=job_name,
                                                                  payload_hash=payload_hash, enable_dedup=enable_dedup,
                                                                  soft_time_limit=soft_time_limit, time_limit=time_limit,
-                                                                 disk_usage=disk_usage, publish_override_ok=publish_override_ok)
+                                                                 disk_usage=disk_usage, publish_overwrite_ok=publish_overwrite_ok)
             ident = hysds_commons.job_utils.submit_hysds_job(job_json)
         except Exception as e:
             message = "Failed to submit job. {0}:{1}".format(type(e), str(e))
