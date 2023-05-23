@@ -57,7 +57,7 @@ class SubmitJob(Resource):
     parser.add_argument('soft_time_limit', type=str, help='soft time limit for job execution')
     parser.add_argument('time_limit', type=str, help='hard time limit for job execution')
     parser.add_argument('disk_usage', type=str, help='disk usage for PGE (KB, MB, GB, etc)')
-    parser.add_argument('publish_overwrite_ok', type=int, help='enable a job to overwrite an existing dataset on publish')
+    parser.add_argument('publish_overwrite_ok', type=bool, help='enable a job to overwrite an existing dataset on publish')
     parser.add_argument('params', required=False, type=str,
                         help="""JSON job context for PGE, e.g. {
                             "entity_id": "LC80101172015002LGN00",
