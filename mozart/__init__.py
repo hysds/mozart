@@ -12,8 +12,9 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_cors import CORS  # TODO: will remove this once we figure out the proper host for the UI
 
-from hysds_commons.elasticsearch_utils import ElasticsearchUtility
 from jenkins import Jenkins
+
+from hysds.es_util import get_mozart_es
 
 
 class ReverseProxied(object):
@@ -106,7 +107,7 @@ lm.login_view = 'views/main.login'
 app.register_error_handler(404, resource_not_found)
 
 # Mozart's connection to Elasticsearch
-mozart_es = ElasticsearchUtility(app.config['ES_URL'])
+mozart_es = get_mozart_es()
 
 # add jenkins connection
 if app.config.get('JENKINS_ENABLED', False):
