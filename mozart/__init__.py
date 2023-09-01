@@ -108,9 +108,9 @@ app.register_error_handler(404, resource_not_found)
 # Mozart's connection to Elasticsearch
 es_cluster_mode = app.config['ES_CLUSTER_MODE']
 if es_cluster_mode:
-    hosts = [app.config.ES_URL, app.config.GRQ_ES_URL, app.config.METRICS_ES_URL]
+    hosts = [app.config['ES_URL'], app.config['GRQ_ES_URL'], app.config['METRICS_ES_URL']]
 else:
-    hosts = [app.config.ES_URL]
+    hosts = [app.config['ES_URL']]
 mozart_es = ElasticsearchUtility(hosts)
 
 # add jenkins connection
