@@ -18,9 +18,9 @@ from jenkins import Jenkins
 
 class ReverseProxied(object):
     """
-    Wrap the application in this middleware and configure the 
-    front-end server to add these headers, to let you quietly bind 
-    this to a URL other than / and to an HTTP scheme that is 
+    Wrap the application in this middleware and configure the
+    front-end server to add these headers, to let you quietly bind
+    this to a URL other than / and to an HTTP scheme that is
     different than what is used locally.
 
     In nginx:
@@ -106,7 +106,12 @@ lm.login_view = 'views/main.login'
 app.register_error_handler(404, resource_not_found)
 
 # Mozart's connection to Elasticsearch
-mozart_es = ElasticsearchUtility(app.config['ES_URL'])
+es_cluster_mode = app.config['ES_CLUSTER_MODE']
+if es_cluster_mode:
+    hosts = [app.config.ES_URL, app.config.GRQ_ES_URL, app.config.METRICS_ES_URL]
+else:
+    hosts = [app.config.ES_URL]
+mozart_es = ElasticsearchUtility(hosts)
 
 # add jenkins connection
 if app.config.get('JENKINS_ENABLED', False):
