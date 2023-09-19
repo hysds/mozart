@@ -74,7 +74,7 @@ if __name__ == "__main__":
 
         for template in templates:
             # Copy templates to etc/ directory
-            template_file = f"{args.template_dir}/mozart/etc/{template}"
+            template_file = f"{args.template_dir}/{template}"
             template_doc_name = template.split(".template")[0]
             print(f"Creating ES index template for {template}")
             write_template(template_doc_name, template_file)
