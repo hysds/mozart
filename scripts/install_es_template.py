@@ -50,6 +50,20 @@ def write_template(index, tmpl_file):
     print("Successfully installed template %s" % index)
 
 
+def write_index_template(index, tmpl_file):
+    """Write template to ES."""
+
+    with open(tmpl_file) as f:
+        tmpl = Template(f.read()).render(index=index)
+
+    # https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.delete_template
+    mozart_es.es.indices.delete_index_template(name=index, ignore=[400, 404])
+
+    # https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch.client.IndicesClient.put_template
+    mozart_es.es.indices.put_index_template(name=index, body=tmpl)
+    print("Successfully installed index template %s" % index)
+
+
 if __name__ == "__main__":
     args = get_parser().parse_args()
 
@@ -77,4 +91,4 @@ if __name__ == "__main__":
             template_file = f"{args.template_dir}/{template}"
             template_doc_name = template.split(".template")[0]
             print(f"Creating ES index template for {template}")
-            write_template(template_doc_name, template_file)
+            write_index_template(template_doc_name, template_file)
