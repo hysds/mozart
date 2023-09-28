@@ -25,6 +25,13 @@ def get_parser():
         type=str,
         help="Specify the Mozart ILM policy file.",
     )
+    parser.add_argument(
+        "--ilm_policy_name",
+        required=False,
+        type=str,
+        default="ilm_policy_mozart",
+        help="Optionally specify the Mozart ILM policy name. Defaults to 'ilm_policy_mozart'",
+    )
     return parser
 
 
@@ -37,5 +44,5 @@ if __name__ == "__main__":
     # https://elasticsearch-py.readthedocs.io/en/7.x/api.html#elasticsearch.client.IlmClient
     # ignore 400 cause by IndexAlreadyExistsException when creating an index
     es_ilm = IlmClient(mozart_es.es)
-    es_ilm.put_lifecycle(policy="ilm_policy_mozart", body=ilm_policy)
+    es_ilm.put_lifecycle(policy=args.ilm_policy_name, body=ilm_policy)
     print(f"Successfully installed ILM policy to index-delete-policy:\n{json.dumps(ilm_policy, indent=2)}")
