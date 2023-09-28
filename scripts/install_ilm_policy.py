@@ -45,4 +45,4 @@ if __name__ == "__main__":
     # ignore 400 cause by IndexAlreadyExistsException when creating an index
     es_ilm = IlmClient(mozart_es.es)
     es_ilm.put_lifecycle(policy=args.ilm_policy_name, body=ilm_policy)
-    print(f"Successfully installed ILM policy to index-delete-policy:\n{json.dumps(ilm_policy, indent=2)}")
+    print(f"Successfully installed ILM policy to {args.ilm_policy_name}:\n{json.dumps(ilm_policy, indent=2)}")
