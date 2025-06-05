@@ -9,7 +9,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='mozart',
-    version='2.3.1',
+    version='2.3.2',
     long_description='HySDS job orchestration/worker web interface',
     packages=find_packages(),
     include_package_data=True,
@@ -22,7 +22,7 @@ setup(
         'Flask-DebugToolbar>=0.11.0',
         'Flask-Login>=0.5.0',
         'gunicorn>=20.1.0',
-        'gevent>=1.1.1',
+        'gevent>=1.1.1,<25.4.1',
         'eventlet>=0.33.3',
         'requests>=2.7.0',
         'simpleldap>=0.8',
