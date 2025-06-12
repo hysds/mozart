@@ -1,7 +1,3 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
 from future import standard_library
 standard_library.install_aliases()
 
@@ -28,7 +24,7 @@ def get_queue_names(_id):
         if spec['found'] is True:
             spec = spec['_source']
     except Exception as e:
-        app.logger.warn("Failed to get job-spec: {0} proceeding without it. {1}:{2}".format(_id, type(e), e))
+        app.logger.warn(f"Failed to get job-spec: {_id} proceeding without it. {type(e)}:{e}")
 
     # adding backwards compatibility to queues
     required = set(spec.get("required-queues", spec.get("required_queues", [])))

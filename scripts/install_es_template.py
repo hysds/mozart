@@ -1,10 +1,6 @@
 #!/usr/bin/env python
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-from __future__ import absolute_import
-from builtins import open
 from future import standard_library
+
 standard_library.install_aliases()
 
 import argparse
@@ -18,14 +14,16 @@ mozart_es = get_mozart_es()
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(description="Tool to install Mozart ES templates to the cluster.")
+    parser = argparse.ArgumentParser(
+        description="Tool to install Mozart ES templates to the cluster."
+    )
     parser.add_argument(
         "--install_job_templates",
         required=False,
         action="store_true",
         default=False,
         help="Optionally specify this flag to install the job templates (job_status, worker_status, "
-             "event_status, task_status).",
+        "event_status, task_status).",
     )
     parser.add_argument(
         "--template_dir",
@@ -71,7 +69,9 @@ if __name__ == "__main__":
         indices = ("containers", "job_specs", "hysds_ios")
 
         curr_file = os.path.dirname(__file__)
-        tmpl_file = os.path.abspath(os.path.join(curr_file, '..', 'configs', 'es_template.json'))
+        tmpl_file = os.path.abspath(
+            os.path.join(curr_file, "..", "configs", "es_template.json")
+        )
         tmpl_file = os.path.normpath(tmpl_file)
 
         for index in indices:
@@ -81,10 +81,12 @@ if __name__ == "__main__":
             "job_status.template",
             "worker_status.template",
             "task_status.template",
-            "event_status.template"
+            "event_status.template",
         ]
         if args.template_dir is None:
-            raise RuntimeError(f"Must specify --template_dir when installing job templates.")
+            raise RuntimeError(
+                "Must specify --template_dir when installing job templates."
+            )
 
         for template in templates:
             # Copy templates to etc/ directory

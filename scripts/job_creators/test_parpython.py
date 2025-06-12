@@ -1,17 +1,7 @@
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-from __future__ import absolute_import
-from builtins import int
 from future import standard_library
-standard_library.install_aliases()
-import os
-import sys
-import ftplib
-from urllib.parse import urlsplit
-from pprint import pprint, pformat
 
-from mozart import app
+standard_library.install_aliases()
+from pprint import pprint
 
 
 def createParPythonMapJob(info):
@@ -36,10 +26,11 @@ def createParPythonMapJob(info):
 
     # build parrams
     job = {
-        'type': 'test_map_parpython',
-        'name': 'test_map_parpython-%04d-%02d' % (int(info['year']), int(info['month'])),
-        'params': info,
-        'localize_urls': []
+        "type": "test_map_parpython",
+        "name": "test_map_parpython-%04d-%02d"
+        % (int(info["year"]), int(info["month"])),
+        "params": info,
+        "localize_urls": [],
     }
 
     print("Job:")
@@ -68,10 +59,10 @@ def createParPythonReduceJob(info):
 
     # build parrams
     job = {
-        'type': 'test_reduce_parpython',
-        'name': 'test_reduce_parpython',
-        'params': info,
-        'localize_urls': []
+        "type": "test_reduce_parpython",
+        "name": "test_reduce_parpython",
+        "params": info,
+        "localize_urls": [],
     }
 
     print("Job:")

@@ -1,9 +1,5 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
-from builtins import str
 from future import standard_library
+
 standard_library.install_aliases()
 from mozart import db
 
@@ -31,4 +27,4 @@ class User(db.Model):
         return str(self.id)
 
     def __repr__(self):
-        return '<User %r>' % (self.id)
+        return "<User %r>" % (self.id)

@@ -1,14 +1,8 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
 from future import standard_library
+
 standard_library.install_aliases()
 import os
-import sys
-from pprint import pprint, pformat
-
-from mozart import app
+from pprint import pprint
 
 
 def createJob(info):
@@ -39,22 +33,22 @@ def createJob(info):
 
     # build params
     params = {}
-    params['host'] = info['host']
-    params['data_dir'] = info['data_dir']
-    params['signal_file'] = info['signal_file']
-    params['staged_prod_dir'] = info['staged_prod_dir']
-    params['staged_work_dir'] = info['staged_work_dir']
-    params['staged_failed_dir'] = info['staged_failed_dir']
-    params['datasets_file'] = info['datasets_file']
-    params['grq_update_url'] = info['grq_update_url']
-    params['mozart_host'] = info['mozart_host']
-    params['product_processed_queue'] = info['product_processed_queue']
-    params['staged_work_url'] = info['staged_work_url']
+    params["host"] = info["host"]
+    params["data_dir"] = info["data_dir"]
+    params["signal_file"] = info["signal_file"]
+    params["staged_prod_dir"] = info["staged_prod_dir"]
+    params["staged_work_dir"] = info["staged_work_dir"]
+    params["staged_failed_dir"] = info["staged_failed_dir"]
+    params["datasets_file"] = info["datasets_file"]
+    params["grq_update_url"] = info["grq_update_url"]
+    params["mozart_host"] = info["mozart_host"]
+    params["product_processed_queue"] = info["product_processed_queue"]
+    params["staged_work_url"] = info["staged_work_url"]
     job = {
-        'type': 'product_ingest',
-        'name': os.path.basename(info['staged_prod_dir']),
-        'params': params,
-        'localize_urls': []
+        "type": "product_ingest",
+        "name": os.path.basename(info["staged_prod_dir"]),
+        "params": params,
+        "localize_urls": [],
     }
 
     pprint(job, indent=2)

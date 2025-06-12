@@ -1,6 +1,12 @@
 mozart
 ======
 
+## Requirements
+
+- Python 3.12 or higher
+
+## Installation
+
 To install/develop
 --------------------------
 ```bash

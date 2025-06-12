@@ -1,16 +1,7 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
 from future import standard_library
-standard_library.install_aliases()
-import os
-import sys
-import ftplib
-from urllib.parse import urlsplit
-from pprint import pprint, pformat
 
-from mozart import app
+standard_library.install_aliases()
+from pprint import pprint
 
 
 def createJob(info):
@@ -32,13 +23,13 @@ def createJob(info):
 
     # build params
     params = {}
-    params['id'] = info['objectid']
-    params['output_name'] = '%s.interferogram.json' % info['objectid']
+    params["id"] = info["objectid"]
+    params["output_name"] = "%s.interferogram.json" % info["objectid"]
     job = {
-        'type': 'sciflo-create_interferograms',
-        'name': 'sciflo-create_interferograms-%s' % info['objectid'],
-        'params': params,
-        'localize_urls': []
+        "type": "sciflo-create_interferograms",
+        "name": "sciflo-create_interferograms-%s" % info["objectid"],
+        "params": params,
+        "localize_urls": [],
     }
 
     pprint(job, indent=2)
@@ -64,10 +55,10 @@ def createDatastagerJob(info):
 
     # build params
     job = {
-        'type': 'datastager',
-        'name': 'datastager-%s' % info['id'],
-        'params': info,
-        'localize_urls': [],
+        "type": "datastager",
+        "name": "datastager-%s" % info["id"],
+        "params": info,
+        "localize_urls": [],
     }
 
     pprint(job, indent=2)
@@ -93,10 +84,10 @@ def createDatastagerJobHigh(info):
 
     # build params
     job = {
-        'type': 'datastager-high',
-        'name': 'datastager-high-%s' % info['id'],
-        'params': info,
-        'localize_urls': [],
+        "type": "datastager-high",
+        "name": "datastager-high-%s" % info["id"],
+        "params": info,
+        "localize_urls": [],
     }
 
     pprint(job, indent=2)

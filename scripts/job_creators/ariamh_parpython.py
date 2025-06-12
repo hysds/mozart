@@ -1,16 +1,7 @@
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-from __future__ import absolute_import
 from future import standard_library
-standard_library.install_aliases()
-import os
-import sys
-import ftplib
-from urllib.parse import urlsplit
-from pprint import pprint, pformat
 
-from mozart import app
+standard_library.install_aliases()
+from pprint import pprint
 
 
 def network_selector(info):
@@ -34,10 +25,10 @@ def network_selector(info):
 
     # build params
     job = {
-        'type': 'network_selector',
-        'name': 'network_selector-%s' % info['id'],
-        'params': info,
-        'localize_urls': []
+        "type": "network_selector",
+        "name": "network_selector-%s" % info["id"],
+        "params": info,
+        "localize_urls": [],
     }
 
     print("Job:")
@@ -69,10 +60,10 @@ def create_interferogram(info):
 
     # build params
     job = {
-        'type': 'create_interferogram',
-        'name': 'create_interferogram-%s' % info['netsel_file'],
-        'params': info,
-        'localize_urls': [{'url': info['netsel_url']}]
+        "type": "create_interferogram",
+        "name": "create_interferogram-%s" % info["netsel_file"],
+        "params": info,
+        "localize_urls": [{"url": info["netsel_url"]}],
     }
 
     print("Job:")
