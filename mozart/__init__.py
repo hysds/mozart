@@ -1,8 +1,5 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
 from future import standard_library
+
 standard_library.install_aliases()
 
 import os
@@ -10,14 +7,16 @@ import os
 from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
-from flask_cors import CORS  # TODO: will remove this once we figure out the proper host for the UI
+from flask_cors import (
+    CORS,
+)  # TODO: will remove this once we figure out the proper host for the UI
 
 from jenkins import Jenkins
 
 from hysds.es_util import get_mozart_es
 
 
-class ReverseProxied(object):
+class ReverseProxied:
     """
     Wrap the application in this middleware and configure the
     front-end server to add these headers, to let you quietly bind
@@ -62,46 +61,43 @@ class ReverseProxied(object):
         self.app = app
 
     def __call__(self, environ, start_response):
-        script_name = environ.get('HTTP_X_SCRIPT_NAME', '')
+        script_name = environ.get("HTTP_X_SCRIPT_NAME", "")
         if script_name:
-            environ['SCRIPT_NAME'] = script_name
-            path_info = environ['PATH_INFO']
+            environ["SCRIPT_NAME"] = script_name
+            path_info = environ["PATH_INFO"]
             if path_info.startswith(script_name):
-                environ['PATH_INFO'] = path_info[len(script_name):]
+                environ["PATH_INFO"] = path_info[len(script_name) :]
 
-        scheme = environ.get('HTTP_X_SCHEME', '')
+        scheme = environ.get("HTTP_X_SCHEME", "")
         if scheme:
-            environ['wsgi.url_scheme'] = scheme
-        x_forwarded_host = environ.get('HTTP_X_FORWARDED_HOST', '')
+            environ["wsgi.url_scheme"] = scheme
+        x_forwarded_host = environ.get("HTTP_X_FORWARDED_HOST", "")
         if x_forwarded_host:
-            environ['HTTP_HOST'] = x_forwarded_host
+            environ["HTTP_HOST"] = x_forwarded_host
         return self.app(environ, start_response)
 
 
 def resource_not_found(e):
-    return jsonify({
-        'status_code': 404,
-        'message': str(e)
-    }), 404
+    return jsonify({"status_code": 404, "message": str(e)}), 404
 
 
 app = Flask(__name__)
 app.wsgi_app = ReverseProxied(app.wsgi_app)
-app.config.from_pyfile('../settings.cfg')
+app.config.from_pyfile("../settings.cfg")
 
 # TODO: will remove this when ready for actual release, need to figure out the right host
 CORS(app)
 
 # TODO: may remove this (and any code related to User models and authentication) once SSO is integrated
 # set database config
-dbdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(dbdir, 'app.db')
+dbdir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(dbdir, "app.db")
 db = SQLAlchemy(app)
 
 # set user auth config
 lm = LoginManager()
 lm.init_app(app)
-lm.login_view = 'views/main.login'
+lm.login_view = "views/main.login"
 
 # handle global errors
 app.register_error_handler(404, resource_not_found)
@@ -110,46 +106,58 @@ app.register_error_handler(404, resource_not_found)
 mozart_es = get_mozart_es()
 
 # add jenkins connection
-if app.config.get('JENKINS_ENABLED', False):
-    jenkins_wrapper = Jenkins(app.config['JENKINS_HOST'], username=app.config['JENKINS_USER'],
-                              password=app.config['JENKINS_API_KEY'])
+if app.config.get("JENKINS_ENABLED", False):
+    jenkins_wrapper = Jenkins(
+        app.config["JENKINS_HOST"],
+        username=app.config["JENKINS_USER"],
+        password=app.config["JENKINS_API_KEY"],
+    )
     from mozart.services.ci import services as ci_services
+
     app.register_blueprint(ci_services)
 else:
     jenkins_wrapper = None
 
 # views blueprints
 from mozart.views.main import mod as views_module
+
 app.register_blueprint(views_module)
 
 # services blueprints
 from mozart.services.main import mod as main_module
+
 app.register_blueprint(main_module)
 
 from mozart.services.jobs import mod as jobs_module
+
 app.register_blueprint(jobs_module)
 
 from mozart.services.admin import mod as admin_module
+
 app.register_blueprint(admin_module)
 
 from mozart.services.es import mod as es_module
+
 app.register_blueprint(es_module)
 
 from mozart.services.stats import mod as stats_module
+
 app.register_blueprint(stats_module)
 
 # rest API blueprints
 from mozart.services.api_v01.service import services as api_v01_services
+
 app.register_blueprint(api_v01_services)
 
 from mozart.services.api_v02.service import services as api_v02_services
+
 app.register_blueprint(api_v02_services)
 
 
-if __name__ != '__main__':
+if __name__ != "__main__":
     import logging
 
-    gunicorn_logger = logging.getLogger('gunicorn.error')
+    gunicorn_logger = logging.getLogger("gunicorn.error")
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)
     app.logger.propagate = False
