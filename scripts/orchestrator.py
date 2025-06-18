@@ -9,7 +9,7 @@ import json
 import logging
 import time
 import pprint
-from datetime import datetime
+from datetime import datetime, UTC
 import pika
 
 from mozart import app
@@ -29,7 +29,7 @@ def getTimestamp(fraction=True):
     """Return the current date and time formatted for a message header."""
 
     (year, month, day, hh, mm, ss, wd, y, z) = time.gmtime()
-    d = datetime.utcnow()
+    d = datetime.now(UTC)
     if fraction:
         s = "%04d%02d%02dT%02d%02d%02d.%dZ" % (
             d.year,
@@ -142,14 +142,13 @@ class OrchestratorClient:
         self._job_json["job_id"] = getJobId(self._job_name)
 
         # set job_info
-        time_queued = datetime.utcnow()
         self._job_json["job_info"] = {
             "id": self._job_json["job_id"],
             "job_queue": self._queue_name,
             "completed_queue": self._config["job_completed_queue"],
             "error_queue": self._config["job_error_queue"],
             "job_status_exchange": self._config["job_status_exchange"],
-            "time_queued": time_queued.isoformat() + "Z",
+            "time_queued": datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z",
         }
 
         body = json.dumps(self._job_json)
@@ -175,7 +174,7 @@ class OrchestratorClient:
                 {
                     "job_id": self._job_json["job_id"],
                     "status": "job-queued",
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z",
                     "job": self._job_json,
                 }
             ),
