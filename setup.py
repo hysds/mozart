@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="mozart",
-    version="2.3.2",
+    version="2.4.0",
     long_description="HySDS job orchestration/worker web interface",
     packages=find_packages(),
     include_package_data=True,
