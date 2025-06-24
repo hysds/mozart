@@ -411,7 +411,7 @@ class GetQueueNames(Resource):
         except Exception as e:
             message = f"Failed to list job queues. {type(e)}:{str(e)}"
             app.logger.warning(message)
-            app.logger.warning(traceback.format_exc(e))
+            app.logger.warning("".join(traceback.format_exception(e)))
             return {"success": False, "message": message}, 500
         return {"success": True, "message": "", "result": queues}
 
