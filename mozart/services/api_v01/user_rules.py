@@ -3,7 +3,7 @@ from future import standard_library
 standard_library.install_aliases()
 
 import json
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 from flask import request
 from flask_restx import Namespace, Resource, inputs
@@ -266,7 +266,7 @@ class UserRules(Resource):
         if type(tags) == str:
             tags = [tags]
 
-        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         new_doc = {
             "workflow": hysds_io,
             "job_spec": job_spec,
@@ -429,7 +429,7 @@ class UserRules(Resource):
             if type(tags) == str:
                 tags = [tags]
             update_doc["tags"] = tags
-        update_doc["modified_time"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        update_doc["modified_time"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         if "time_limit" in request_data:  # if submitted in editor
             if time_limit is None:
