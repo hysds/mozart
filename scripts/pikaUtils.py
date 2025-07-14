@@ -1,9 +1,5 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
-from builtins import str
 from future import standard_library
+
 standard_library.install_aliases()
 import pika
 import traceback
@@ -11,29 +7,27 @@ import json
 import logging
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('pika')
+logger = logging.getLogger("pika")
 logger.setLevel(logging.INFO)
 
 
 def processError(queue_name, body, error, traceback):
     """Add to error queue."""
 
-    body = json.dumps({
-        "queue_name": queue_name,
-        "body": body,
-        "error": error,
-        "traceback": traceback
-    })
-    connection = pika.BlockingConnection(
-        pika.ConnectionParameters('localhost'))
+    body = json.dumps(
+        {"queue_name": queue_name, "body": body, "error": error, "traceback": traceback}
+    )
+    connection = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
     channel = connection.channel()
-    channel.queue_declare(queue='error_queue', durable=True)
-    channel.basic_publish(exchange='',
-                          routing_key='error_queue',
-                          body=body,
-                          properties=pika.BasicProperties(
-                              delivery_mode=2,  # make message persistent
-                          ))
+    channel.queue_declare(queue="error_queue", durable=True)
+    channel.basic_publish(
+        exchange="",
+        routing_key="error_queue",
+        body=body,
+        properties=pika.BasicProperties(
+            delivery_mode=2,  # make message persistent
+        ),
+    )
     connection.close()
 
 
@@ -47,5 +41,7 @@ def pika_callback(queue_name):
                 processError(queue_name, body, str(e), traceback.format_exc())
             logger.info(" [x] Done")
             ch.basic_ack(method.delivery_tag)
+
         return wrapped_fn
+
     return wrapped

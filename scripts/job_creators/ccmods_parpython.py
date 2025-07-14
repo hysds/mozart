@@ -1,17 +1,8 @@
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-from __future__ import absolute_import
-from builtins import int
 from future import standard_library
+
 standard_library.install_aliases()
 import os
-import sys
-import ftplib
-from urllib.parse import urlsplit
-from pprint import pprint, pformat
-
-from mozart import app
+from pprint import pprint
 
 
 def get_agg_file(info):
@@ -36,10 +27,10 @@ def get_agg_file(info):
 
     # build params
     job = {
-        'type': 'get_agg_file',
-        'name': 'get_agg_file-%04d-%02d' % (int(info['year']), int(info['month'])),
-        'params': info,
-        'localize_urls': []
+        "type": "get_agg_file",
+        "name": "get_agg_file-%04d-%02d" % (int(info["year"]), int(info["month"])),
+        "params": info,
+        "localize_urls": [],
     }
 
     print("Job:")
@@ -53,10 +44,10 @@ def generate_merged_file(info):
 
     # build parrams
     job = {
-        'type': 'generate_merged_file',
-        'name': 'generate_merged_file',
-        'params': info,
-        'localize_urls': info['agg_urls']
+        "type": "generate_merged_file",
+        "name": "generate_merged_file",
+        "params": info,
+        "localize_urls": info["agg_urls"],
     }
 
     print("Job:")
@@ -70,10 +61,10 @@ def generate_pdf_plots(info):
 
     # build parrams
     job = {
-        'type': 'generate_pdf_plots',
-        'name': 'generate_pdf_plots',
-        'params': info,
-        'localize_urls': [info['merge_url']]
+        "type": "generate_pdf_plots",
+        "name": "generate_pdf_plots",
+        "params": info,
+        "localize_urls": [info["merge_url"]],
     }
 
     print("Job:")
@@ -100,14 +91,14 @@ def wvcc_generate_matchup(info):
     print("Info:")
     pprint(info, indent=2)
 
-    airs_id = os.path.basename(info['dap_url'])[5:19]
+    airs_id = os.path.basename(info["dap_url"])[5:19]
 
     # build params
     job = {
-        'type': 'wvcc_generate_matchup',
-        'name': 'wvcc_generate_matchup-%s' % airs_id,
-        'params': info,
-        'localize_urls': []
+        "type": "wvcc_generate_matchup",
+        "name": "wvcc_generate_matchup-%s" % airs_id,
+        "params": info,
+        "localize_urls": [],
     }
 
     print("Job:")

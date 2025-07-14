@@ -1,13 +1,8 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
 from future import standard_library
+
 standard_library.install_aliases()
 import json
-from pprint import pprint, pformat
-
-from mozart import app
+from pprint import pprint
 
 
 def notify_by_email(info):
@@ -31,21 +26,21 @@ def notify_by_email(info):
 
     # build params
     params = {}
-    params['id'] = info['objectid']
-    params['rule_name'] = info['rule']['rule_name']
-    kwargs = json.loads(info['rule']['kwargs'])
-    params['emails'] = kwargs['email_addresses']
-    rule_hit = info['rule_hit']
-    urls = rule_hit['_source']['urls']
+    params["id"] = info["objectid"]
+    params["rule_name"] = info["rule"]["rule_name"]
+    kwargs = json.loads(info["rule"]["kwargs"])
+    params["emails"] = kwargs["email_addresses"]
+    rule_hit = info["rule_hit"]
+    urls = rule_hit["_source"]["urls"]
     if len(urls) > 0:
-        params['url'] = urls[0]
+        params["url"] = urls[0]
     else:
-        params['url'] = None
+        params["url"] = None
     job = {
-        'type': 'notify_by_email',
-        'name': 'action-notify_by_email-%s' % info['objectid'],
-        'params': params,
-        'localize_urls': []
+        "type": "notify_by_email",
+        "name": "action-notify_by_email-%s" % info["objectid"],
+        "params": params,
+        "localize_urls": [],
     }
 
     pprint(job, indent=2)
@@ -74,22 +69,22 @@ def ftp_push(info):
 
     # build params
     params = {}
-    params['id'] = info['objectid']
-    params['rule_name'] = info['rule']['rule_name']
-    kwargs = json.loads(info['rule']['kwargs'])
-    params['ftp_url'] = kwargs['ftp_url']
-    params['emails'] = kwargs['email_addresses']
-    rule_hit = info['rule_hit']
-    urls = rule_hit['_source']['urls']
+    params["id"] = info["objectid"]
+    params["rule_name"] = info["rule"]["rule_name"]
+    kwargs = json.loads(info["rule"]["kwargs"])
+    params["ftp_url"] = kwargs["ftp_url"]
+    params["emails"] = kwargs["email_addresses"]
+    rule_hit = info["rule_hit"]
+    urls = rule_hit["_source"]["urls"]
     if len(urls) > 0:
-        params['url'] = urls[0]
+        params["url"] = urls[0]
     else:
-        params['url'] = None
+        params["url"] = None
     job = {
-        'type': 'ftp_push',
-        'name': 'action-ftp_push-%s' % info['objectid'],
-        'params': params,
-        'localize_urls': []
+        "type": "ftp_push",
+        "name": "action-ftp_push-%s" % info["objectid"],
+        "params": params,
+        "localize_urls": [],
     }
 
     pprint(job, indent=2)

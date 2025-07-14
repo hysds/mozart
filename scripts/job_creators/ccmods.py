@@ -1,16 +1,8 @@
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-from __future__ import absolute_import
-from builtins import int
 from future import standard_library
+
 standard_library.install_aliases()
 import os
-import sys
-from urllib.parse import urlsplit
 from pprint import pprint, pformat
-
-from mozart import app
 
 
 def createIgraMatchupJob(info):
@@ -36,13 +28,14 @@ def createIgraMatchupJob(info):
 
     # build parrams
     params = {}
-    params['year'] = info['year']
-    params['month'] = info['month']
+    params["year"] = info["year"]
+    params["month"] = info["month"]
     job = {
-        'type': 'get_igra_modis_all',
-        'name': 'get_igra_modis_all-%04d-%02d' % (int(info['year']), int(info['month'])),
-        'params': params,
-        'localize_urls': []
+        "type": "get_igra_modis_all",
+        "name": "get_igra_modis_all-%04d-%02d"
+        % (int(info["year"]), int(info["month"])),
+        "params": params,
+        "localize_urls": [],
     }
 
     print("Job:")
@@ -74,24 +67,25 @@ def createAggregateAirsJob(info):
     pprint(info, indent=2)
 
     # sav file
-    sav_file = '%s.sav' % info['objectid']
+    sav_file = "%s.sav" % info["objectid"]
 
     # get dav url
     dav_url = None
-    for url in info['urls']:
-        if url.startswith('http://puccini-ccmods.jpl.nasa.gov:5000'):
+    for url in info["urls"]:
+        if url.startswith("http://puccini-ccmods.jpl.nasa.gov:5000"):
             dav_url = os.path.join(url, sav_file)
     if dav_url is None:
         raise RuntimeError("Failed to find FTP url: %s" % pformat(info))
 
     # build params
     params = {}
-    params['matchup_file'] = sav_file
+    params["matchup_file"] = sav_file
     job = {
-        'type': 'get_airs_all',
-        'name': 'get_airs_all-%s' % '-'.join(os.path.splitext(sav_file)[0].split('-')[1:]),
-        'params': params,
-        'localize_urls': [{'url': dav_url}]
+        "type": "get_airs_all",
+        "name": "get_airs_all-%s"
+        % "-".join(os.path.splitext(sav_file)[0].split("-")[1:]),
+        "params": params,
+        "localize_urls": [{"url": dav_url}],
     }
 
     print("Job:")
