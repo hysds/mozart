@@ -1,9 +1,3 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
-from builtins import dict
-from builtins import str
 from future import standard_library
 standard_library.install_aliases()
 import simpleldap
@@ -21,10 +15,10 @@ def ldap_user_verified(username, password):
     groups = app.config['LDAP_GROUPS']
 
     try:
-        l = simpleldap.Connection(host, dn='uid=%s,%s' % (username, base_dn), encryption='ssl', password=password)
+        l = simpleldap.Connection(host, dn='uid={},{}'.format(username, base_dn), encryption='ssl', password=password)
     except Exception as e:
         app.logger.info("Got error trying to verify LDAP user %s:" % username)
-        app.logger.info("%s:\n\n%s" % (str(e), traceback.format_exc()))
+        app.logger.info("{}:\n\n{}".format(str(e), traceback.format_exc()))
         return None
 
     # validate user
@@ -36,7 +30,7 @@ def ldap_user_verified(username, password):
         return None
 
     # validate user is part of a group allowed
-    uid = 'uid=%s,%s' % (username, base_dn)
+    uid = 'uid={},{}'.format(username, base_dn)
     for group in groups:
         g = l.search('cn=%s' % group, base_dn=base_dn)
         for this_g in g:

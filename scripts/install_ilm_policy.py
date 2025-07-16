@@ -1,10 +1,6 @@
 #!/usr/bin/env python
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-from __future__ import absolute_import
-from builtins import open
 from future import standard_library
+
 standard_library.install_aliases()
 
 import argparse
@@ -45,4 +41,6 @@ if __name__ == "__main__":
     # ignore 400 cause by IndexAlreadyExistsException when creating an index
     es_ilm = IlmClient(mozart_es.es)
     es_ilm.put_lifecycle(policy=args.ilm_policy_name, body=ilm_policy)
-    print(f"Successfully installed ILM policy to {args.ilm_policy_name}:\n{json.dumps(ilm_policy, indent=2)}")
+    print(
+        f"Successfully installed ILM policy to {args.ilm_policy_name}:\n{json.dumps(ilm_policy, indent=2)}"
+    )

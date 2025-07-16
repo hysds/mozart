@@ -1,19 +1,23 @@
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
-from future import standard_library
-standard_library.install_aliases()
 from setuptools import setup, find_packages
 
 
 setup(
-    name='mozart',
-    version='2.3.2',
-    long_description='HySDS job orchestration/worker web interface',
+    name="mozart",
+    version="2.4.0",
+    long_description="HySDS job orchestration/worker web interface",
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
+    python_requires=">=3.12",
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: Apache Software License",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.12",
+        "Topic :: Scientific/Engineering",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+    ],
     install_requires=[
         'Flask<2.3.0',  # TODO: remove kluge when Flask-DebugToolbar fixes import error
         'flask-restx>=0.5.1',
@@ -37,7 +41,7 @@ setup(
         'future>=0.17.1',
         'pytz',
         'numpy',
-        "werkzeug>=2.2.0",  # TODO: remove this pin after fix has been made https://stackoverflow.com/a/73105878
-        "cryptography>=39.0.0"
-    ]
+        "werkzeug>=2.2.0",
+        "cryptography>=39.0.0",
+    ],
 )
