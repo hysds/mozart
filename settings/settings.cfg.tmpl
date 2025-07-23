@@ -47,11 +47,11 @@ KIBANA_PROV_METRICS_URL = "https://{{ METRICS_FQDN }}/metrics/#/dashboard/elasti
 KIBANA_INSTANCE_STATS_URL = "https://{{ METRICS_FQDN }}/metrics/#/dashboard/elasticsearch/Worker%20Metrics"
 
 # Flower URL
-FLOWER_URL = "http://{{ MOZART_FQDN }}:5555"
+FLOWER_URL = "https://{{ MOZART_FQDN }}:5555"
 
 # RabbitMQ Admin URL
-RABBITMQ_ADMIN_URL = "http://{{ MOZART_RABBIT_FQDN }}:15672"
-RABBITMQ_ADMIN_API = "http://{{ MOZART_RABBIT_PVT_IP }}:15672"
+RABBITMQ_ADMIN_URL = "https://{{ MOZART_RABBIT_FQDN }}:15672"
+RABBITMQ_ADMIN_API = "https://{{ MOZART_RABBIT_PVT_IP }}:15672"
 
 # System protected queue
 PROTECTED_QUEUES = ["{{ SYSTEM_JOBS_QUEUE }}"]
@@ -60,8 +60,8 @@ JOB_SUBMISSION_JOB_SPEC = "{{ LIGHTWEIGHT_JOBS_SPEC }}"
 JOB_SUBMISSION_QUEUE = "{{ SYSTEM_JOBS_QUEUE }}"
 
 # ES plugins
-ES_HEAD_URL = "http://{{ MOZART_ES_FQDN }}:9200/_plugin/head"
-ES_KOPF_URL = "http://{{ MOZART_ES_FQDN }}:9200/_plugin/kopf"
+ES_HEAD_URL = "https://{{ MOZART_ES_FQDN }}:9200/_plugin/head"
+ES_KOPF_URL = "https://{{ MOZART_ES_FQDN }}:9200/_plugin/kopf"
 
 # value needed to generate Jenkins job name
 VENUE = "{{ VENUE }}"
@@ -78,6 +78,6 @@ GRQ_ES_PORT = {{ GRQ_ES_PORT or 9200 }}
 GRQ_ES_PROTOCOL = "{{ GRQ_ES_PROTOCOL or 'http' }}"
 GRQ_ES_URL = '%s://%s:%d' % (GRQ_ES_PROTOCOL, GRQ_ES_HOST, GRQ_ES_PORT)
 
-METRICS_ES_URL = "http://{{ METRICS_ES_PVT_IP }}:9200"
+METRICS_ES_URL = "https://{{ METRICS_ES_PVT_IP }}:9200"
 
 ES_CLUSTER_MODE = {{ ES_CLUSTER_MODE or False }}

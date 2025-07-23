@@ -6,4 +6,4 @@ if [[ -z "$queue" ]]; then
   echo "$0 queue_to_delete"
   exit 1
 fi
-curl -i -u guest:guest -H "content-type:application/json" -XDELETE "http://localhost:15672/api/queues/%2f/$queue/contents"
+curl -k -i -u guest:guest -H "content-type:application/json" -XDELETE "https://localhost:15672/api/queues/%2f/$queue/contents"
