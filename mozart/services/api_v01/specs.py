@@ -270,7 +270,7 @@ class GetContainerAdd(Resource):
         version = request.form.get("version", request.args.get("version", None))
         digest = request.form.get("digest", request.args.get("digest", None))
 
-        if not all((name, url, version, digest)):
+        if not all((name, version, digest)):
             return {
                 "success": False,
                 "message": "Parameters (name, url, version, digest) must be supplied",
