@@ -27,4 +27,4 @@ with open(path) as f:
     body = {**body, **user_rules_mapping}
 
 # create destination index
-mozart_es.es.indices.create(HYSDS_IOS_INDEX, body, ignore=400)
+mozart_es.es.indices.create(index=HYSDS_IOS_INDEX, body=body, ignore=400)
