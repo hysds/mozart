@@ -257,8 +257,8 @@ class GetContainerAdd(Resource):
     )
     parser = container_ns.parser()
     parser.add_argument("name", required=True, type=str, help="Container Name")
-    parser.add_argument("url", required=True, type=str, help="Container URL")
-    parser.add_argument("urls", required=False, type=str, help="Container URLs (JSON)")
+    parser.add_argument("url", required=False, type=str, help="Container URL (legacy, single-arch)")
+    parser.add_argument("urls", required=False, type=str, help="Container URLs (JSON, multi-arch)")
     parser.add_argument("version", required=True, type=str, help="Container Version")
     parser.add_argument("digest", required=True, type=str, help="Container Digest")
 
@@ -272,10 +272,10 @@ class GetContainerAdd(Resource):
         version = request.form.get("version", request.args.get("version", None))
         digest = request.form.get("digest", request.args.get("digest", None))
 
-        if not all((name, version, digest)):
+        if not all((name, version, digest)) or (url is None and urls is None):
             return {
                 "success": False,
-                "message": "Parameters (name, url, version, digest) must be supplied",
+                "message": "Parameters (name, version, digest) and at least one of (url, urls) must be supplied",
             }, 400
 
         container_obj = {"id": name, "digest": digest, "url": url, "version": version}
