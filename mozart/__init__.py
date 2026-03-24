@@ -1,6 +1,6 @@
-from future import standard_library
+from importlib.metadata import version
 
-standard_library.install_aliases()
+__version__ = version("hysds-mozart")
 
 import os
 

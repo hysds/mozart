@@ -1,47 +1,12 @@
-from setuptools import setup, find_packages
+# Minimal setup.py shim for backward compatibility
+# This delegates to pyproject.toml for all configuration
+# This file will be removed in a future release (v7.1.0+)
+#
+# Modern installation (recommended):
+#   pip install .
+#   pip install -e .
+#
+# This shim ensures existing scripts that expect setup.py continue to work
+from setuptools import setup
 
-
-setup(
-    name="mozart",
-    version="3.1.0",
-    long_description="HySDS job orchestration/worker web interface",
-    packages=find_packages(),
-    include_package_data=True,
-    zip_safe=False,
-    python_requires=">=3.12",
-    classifiers=[
-        "Development Status :: 4 - Beta",
-        "Intended Audience :: Developers",
-        "License :: OSI Approved :: Apache Software License",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.12",
-        "Topic :: Scientific/Engineering",
-        "Topic :: Software Development :: Libraries :: Python Modules",
-    ],
-    install_requires=[
-        'Flask<2.3.0',  # TODO: remove kluge when Flask-DebugToolbar fixes import error
-        'flask-restx>=0.5.1',
-        'Flask-SQLAlchemy>=3.0.0',
-        'Flask-WTF>=0.15.1',
-        'Flask-DebugToolbar>=0.11.0',
-        'Flask-Login>=0.5.0',
-        'gunicorn>=20.1.0',
-        'gevent>=1.1.1,<25.4.1',
-        'eventlet>=0.33.3',
-        'requests>=2.7.0',
-        'simpleldap>=0.8',
-        'simplekml>=1.2.3',
-        'tornado>=4.0.2',
-        'pika>=0.9.14',
-        'pymongo>=2.7.2',
-        'boto>=2.38.0',
-        'python-dateutil',
-        'elasticsearch>=7.0.0,<7.14.0',
-        'python-jenkins==1.7.0',
-        'future>=0.17.1',
-        'pytz',
-        'numpy',
-        "werkzeug>=2.2.0",
-        "cryptography>=39.0.0",
-    ],
-)
+setup()

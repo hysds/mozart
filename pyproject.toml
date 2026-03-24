@@ -1,0 +1,77 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hysds-mozart"
+dynamic = ["version"]
+description = "HySDS job orchestration/worker web interface"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.12"
+authors = [
+    {name = "HySDS", email = "hysds-help@jpl.nasa.gov"}
+]
+keywords = ["hysds", "mozart", "orchestration", "job-management", "flask"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    # HySDS sibling packages (undeclared in original setup.py - now added)
+    "hysds-core~=7.0",
+    "hysds-commons~=7.0",
+    
+    # Core dependencies - matching original setup.py order and pins exactly
+    "Flask<2.3.0",
+    "flask-restx>=0.5.1",
+    "Flask-SQLAlchemy>=3.0.0",
+    "Flask-WTF>=0.15.1",
+    "Flask-DebugToolbar>=0.11.0",
+    "Flask-Login>=0.5.0",
+    "gunicorn>=20.1.0",
+    "gevent>=1.1.1,<25.4.1",
+    "eventlet>=0.33.3",
+    "requests>=2.7.0",
+    "simpleldap>=0.8",
+    "simplekml>=1.2.3",
+    "tornado>=4.0.2",
+    "pika>=0.9.14",
+    "pymongo>=2.7.2",
+    "boto>=2.38.0",
+    "python-dateutil",
+    "elasticsearch>=7.0.0,<7.14.0",
+    "python-jenkins==1.7.0",
+    "pytz",
+    "numpy<2.0.0",  # Added upper bound per migration spec
+    "werkzeug>=2.2.0,<3.0.0",  # Added upper bound per migration spec
+    "cryptography>=39.0.0",
+    # Note: 'future>=0.17.1' removed - not needed on Python 3.12+
+]
+
+[project.urls]
+Homepage = "https://github.com/hysds/mozart"
+Repository = "https://github.com/hysds/mozart"
+Issues = "https://github.com/hysds/mozart/issues"
+
+[tool.hatch.version]
+source = "vcs"
+raw-options = {version_scheme = "no-guess-dev"}
+
+[tool.hatch.build.targets.wheel]
+packages = ["mozart"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/mozart",
+    "/scripts",
+    "README.md",
+    "LICENSE",
+]
