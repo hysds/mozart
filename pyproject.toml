@@ -48,12 +48,11 @@ dependencies = [
     "boto>=2.38.0",
     "python-dateutil",
     "elasticsearch>=7.0.0,<7.14.0",
-    "python-jenkins==1.7.0",
+    "python-jenkins>=1.8.0",
     "pytz",
     "numpy<2.0.0",  # Added upper bound per migration spec
     "werkzeug>=2.2.0,<3.0.0",  # Added upper bound per migration spec
     "cryptography>=39.0.0",
-    "setuptools",  # Required for pkg_resources used by python-jenkins
     # Note: 'future>=0.17.1' removed - not needed on Python 3.12+
 ]
 
