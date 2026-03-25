@@ -26,8 +26,8 @@ classifiers = [
 
 dependencies = [
     # HySDS sibling packages (undeclared in original setup.py - now added)
-    "hysds-core~=7.0",
-    "hysds-commons~=7.0",
+    "hysds-core>=7.0,<8.0",
+    "hysds-commons>=7.0,<8.0",
     
     # Core dependencies - matching original setup.py order and pins exactly
     "Flask<2.3.0",
