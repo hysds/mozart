@@ -30,7 +30,7 @@ dependencies = [
     "hysds-commons>=7.0,<8.0",
     
     # Core dependencies - matching original setup.py order and pins exactly
-    "Flask<2.3.0",
+    "Flask>=2.2,<3.0",
     "flask-restx>=0.5.1",
     "Flask-SQLAlchemy>=3.0.0",
     "Flask-WTF>=0.15.1",
