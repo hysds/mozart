@@ -83,75 +83,86 @@ def resource_not_found(e):
 
 app = Flask(__name__)
 app.wsgi_app = ReverseProxied(app.wsgi_app)
-app.config.from_pyfile("../settings.cfg")
 
-# TODO: will remove this when ready for actual release, need to figure out the right host
-CORS(app)
+# Only load config if it exists (allows imports without runtime environment)
+config_path = os.path.join(os.path.dirname(__file__), "..", "settings.cfg")
+if os.path.exists(config_path):
+    app.config.from_pyfile(config_path)
 
-# TODO: may remove this (and any code related to User models and authentication) once SSO is integrated
-# set database config
-dbdir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(dbdir, "app.db")
-db = SQLAlchemy(app)
+    # TODO: will remove this when ready for actual release, need to figure out the right host
+    CORS(app)
 
-# set user auth config
-lm = LoginManager()
-lm.init_app(app)
-lm.login_view = "views/main.login"
+    # TODO: may remove this (and any code related to User models and authentication) once SSO is integrated
+    # set database config
+    dbdir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(dbdir, "app.db")
+    db = SQLAlchemy(app)
 
-# handle global errors
-app.register_error_handler(404, resource_not_found)
+    # set user auth config
+    lm = LoginManager()
+    lm.init_app(app)
+    lm.login_view = "views/main.login"
 
-# Mozart's connection to Elasticsearch
-mozart_es = get_mozart_es()
+    # handle global errors
+    app.register_error_handler(404, resource_not_found)
 
-# add jenkins connection
-if app.config.get("JENKINS_ENABLED", False):
-    jenkins_wrapper = Jenkins(
-        app.config["JENKINS_HOST"],
-        username=app.config["JENKINS_USER"],
-        password=app.config["JENKINS_API_KEY"],
-    )
-    from mozart.services.ci import services as ci_services
+    # Mozart's connection to Elasticsearch
+    mozart_es = get_mozart_es()
 
-    app.register_blueprint(ci_services)
+    # add jenkins connection
+    if app.config.get("JENKINS_ENABLED", False):
+        jenkins_wrapper = Jenkins(
+            app.config["JENKINS_HOST"],
+            username=app.config["JENKINS_USER"],
+            password=app.config["JENKINS_API_KEY"],
+        )
+        from mozart.services.ci import services as ci_services
+
+        app.register_blueprint(ci_services)
+    else:
+        jenkins_wrapper = None
+
+    # views blueprints
+    from mozart.views.main import mod as views_module
+
+    app.register_blueprint(views_module)
+
+    # services blueprints
+    from mozart.services.main import mod as main_module
+
+    app.register_blueprint(main_module)
+
+    from mozart.services.jobs import mod as jobs_module
+
+    app.register_blueprint(jobs_module)
+
+    from mozart.services.admin import mod as admin_module
+
+    app.register_blueprint(admin_module)
+
+    from mozart.services.es import mod as es_module
+
+    app.register_blueprint(es_module)
+
+    from mozart.services.stats import mod as stats_module
+
+    app.register_blueprint(stats_module)
+
+    # rest API blueprints
+    from mozart.services.api_v01.service import services as api_v01_services
+
+    app.register_blueprint(api_v01_services)
+
+    from mozart.services.api_v02.service import services as api_v02_services
+
+    app.register_blueprint(api_v02_services)
 else:
+    # Config doesn't exist - app is created but not fully initialized
+    # This allows "import mozart" to succeed for library usage
+    db = None
+    lm = None
+    mozart_es = None
     jenkins_wrapper = None
-
-# views blueprints
-from mozart.views.main import mod as views_module
-
-app.register_blueprint(views_module)
-
-# services blueprints
-from mozart.services.main import mod as main_module
-
-app.register_blueprint(main_module)
-
-from mozart.services.jobs import mod as jobs_module
-
-app.register_blueprint(jobs_module)
-
-from mozart.services.admin import mod as admin_module
-
-app.register_blueprint(admin_module)
-
-from mozart.services.es import mod as es_module
-
-app.register_blueprint(es_module)
-
-from mozart.services.stats import mod as stats_module
-
-app.register_blueprint(stats_module)
-
-# rest API blueprints
-from mozart.services.api_v01.service import services as api_v01_services
-
-app.register_blueprint(api_v01_services)
-
-from mozart.services.api_v02.service import services as api_v02_services
-
-app.register_blueprint(api_v02_services)
 
 
 if __name__ != "__main__":
