@@ -53,6 +53,7 @@ dependencies = [
     "numpy<2.0.0",  # Added upper bound per migration spec
     "werkzeug>=2.2.0,<3.0.0",  # Added upper bound per migration spec
     "cryptography>=39.0.0",
+    "setuptools",  # Required for pkg_resources used by python-jenkins
     # Note: 'future>=0.17.1' removed - not needed on Python 3.12+
 ]
 
