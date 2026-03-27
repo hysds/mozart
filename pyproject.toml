@@ -69,6 +69,9 @@ raw-options = {version_scheme = "no-guess-dev"}
 [tool.hatch.build.targets.wheel]
 packages = ["mozart"]
 
+[tool.hatch.build.targets.wheel.shared-data]
+"scripts" = "share/mozart/scripts"
+
 [tool.hatch.build.targets.sdist]
 include = [
     "/mozart",
