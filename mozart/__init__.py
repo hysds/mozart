@@ -85,7 +85,12 @@ app = Flask(__name__)
 app.wsgi_app = ReverseProxied(app.wsgi_app)
 
 # Only load config if it exists (allows imports without runtime environment)
-config_path = os.path.join(os.path.dirname(__file__), "..", "settings.cfg")
+# Priority: 1) Runtime location (PyPI installs), 2) Package location (editable installs)
+config_path = os.path.expanduser("~/mozart/etc/settings.cfg")
+if not os.path.exists(config_path):
+    # Fallback to package-relative location for editable installs
+    config_path = os.path.join(os.path.dirname(__file__), "..", "settings.cfg")
+
 if os.path.exists(config_path):
     app.config.from_pyfile(config_path)
 
