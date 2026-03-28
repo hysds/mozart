@@ -99,7 +99,15 @@ if os.path.exists(config_path):
 
     # TODO: may remove this (and any code related to User models and authentication) once SSO is integrated
     # set database config
-    dbdir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+    # For PyPI installs, use runtime directory; for editable installs, use package-relative path
+    package_data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+    if os.path.exists(package_data_dir) and os.access(package_data_dir, os.W_OK):
+        # Editable install with writable data directory
+        dbdir = package_data_dir
+    else:
+        # PyPI install or non-writable package location - use runtime directory
+        home = os.environ.get('HOME', os.path.expanduser('~'))
+        dbdir = os.path.join(home, 'mozart', 'data')
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(dbdir, "app.db")
     db = SQLAlchemy(app)
 
