@@ -72,12 +72,14 @@ packages = ["mozart"]
 [tool.hatch.build.targets.wheel.shared-data]
 "scripts" = "share/mozart/scripts"
 "settings" = "share/mozart/settings"
+"configs" = "share/mozart/configs"
 
 [tool.hatch.build.targets.sdist]
 include = [
     "/mozart",
     "/scripts",
     "/settings",
+    "/configs",
     "README.md",
     "LICENSE",
 ]
