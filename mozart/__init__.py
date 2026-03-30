@@ -81,6 +81,29 @@ def resource_not_found(e):
     return jsonify({"status_code": 404, "message": str(e)}), 404
 
 
+def get_package_path(subdir, relative_path):
+    """Get path to package resource for both PyPI and editable installs.
+    
+    Priority:
+    1. PyPI install: share/mozart/{subdir}/
+    2. Editable install: ../{subdir}/
+    
+    :param subdir: Subdirectory name (e.g., 'configs', 'scripts')
+    :param relative_path: Relative path within subdirectory (e.g., 'es_settings.json', 'job_creators')
+    :return: Full path to resource
+    """
+    import sysconfig
+    
+    # Try PyPI location first
+    pypi_path = os.path.join(sysconfig.get_path('data'), 'share', 'mozart', subdir, relative_path)
+    if os.path.exists(pypi_path):
+        return pypi_path
+    
+    # Fallback to editable install location
+    editable_path = os.path.join(os.path.dirname(__file__), "..", subdir, relative_path)
+    return os.path.abspath(editable_path)
+
+
 app = Flask(__name__)
 app.wsgi_app = ReverseProxied(app.wsgi_app)
 

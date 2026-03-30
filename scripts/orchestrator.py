@@ -12,7 +12,7 @@ import pprint
 from datetime import datetime, timezone
 import pika
 
-from mozart import app
+from mozart import app, get_package_path
 from pikaUtils import pika_callback
 
 
@@ -240,9 +240,7 @@ class Orchestrator:
         logger.info("Starting up orchestrator using %s." % self._config_file)
 
         # append job_creators dir
-        self._job_creators_dir = os.path.normpath(
-            os.path.join(app.root_path, "..", "scripts", "job_creators")
-        )
+        self._job_creators_dir = get_package_path("scripts", "job_creators")
         logger.info("Job creators directory: %s." % self._job_creators_dir)
 
     def create_job_callback(self, channel, method, properties, body):
