@@ -27,4 +27,4 @@ with open(path) as f:
     body = {**body, **user_rules_mapping}
 
 # create destination index
-mozart_es.es.indices.create(USER_RULES_INDEX, body, ignore=400)
+mozart_es.es.indices.create(index=USER_RULES_INDEX, body=body, ignore=400)
