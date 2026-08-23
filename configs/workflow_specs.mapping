@@ -1,0 +1,49 @@
+{
+  "mappings": {
+    "properties": {
+      "id": {
+        "type": "keyword"
+      },
+      "version": {
+        "type": "keyword"
+      },
+      "schema_version": {
+        "type": "keyword"
+      },
+      "label": {
+        "type": "text"
+      },
+      "username": {
+        "type": "keyword"
+      },
+      "creation_time": {
+        "type": "date"
+      },
+      "modification_time": {
+        "type": "date"
+      },
+      "tags": {
+        "type": "keyword"
+      },
+      "entry": {
+        "type": "keyword"
+      },
+      "defaults": {
+        "type": "object",
+        "enabled": false
+      },
+      "inputs": {
+        "type": "object",
+        "enabled": false
+      },
+      "nodes": {
+        "type": "object",
+        "enabled": false
+      },
+      "outputs": {
+        "type": "object",
+        "enabled": false
+      }
+    }
+  }
+}

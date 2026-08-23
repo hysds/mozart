@@ -1,0 +1,54 @@
+{
+  "mappings": {
+    "properties": {
+      "run_id": {
+        "type": "keyword"
+      },
+      "spec_id": {
+        "type": "keyword"
+      },
+      "schema_version": {
+        "type": "keyword"
+      },
+      "status": {
+        "type": "keyword"
+      },
+      "username": {
+        "type": "keyword"
+      },
+      "tags": {
+        "type": "keyword"
+      },
+      "submitted_at": {
+        "type": "date"
+      },
+      "updated_at": {
+        "type": "date"
+      },
+      "ended_at": {
+        "type": "date"
+      },
+      "current_nodes": {
+        "type": "keyword"
+      },
+      "error": {
+        "type": "text"
+      },
+      "traceback": {
+        "type": "text"
+      },
+      "inputs": {
+        "type": "object",
+        "enabled": false
+      },
+      "nodes": {
+        "type": "object",
+        "enabled": false
+      },
+      "outputs": {
+        "type": "object",
+        "enabled": false
+      }
+    }
+  }
+}

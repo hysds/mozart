@@ -1,0 +1,46 @@
+{
+  "id": "job-workflow-scatter:v1.0.0",
+  "job-version": "v1.0.0",
+  "label": "Workflow connector: scatter",
+  "description": "Enumerate the $.-ref array and fan out one child job per element, recording expected N atomically.",
+  "container": "hysds/workflow-connectors:v1.0.0",
+  "command": "/home/ops/workflow_connectors/run_scatter.sh",
+  "recommended-queues": [
+    "workflow-connector-scatter"
+  ],
+  "imported_worker_files": {
+    "$HOME/.netrc": [
+      "/home/ops/.netrc"
+    ],
+    "$HOME/.aws": [
+      "/home/ops/.aws",
+      "ro"
+    ]
+  },
+  "params": [
+    {
+      "name": "run_id",
+      "destination": "context"
+    },
+    {
+      "name": "step_id",
+      "destination": "context"
+    },
+    {
+      "name": "spec_id",
+      "destination": "context"
+    },
+    {
+      "name": "workflow_event",
+      "destination": "context"
+    }
+  ],
+  "disable_pre_builtins": true,
+  "disable_post_builtins": true,
+  "pre": [],
+  "post": [],
+  "disk_usage": "1MB",
+  "soft_time_limit": 900,
+  "time_limit": 1020,
+  "enable_dedup": false
+}
