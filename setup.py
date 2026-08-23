@@ -44,4 +44,13 @@ setup(
         "werkzeug>=2.2.0",
         "cryptography>=39.0.0",
     ],
+    extras_require={
+        'test': [
+            'pytest>=7.2.0',
+            # [lua] pulls in lupa, needed for the barrier's atomic EVAL scripts
+            'fakeredis[lua]>=2.20.0',
+            # used by scripts/install_es_template.py to render configs/es_template.json
+            'Jinja2>=3.0.0',
+        ],
+    },
 )
