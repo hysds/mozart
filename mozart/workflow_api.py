@@ -26,7 +26,8 @@ from hysds_commons.workflow_status import (
     get_status,
     update_status,
 )
-from hysds_commons.workflow_submit import submit_workflow_job, workflow_tag
+# mozart is the submission authority, so it submits the entry job in-process
+from hysds_commons.workflow_submit import submit_workflow_job_inprocess as submit_workflow_job, workflow_tag
 
 from mozart import app, mozart_es
 
