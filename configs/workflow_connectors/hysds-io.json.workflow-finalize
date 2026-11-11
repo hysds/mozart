@@ -1,0 +1,31 @@
+{
+  "label": "Workflow connector: finalize",
+  "component": "mozart",
+  "submission_type": "individual",
+  "id": "hysds-io-workflow-finalize:v1.0.0",
+  "job-specification": "job-workflow-finalize:v1.0.0",
+  "job-version": "v1.0.0",
+  "enable_dedup": false,
+  "params": [
+    {
+      "name": "run_id",
+      "from": "submitter",
+      "type": "text"
+    },
+    {
+      "name": "step_id",
+      "from": "submitter",
+      "type": "text"
+    },
+    {
+      "name": "spec_id",
+      "from": "submitter",
+      "type": "text"
+    },
+    {
+      "name": "workflow_event",
+      "from": "submitter",
+      "type": "text"
+    }
+  ]
+}

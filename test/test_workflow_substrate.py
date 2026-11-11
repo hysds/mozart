@@ -23,7 +23,7 @@ from test_configs import VALID_FIELD_TYPES, _iter_properties
 
 WORKFLOW_MAPPINGS = ("workflow_specs.mapping", "workflow_status.mapping")
 
-CONNECTORS = ("pass", "scatter", "gather", "gate", "switch", "halt")
+CONNECTORS = ("pass", "scatter", "gather", "gate", "switch", "halt", "finalize")
 
 SHARED_CONTAINER = "hysds/workflow-connectors:v1.0.0"
 

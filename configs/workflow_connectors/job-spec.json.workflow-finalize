@@ -1,0 +1,42 @@
+{
+  "id": "job-workflow-finalize:v1.0.0",
+  "job-version": "v1.0.0",
+  "label": "Workflow connector: finalize",
+  "description": "Terminal node materialized after the last node completes; marks the run completed and resolves the workflow outputs.",
+  "container": "hysds/workflow-connectors:v1.0.0",
+  "command": "/home/ops/workflow_connectors/run_finalize.sh",
+  "recommended-queues": [
+    "workflow-connector-finalize"
+  ],
+  "imported_worker_files": {},
+  "runtime_options": {
+    "network": "host",
+    "env-file": "$HOME/.workflow-connectors.env"
+  },
+  "params": [
+    {
+      "name": "run_id",
+      "destination": "context"
+    },
+    {
+      "name": "step_id",
+      "destination": "context"
+    },
+    {
+      "name": "spec_id",
+      "destination": "context"
+    },
+    {
+      "name": "workflow_event",
+      "destination": "context"
+    }
+  ],
+  "disable_pre_builtins": true,
+  "disable_post_builtins": true,
+  "pre": [],
+  "post": [],
+  "disk_usage": "1MB",
+  "soft_time_limit": 300,
+  "time_limit": 360,
+  "enable_dedup": false
+}

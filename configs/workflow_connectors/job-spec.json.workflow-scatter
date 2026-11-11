@@ -8,14 +8,10 @@
   "recommended-queues": [
     "workflow-connector-scatter"
   ],
-  "imported_worker_files": {
-    "$HOME/.netrc": [
-      "/home/ops/.netrc"
-    ],
-    "$HOME/.aws": [
-      "/home/ops/.aws",
-      "ro"
-    ]
+  "imported_worker_files": {},
+  "runtime_options": {
+    "network": "host",
+    "env-file": "$HOME/.workflow-connectors.env"
   },
   "params": [
     {
