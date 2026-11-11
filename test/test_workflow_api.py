@@ -11,6 +11,8 @@ from flask_restx import Api
 
 from hysds_commons.workflow_examples import linear_spec, scatter_gather_spec
 
+DEFAULT_WORKFLOW_CONNECTORS_IDS = ["job-workflow-pass:v1.0.0", "job-workflow-scatter:v1.0.0",
+                                   "job-workflow-gather:v1.0.0"]
 REPO = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
@@ -56,8 +58,11 @@ class FakeES:
 def _load(version, monkeypatch):
     flask_app = Flask("t")
     flask_app.config.update(WORKFLOW_SPECS_INDEX="specs", WORKFLOW_STATUS_INDEX="status",
-                            JOB_STATUS_INDEX="job_status-current")
+                            JOB_STATUS_INDEX="job_status-current",
+                            JOB_SPECS_INDEX="job_specs")
     es = FakeES()
+    for jt in DEFAULT_WORKFLOW_CONNECTORS_IDS:  # default connector job_specs are registered
+        es.docs[("job_specs", jt)] = ({"id": jt}, 1)
     monkeypatch.setitem(sys.modules, "mozart",
                         umock.MagicMock(app=flask_app, mozart_es=umock.MagicMock(es=es)))
 
@@ -101,7 +106,14 @@ def test_spec_post_valid(env, fixture):
     sid = f"{spec['id']}:{spec['version']}"
     assert r.get_json()["spec_id"] == sid
     stored_doc = es.doc("specs", sid)
-    assert stored_doc["entry"] == spec["entry"] and stored_doc["nodes"] == spec["nodes"]
+    assert stored_doc["entry"] == spec["entry"]
+    # stored spec is fully resolved (contract 11.3); everything else is as posted
+    for nid, n in stored_doc["nodes"].items():
+        k = n["kind"]
+        if k in ("pass", "scatter", "gather"):
+            assert n.pop("connector") == f"job-workflow-{k}:v1.0.0"
+            assert n.pop("connector_queue") == f"workflow-connector-{k}"
+    assert stored_doc["nodes"] == spec["nodes"]
 
 
 def test_spec_post_invalid_lists_all_errors(env):
@@ -114,7 +126,48 @@ def test_spec_post_invalid_lists_all_errors(env):
     assert r.status_code == 400
     body = r.get_json()
     assert body["success"] is False and len(body["errors"]) >= 2
-    assert not es.docs
+    assert not any(k[0] == "specs" for k in es.docs)
+
+
+def test_spec_connector_not_allowed_400(env):
+    c, es, _ = env
+    spec = scatter_gather_spec()
+    spec["nodes"]["scatter_1"]["connector"] = "job-rogue:v1"
+    r = c.post("/workflow/specs", json=spec)
+    assert r.status_code == 400
+    errs = r.get_json()["errors"]
+    assert "scatter_1" in errs[0] and "job-workflow-scatter:v1.0.0" in errs[0]
+    assert ("specs", "demo-scatter:1.0.0") not in es.docs and not any(k[0] == "specs" for k in es.docs)
+
+
+def test_spec_connector_not_registered_400(env):
+    c, es, _ = env
+    del es.docs[("job_specs", "job-workflow-gather:v1.0.0")]
+    r = c.post("/workflow/specs", json=scatter_gather_spec())
+    assert r.status_code == 400
+    errs = r.get_json()["errors"]
+    assert errs and all("job-workflow-gather:v1.0.0" in e for e in errs)
+    assert not any(k[0] == "specs" for k in es.docs)
+
+
+def test_spec_mission_connector_stored_with_queue(env):
+    c, es, _ = env
+    c.application.config["WORKFLOW_CONNECTORS"] = {
+        "pass": {"default": "job-workflow-pass:v1.0.0",
+                 "allowed": {"job-workflow-pass:v1.0.0": "workflow-connector-pass"}},
+        "scatter": {"default": "job-workflow-scatter:v1.0.0",
+                    "allowed": {"job-workflow-scatter:v1.0.0": "workflow-connector-scatter",
+                                "job-m-scatter:v1": "m-queue"}},
+        "gather": {"default": "job-workflow-gather:v1.0.0",
+                   "allowed": {"job-workflow-gather:v1.0.0": "workflow-connector-gather"}},
+    }
+    es.docs[("job_specs", "job-m-scatter:v1")] = ({}, 1)
+    spec = scatter_gather_spec()
+    spec["nodes"]["scatter_1"].update(connector="job-m-scatter:v1", connector_queue="ignored")
+    r = c.post("/workflow/specs", json=spec)
+    assert r.status_code == 201, r.data
+    n = es.doc("specs", r.get_json()["spec_id"])["nodes"]["scatter_1"]
+    assert n["connector"] == "job-m-scatter:v1" and n["connector_queue"] == "m-queue"
 
 
 def test_spec_post_non_object(env):

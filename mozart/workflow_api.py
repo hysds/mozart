@@ -15,8 +15,10 @@ from flask_restx import Namespace, Resource
 
 from hysds_commons.workflow_refs import WorkflowRefError, build_context, resolve_inputs
 from hysds_commons.workflow_spec import (
+    DEFAULT_WORKFLOW_CONNECTORS,
     WorkflowSpecError,
     check_spec,
+    resolve_connectors,
     spec_doc_id,
     validate_run_inputs,
 )
@@ -63,6 +65,21 @@ def _is_error(resp, code):
     return isinstance(resp, dict) and "error" in resp and resp.get("status") == code
 
 
+def _missing_connector_specs(spec):
+    """[(node_id, kind, connector)] whose connector job_spec is absent from the job_specs index."""
+    missing, seen = [], {}
+    for nid, node in spec["nodes"].items():
+        conn = node.get("connector")
+        if not conn:
+            continue
+        if conn not in seen:
+            r = _es().get(index=app.config["JOB_SPECS_INDEX"], id=conn, ignore=404)
+            seen[conn] = not (_is_error(r, 404) or not r.get("found", True))
+        if not seen[conn]:
+            missing.append((nid, node["kind"], conn))
+    return missing
+
+
 def create_spec():
     spec = _body()
     if spec is None:
@@ -74,6 +91,21 @@ def create_spec():
             "success": False,
             "message": "invalid workflow spec",
             "errors": list(e.errors),
+        }, 400
+    spec, errors = resolve_connectors(spec, app.config.get("WORKFLOW_CONNECTORS", DEFAULT_WORKFLOW_CONNECTORS))
+    if errors:
+        return {"success": False, "message": "invalid workflow spec", "errors": errors}, 400
+    try:
+        missing = _missing_connector_specs(spec)
+    except Exception as e:
+        app.logger.error("workflow connector job_spec lookup failed: %s", e)
+        return _fail(f"Failed to check connector job_specs. {type(e)}:{e}", 500)
+    if missing:
+        return {
+            "success": False,
+            "message": "connector job_spec(s) not registered",
+            "errors": [f"node '{nid}' ({kind}): connector job_spec '{c}' is not registered in the "
+                       f"job_specs index" for nid, kind, c in missing],
         }, 400
     spec_id = spec_doc_id(spec)
     now = _now()

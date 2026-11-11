@@ -33,6 +33,16 @@ CONTAINERS_INDEX = "containers"
 WORKFLOW_SPECS_INDEX = "workflow_specs"
 WORKFLOW_STATUS_INDEX = "workflow_status"
 
+# Pluggable workflow connectors (contract section 11.2): kind -> default + allowed {job_spec id: queue}
+WORKFLOW_CONNECTORS = {
+    "pass":    {"default": "job-workflow-pass:v1.0.0",
+                "allowed": {"job-workflow-pass:v1.0.0": "workflow-connector-pass"}},
+    "scatter": {"default": "job-workflow-scatter:v1.0.0",
+                "allowed": {"job-workflow-scatter:v1.0.0": "workflow-connector-scatter"}},
+    "gather":  {"default": "job-workflow-gather:v1.0.0",
+                "allowed": {"job-workflow-gather:v1.0.0": "workflow-connector-gather"}},
+}
+
 # key file for fabric
 KEY_FILENAME = "{{ KEY_FILENAME }}"
 
