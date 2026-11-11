@@ -13,6 +13,12 @@ from datetime import datetime, timezone
 from flask import request
 from flask_restx import Namespace, Resource
 
+from hysds_commons.workflow_cancel import (
+    TERMINAL_RUN_STATUSES,
+    cancel_mutate,
+    resolve_revoke_job_type,
+    sweep_run,
+)
 from hysds_commons.workflow_refs import WorkflowRefError, build_context, resolve_inputs
 from hysds_commons.workflow_spec import (
     DEFAULT_WORKFLOW_CONNECTORS,
@@ -311,6 +317,44 @@ def get_run_steps(run_id):
     return {"success": True, "message": "", "run_id": run_id, "result": steps}, 200
 
 
+def cancel_run(run_id):
+    """Contract 12.5. 404 unknown run; 409 terminal and not cancelled; 200 already
+    cancelled (sweep only); else 202 after cancelling the run and revoking its jobs."""
+    body = _body() or {}
+    user = body.get("user") or request.args.get("user") or DEFAULT_USER
+    try:
+        doc, _, _ = get_status(_es(), _status_index(), run_id)
+    except WorkflowStatusNotFound:
+        return _fail(f"workflow run not found: {run_id}", 404)
+    except Exception as e:
+        return _fail(f"Failed to get workflow run. {type(e)}:{e}", 500)
+
+    status = doc.get("status")
+    already = status == "cancelled"
+    if status in TERMINAL_RUN_STATUSES and not already:
+        return _fail(f"workflow run {run_id} is already {status}", 409)
+    if not already:
+        try:
+            doc = update_status(_es(), _status_index(), run_id, cancel_mutate(user))
+        except Exception as e:
+            app.logger.error("workflow run cancel failed: %s", e)
+            return _fail(f"Failed to cancel workflow run. {type(e)}:{e}", 500)
+        if doc.get("status") != "cancelled":  # lost a race with completion/failure
+            return _fail(f"workflow run {run_id} is already {doc.get('status')}", 409)
+
+    try:
+        job_type = resolve_revoke_job_type(
+            _es(), app.config["JOB_SPECS_INDEX"], app.config.get("WORKFLOW_REVOKE_JOB_TYPE"))
+        revoked = sweep_run(_es(), app.config["JOB_STATUS_INDEX"], run_id,
+                            submit_workflow_job, job_type, username=user)
+    except Exception as e:
+        msg = f"Run {run_id} is cancelled but revoking its jobs failed (retry the cancel). {type(e)}:{e}"
+        app.logger.error(msg)
+        return {"success": False, "message": msg, "run_id": run_id}, 500
+    return {"success": True, "message": "", "run_id": run_id, "revoked": revoked,
+            "result": run_id}, (200 if already else 202)
+
+
 def make_workflow_ns():
     """Build the ``workflow`` Namespace (called once per API version)."""
     ns = Namespace("workflow", description="Workflow specs and runs")
@@ -350,5 +394,13 @@ def make_workflow_ns():
         def get(self, run_id):
             """Per-step job_status counts for a run (tag aggregation; may lag)"""
             return get_run_steps(run_id)
+
+    @ns.route("/runs/<string:run_id>/cancel", endpoint="workflow-run-cancel")
+    class RunCancel(Resource):
+        @ns.doc(responses={200: "Already cancelled (sweep only)", 202: "Cancelled",
+                           404: "No such run", 409: "Run already completed/failed"})
+        def post(self, run_id):
+            """Cancel a run and revoke its non-terminal jobs"""
+            return cancel_run(run_id)
 
     return ns

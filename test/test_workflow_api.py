@@ -59,7 +59,8 @@ def _load(version, monkeypatch):
     flask_app = Flask("t")
     flask_app.config.update(WORKFLOW_SPECS_INDEX="specs", WORKFLOW_STATUS_INDEX="status",
                             JOB_STATUS_INDEX="job_status-current",
-                            JOB_SPECS_INDEX="job_specs")
+                            JOB_SPECS_INDEX="job_specs",
+                            WORKFLOW_REVOKE_JOB_TYPE="job-lw-mozart-revoke:test")
     es = FakeES()
     for jt in DEFAULT_WORKFLOW_CONNECTORS_IDS:  # default connector job_specs are registered
         es.docs[("job_specs", jt)] = ({"id": jt}, 1)
@@ -319,3 +320,84 @@ def test_steps_empty_and_404(stored):
     es.search_result = {"hits": {"hits": []}}
     assert c.get(f"/workflow/runs/{run_id}/steps").get_json()["result"] == {}
     assert c.get("/workflow/runs/run-missing/steps").status_code == 404
+
+
+# ---- cancel (12.5)
+
+def _hits(*ids):
+    return {"hits": {"hits": [{"_id": i, "_source": {}, "sort": [n, i]}
+                              for n, i in enumerate(ids)]}}
+
+
+def test_cancel_running_run_202(stored):
+    c, es, submit = stored
+    run_id = _post_run(c).get_json()["run_id"]
+    es.search_result = _hits("p1", "p2")
+    r = c.post(f"/workflow/runs/{run_id}/cancel", json={"user": "bob"})
+    assert r.status_code == 202, r.data
+    assert r.get_json()["revoked"] == 2 and r.get_json()["run_id"] == run_id
+    doc = es.doc("status", run_id)
+    assert doc["status"] == "cancelled" and doc["error"] == "cancelled by bob"
+    assert {n["state"] for n in doc["nodes"].values()} == {"cancelled"}
+    kw = submit.call_args.kwargs  # the last call is the revoke (entry submit was earlier)
+    assert kw["job_type"] == "job-lw-mozart-revoke:test" and kw["queue"] == "system-jobs-queue"
+    assert kw["workflow"] is None and kw["params"]["operation"] == "revoke"
+    assert kw["params"]["component"] == "mozart"
+    import json as _j
+    assert _j.loads(kw["params"]["query"])["query"]["ids"]["values"] == ["p1", "p2"]
+    index, body, _ = es.searches[-1]
+    assert index == "job_status-current"
+    assert body["query"]["bool"]["filter"] == [{"term": {"workflow.run_id": run_id}}]
+
+
+def test_cancel_no_jobs_submits_nothing(stored):
+    c, es, submit = stored
+    run_id = _post_run(c).get_json()["run_id"]
+    submit.reset_mock()
+    es.search_result = {"hits": {"hits": []}}
+    r = c.post(f"/workflow/runs/{run_id}/cancel")
+    assert r.status_code == 202 and r.get_json()["revoked"] == 0
+    assert es.doc("status", run_id)["error"] == "cancelled by anonymous"
+    submit.assert_not_called()
+
+
+def test_cancel_unknown_404(stored):
+    c, es, _ = stored
+    assert c.post("/workflow/runs/run-missing/cancel").status_code == 404
+
+
+@pytest.mark.parametrize("st", ["completed", "failed"])
+def test_cancel_terminal_409(stored, st):
+    c, es, submit = stored
+    run_id = _post_run(c).get_json()["run_id"]
+    doc = es.doc("status", run_id)
+    doc["status"] = st
+    es.index("status", run_id, doc)
+    submit.reset_mock()
+    r = c.post(f"/workflow/runs/{run_id}/cancel")
+    assert r.status_code == 409 and st in r.get_json()["message"]
+    submit.assert_not_called()
+    assert es.doc("status", run_id)["status"] == st
+
+
+def test_cancel_already_cancelled_200_sweeps(stored):
+    c, es, submit = stored
+    run_id = _post_run(c).get_json()["run_id"]
+    es.search_result = _hits()
+    assert c.post(f"/workflow/runs/{run_id}/cancel").status_code == 202
+    es.search_result = _hits("late-1")
+    before = es.doc("status", run_id)
+    r = c.post(f"/workflow/runs/{run_id}/cancel")
+    assert r.status_code == 200 and r.get_json()["revoked"] == 1
+    assert es.doc("status", run_id) == before
+    assert submit.call_args.kwargs["params"]["operation"] == "revoke"
+
+
+def test_cancel_revoke_failure_500_run_stays_cancelled(stored):
+    c, es, submit = stored
+    run_id = _post_run(c).get_json()["run_id"]
+    es.search_result = _hits("p1")
+    submit.side_effect = RuntimeError("amqp down")
+    r = c.post(f"/workflow/runs/{run_id}/cancel")
+    assert r.status_code == 500 and "retry the cancel" in r.get_json()["message"]
+    assert es.doc("status", run_id)["status"] == "cancelled"
