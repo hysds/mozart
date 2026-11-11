@@ -162,7 +162,11 @@ def test_shared_container_doc(connectors_dir):
     with open(path) as f:
         container = json.load(f)
     assert container["id"] == f"{container['name']}:{container['version']}"
-    assert container["name"] == "container-workflow-connectors"
+    # id/name must equal the image the connector job_specs reference in "container"
+    assert container["name"] == "hysds/workflow-connectors"
+    for connector in ("pass", "finalize", "halt", "scatter", "gather"):
+        with open(os.path.join(connectors_dir, f"job-spec.json.workflow-{connector}")) as f:
+            assert json.load(f)["container"] == container["id"]
     assert container["url"].startswith("s3://")
 
 
