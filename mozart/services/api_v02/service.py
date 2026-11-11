@@ -10,6 +10,7 @@ from mozart.services.api_v02.events import event_ns
 from mozart.services.api_v02.jobs import job_ns, queue_ns, on_demand_ns
 from mozart.services.api_v02.tags import user_tags_ns, user_rules_tags_ns
 from mozart.services.api_v02.user_rules import user_rule_ns
+from mozart.services.api_v02.workflow import workflow_ns
 
 
 services = Blueprint("api_v0-2", __name__, url_prefix="/api/v0.2")
@@ -40,6 +41,9 @@ api.add_namespace(user_rules_tags_ns)
 
 # user_rules.py
 api.add_namespace(user_rule_ns)
+
+# workflow.py
+api.add_namespace(workflow_ns)
 
 
 @services.route("/doc/", endpoint="api_doc")
