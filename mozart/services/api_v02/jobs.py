@@ -101,6 +101,13 @@ class SubmitJob(Resource):
         help="enable a job to overwrite an existing dataset on publish",
     )
     parser.add_argument(
+        "workflow",
+        type=str,
+        required=False,
+        help="optional JSON workflow tag, e.g. {\"run_id\": \"r1\", \"step_id\": \"s1\", "
+        "\"spec_id\": \"sp\", \"child_index\": 0, \"child_total\": 3}",
+    )
+    parser.add_argument(
         "params",
         required=False,
         type=str,
@@ -152,7 +159,15 @@ class SubmitJob(Resource):
             "publish_overwrite_ok", request.args.get("publish_overwrite_ok", False)
         )
 
+        workflow = request.form.get("workflow", request.args.get("workflow", None))
+
         try:
+            if workflow is not None:
+                try:
+                    workflow = json.loads(workflow)
+                except Exception:
+                    raise Exception(f"Failed to parse input workflow. '{workflow}' is malformed")
+
             if enable_dedup.strip().lower() == "true":
                 enable_dedup = True
             elif enable_dedup.strip().lower() == "false":
@@ -211,6 +226,7 @@ class SubmitJob(Resource):
                 time_limit=time_limit,
                 disk_usage=disk_usage,
                 publish_overwrite_ok=publish_overwrite_ok,
+                workflow=workflow,
             )
             ident = hysds_commons.job_utils.submit_hysds_job(job_json)
         except Exception as e:
