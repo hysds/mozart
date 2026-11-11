@@ -7,13 +7,8 @@ structurally valid; they deliberately never touch a cluster.
 Covers:
 - ``configs/workflow_specs.mapping`` and ``configs/workflow_status.mapping``,
   created by ``scripts/create_workflow_indices.py``.
-- ``configs/job_status_workflow.mapping`` -- the additive fragment carrying the
-  ``workflow`` keyword fields and the ADR-003 ``job_info.workflow_outputs``
-  nested mapping. NOTE: mozart does not own the ``job_status`` template; it
-  lives in ``sdscli/sdscli/adapters/hysds/files/job_status.template`` and is
-  installed by ``scripts/install_es_template.py --install_job_templates
-  --template_dir <etc>``. This fragment is the mozart-side declaration of what
-  must be merged there.
+- (The ``job_status`` workflow mappings live in sdscli's ``job_status.template``
+  and are tested there.)
 - ``configs/workflow_connectors/`` -- one shared container plus a job_spec per
   connector primitive.
 """
@@ -31,16 +26,6 @@ WORKFLOW_MAPPINGS = ("workflow_specs.mapping", "workflow_status.mapping")
 CONNECTORS = ("pass", "scatter", "gather", "gate", "switch", "halt")
 
 SHARED_CONTAINER = "hysds/workflow-connectors:v1.0.0"
-
-# ADR-003: exactly these four fields, and no more -- the indexed-field count
-# stays fixed at 4 no matter how many workflows or output names exist.
-WORKFLOW_OUTPUT_FIELDS = {
-    "name": "keyword",
-    "value_s": "keyword",
-    "value_d": "double",
-    "value_b": "boolean",
-}
-
 
 @pytest.fixture
 def connectors_dir(configs_dir):
@@ -104,39 +89,8 @@ def test_author_keyed_subdocuments_are_index_disabled(load_config, doc):
         )
 
 
-# --- job_status additions (ADR-003) ------------------------------------------
-
-
-def test_job_status_workflow_tags_are_keywords(load_config):
-    """The tag aggregation, Redis-loss rebuild and UI rollup all need these."""
-    props = load_config("job_status_workflow.mapping")["mappings"]["properties"]
-    workflow = props["workflow"]["properties"]
-    for field in ("run_id", "step_id", "spec_id"):
-        assert workflow[field]["type"] == "keyword", (
-            f"workflow.{field} must be keyword -- term-filterable and aggregatable"
-        )
-    assert workflow["child_index"]["type"] == "integer"
-    assert workflow["child_total"]["type"] == "integer"
-
-
-def test_job_info_workflow_outputs_is_nested_and_explicit(load_config):
-    """The ADR-003 nested mapping, declared so it escapes the string rule.
-
-    Mozart's ``es_template.json`` declares only ``_timestamp`` and
-    ``text_fields``, so ``job_info`` is entirely dynamically mapped today; the
-    ``dynamic_templates`` catch-all would otherwise map every one of these as
-    ``text``.
-    """
-    props = load_config("job_status_workflow.mapping")["mappings"]["properties"]
-    outputs = props["job"]["properties"]["job_info"]["properties"]["workflow_outputs"]
-
-    assert outputs["type"] == "nested"
-    assert set(outputs["properties"]) == set(WORKFLOW_OUTPUT_FIELDS), (
-        "the indexed-field count must stay fixed at 4"
-    )
-    for field, expected_type in WORKFLOW_OUTPUT_FIELDS.items():
-        assert outputs["properties"][field]["type"] == expected_type
-        assert "copy_to" not in outputs["properties"][field]
+# job_status additions (workflow tags, nested workflow_outputs) live in sdscli:
+# sdscli/test/test_job_status_template.py
 
 
 def test_es_template_string_rule_is_why_the_declaration_is_needed(load_config):
