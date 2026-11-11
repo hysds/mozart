@@ -21,6 +21,8 @@ setup(
     install_requires=[
         'Flask<2.3.0',  # TODO: remove kluge when Flask-DebugToolbar fixes import error
         'flask-restx>=0.5.1',
+        'flask-cors',
+        'hysds_commons>=2.4.0',
         'Flask-SQLAlchemy>=3.0.0',
         'Flask-WTF>=0.15.1',
         'Flask-DebugToolbar>=0.11.0',
