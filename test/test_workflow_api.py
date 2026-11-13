@@ -1,5 +1,6 @@
 """``/workflow`` REST namespace, API v0.1 and v0.2 (Flask test client, fake ES)."""
 import copy
+import json
 import importlib.util
 import os
 import sys
@@ -474,3 +475,28 @@ def test_cancel_revoke_failure_500_run_stays_cancelled(stored):
     r = c.post(f"/workflow/runs/{run_id}/cancel")
     assert r.status_code == 500 and "retry the cancel" in r.get_json()["message"]
     assert es.doc("status", run_id)["status"] == "cancelled"
+
+
+def test_entry_job_tag_is_step_id(stored):
+    c, es, submit = stored
+    assert _post_run(c).status_code == 202
+    assert submit.call_args.kwargs["tags"] == ["A"]
+
+
+def test_entry_job_tag_from_node_tag(env):
+    c, es, submit = env
+    spec = linear_spec()
+    spec["nodes"]["A"]["tag"] = "ingest"
+    assert c.post("/workflow/specs", json=spec).status_code == 201
+    assert _post_run(c).status_code == 202
+    assert submit.call_args.kwargs["tags"] == ["ingest"]
+
+
+def test_run_tags_do_not_flow_to_entry_job(stored):
+    c, es, submit = stored
+    r = _post_run(c, tags=["nightly", "figaro"])
+    assert r.status_code == 202
+    assert es.doc("status", r.get_json()["run_id"])["tags"] == ["nightly", "figaro"]
+    kw = submit.call_args.kwargs
+    assert kw["tags"] == ["A"]
+    assert "nightly" not in json.dumps(kw["tags"]) and "nightly" not in json.dumps(kw["workflow"])

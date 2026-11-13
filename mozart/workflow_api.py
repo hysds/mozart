@@ -24,6 +24,7 @@ from hysds_commons.workflow_spec import (
     DEFAULT_WORKFLOW_CONNECTORS,
     WorkflowSpecError,
     check_spec,
+    job_tag,
     resolve_node_queue,
     resolve_connectors,
     spec_doc_id,
@@ -271,6 +272,7 @@ def create_run():
             queue=queue,
             params=params,
             workflow=workflow_tag(run_id, entry, spec_id),
+            tags=[job_tag(node, entry)],
             username=user,
         )
     except Exception as e:
