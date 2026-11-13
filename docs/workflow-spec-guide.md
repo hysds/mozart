@@ -374,35 +374,71 @@ curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<
 |---|---|
 | `POST /workflow/specs` | Register a spec. Returns `201`, `400` with `errors[]`, or `409` if it exists. |
 | `GET /workflow/specs`, `GET /workflow/specs/<id:version>` | List specs or fetch one. |
-| `POST /workflow/runs` `{spec_id, inputs, user?}` | Start a run. Returns `202 {run_id}`, `400` for bad inputs, or `404` for an unknown spec. |
+| `POST /workflow/runs` `{spec_id, inputs, user?, tags?}` | Start a run. `tags` is an optional list of non-empty strings for finding runs later. Returns `202 {run_id}`, `400` for bad inputs or tags, or `404` for an unknown spec. |
 | `GET /workflow/runs/<run_id>` | Get the status doc (below). |
 | `GET /workflow/runs/<run_id>/steps` | Job counts per step and status, e.g. `{"process": {"job-completed": 41, "job-started": 9}}`. Use it for live progress, since the doc only shows node state. |
 | `POST /workflow/runs/<run_id>/cancel` | Cancel a run ([§5.4](#54-cancelling)). |
 
-**Status doc** (`.result`):
+**Status doc** (`.result`). This one is for a run that failed below its scatter threshold:
 
 ```json
-{ "run_id": "run-…", "spec_id": "granule-mosaic:1.0.0", "status": "running",
-  "username": "jdoe", "inputs": { "collection": "…", "bbox": [ … ] },
-  "submitted_at": "…Z", "updated_at": "…Z", "ended_at": null, "error": null, "outputs": null,
+{ "run_id": "run-…", "spec_id": "granule-mosaic:1.0.0",
+  "spec_name": "granule-mosaic", "spec_version": "1.0.0", "has_scatter": true,
+  "status": "failed", "username": "jdoe", "tags": ["campaign-7"],
+  "inputs": { "collection": "…", "bbox": [ … ] },
+  "submitted_at": "…Z", "updated_at": "…Z", "ended_at": "…Z", "duration_s": 5412.8,
+  "current_nodes": [], "failed_node": "process", "error_class": "threshold",
+  "error": "step process failed: scatter process: 41/50 completed < threshold 0.9", "outputs": null,
   "nodes": {
-    "list":    { "state": "completed", "job_id": "…", "outputs": { "granules": [ … ], "count": 50 } },
+    "list":    { "state": "completed", "job_id": "…", "started_at": "…Z", "ended_at": "…Z",
+                 "outputs": { "granules": [ … ], "count": 50 } },
     "fan_out": { "state": "completed", "outputs": { "n": 50 } },
-    "process": { "state": "running", "expected": 50, "threshold": 0.9 },
+    "process": { "state": "failed", "expected": 50, "threshold": 0.9,
+                 "attempts": [ { "job_id": "…", "payload_id": "…", "status": "job-failed",
+                                 "error": "…", "error_class": "pge:throttled", "retry_count": 0,
+                                 "ended_at": "…Z", "child_index": 17 } ] },
     "collect": { "state": "pending" }, "to_mosaic": { "state": "pending" }, "mosaic": { "state": "pending" } } }
 ```
 
-- Run `status` is one of `running`, `completed`, `failed` or `cancelled`. `ended_at` is set
-  when the run reaches one of the last three.
-- Node `state` is one of `pending`, `queued`, `running`, `completed`, `failed` or
-  `cancelled`. `queued` means the node's params are resolved and its submit is imminent.
-  Jobs go from `queued` straight to `completed` or `failed`, so use `/steps` to see
-  progress.
-- After the gather finishes, the scatter child's entry adds `completed` and `failed` counts.
-- **In progress, not yet available:** more run fields (`spec_name`, `spec_version`,
-  `has_scatter`, `tags`, `failed_node`, `error_class`, `current_nodes`, `duration_s`) and
-  per-node `started_at`, `ended_at` and `attempts`. These are for the upcoming Workflows UI.
-  Don't depend on them yet.
+**Run fields**
+
+| field | meaning |
+|---|---|
+| `status` | `running`, `completed`, `failed` or `cancelled`. The last three are terminal. |
+| `spec_id`, `spec_name`, `spec_version` | The spec, as `name:version` and split into its two parts. |
+| `has_scatter` | `true` if the spec has a scatter node. |
+| `username`, `tags` | Who started the run, and the tags from the start request (`[]` if none). |
+| `inputs` | The resolved run inputs, with defaults applied. |
+| `submitted_at`, `updated_at` | When the run started and when the doc last changed. |
+| `ended_at`, `duration_s` | When the run became terminal (set once, never overwritten), and seconds from `submitted_at` to `ended_at`. |
+| `current_nodes` | The nodes queued or running right now. `[]` once the run is terminal. |
+| `error`, `failed_node`, `error_class` | Why the run didn't complete. See below. When a run fails, nodes after the failure stay `pending`; a cancel or timeout sets them to `cancelled`. |
+| `outputs` | The resolved `spec.outputs`, set when the run completes. |
+
+**`error_class` on a run that didn't complete**
+
+| value | meaning | `failed_node` |
+|---|---|---|
+| the job's own class, e.g. `exit_code:1`, `worker`, `pge:throttled` | A job failed and wasn't retried ([§2.4](#24-telling-the-retry-policy-why-you-failed-optional)). | the failing job node |
+| `threshold` | Too few scatter children completed. | the scatter child node |
+| `timeout` | The run hit `defaults.timeout_hours`. | the first node that was running |
+| `cancelled` | Someone cancelled the run. | none |
+| `input_resolution` | A node's `in` or `bind` refs couldn't be resolved. | the node |
+| `output_resolution` | `spec.outputs` couldn't be resolved at the end of the run. | the last node |
+| `submit` | Mozart couldn't submit the entry job. | the entry node |
+| `no_queue` | No queue could be found for a job. | the node |
+| `unknown` | The failure carried no class. | the failing node |
+
+**Node fields** (`nodes.<id>`). These are for display, and aren't searchable.
+
+| field | meaning |
+|---|---|
+| `state` | `pending`, `queued`, `running`, `completed`, `failed` or `cancelled`. `queued` means the node's params are resolved and its submit is imminent. Jobs go from `queued` straight to `completed` or `failed`, so use `/steps` to see progress. |
+| `started_at` | When the node was queued or started. For job nodes after the entry, it's the time the node was queued. |
+| `ended_at` | When the node reached a terminal state. A node cancelled before it started has none. |
+| `job_id`, `payload_id`, `outputs` | The job that ran the node, and its outputs. Scatter children don't store per-child outputs; the gather holds them. |
+| `expected`, `completed`, `failed`, `threshold` | On a scatter child node: the number of children, how many completed and failed (set only when the gather runs), and the threshold. |
+| `attempts` | One entry per failed attempt that was retried by `retry_on`, newest 100 kept: `job_id`, `payload_id`, `status`, `error`, `error_class`, `retry_count`, `ended_at`, and `child_index` for scatter children. Use it to see why earlier attempts failed, since the job doc only keeps the last one. |
 
 **Run inputs** are checked against the spec when the run starts. Unknown names, missing
 required inputs and type mismatches all return `400` with the full list.
