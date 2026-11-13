@@ -216,7 +216,8 @@ Which outputs a node declares depends on its kind:
 
 - a `job` declares its `out` list
 - a `pass` declares the `<param>` part of each bind key, so `"B.text"` declares `text`
-- a `gather` declares the `<output>` part of each `collect` ref. Its value is a **list**.
+- a `gather` declares the `<output>` part of each `collect` ref, whose value is a **list**.
+  It also always declares `n_completed` and `n_failed`, the integer child counts.
 
 **Rules to remember:**
 
@@ -232,8 +233,8 @@ Which outputs a node declares depends on its kind:
   upstream job's outputs.
 - `spec.outputs` can reference any node except a scatter child, because per-child outputs
   aren't stored. Reference the gather instead.
-- The gather's bookkeeping values `n_completed` and `n_failed` are **not** referenceable in
-  v1. They're visible in the run status doc.
+- `$.G.n_completed` and `$.G.n_failed` resolve to plain integers, so a later job can be told
+  how many children succeeded or failed.
 
 ### 3.4 What `pass` is for
 
@@ -297,7 +298,8 @@ list ─▶ fan_out (scatter over $.list.granules) ─▶ process × N ─▶ co
    it checks the threshold:
    - If `completed / N ≥ threshold`, the run continues. Each collected output is a list of
      the **completed** children's values, **in item order**. Failed children are left out,
-     so the list can be shorter than N.
+     so the list can be shorter than N. The gather also outputs the counts `n_completed`
+     and `n_failed`.
    - Otherwise the run halts with `scatter process: k/N completed < threshold t`.
 4. An **empty list** (N = 0) skips straight to the gather, which outputs empty lists.
 
@@ -348,7 +350,8 @@ because it retries real bugs too.
 
 - `defaults.timeout_hours` caps the **whole run**. The deployment default is 48h, set by
   `WORKFLOW_RUN_TIMEOUT_HOURS`. When the cap is hit, the reaper fails the run with
-  `run timed out after <h>h` and revokes its jobs. To limit a single job, use the job-spec's
+  `run timed out after <h>h` and revokes its jobs. There's no per-node timeout: `timeout_hours`
+  on a job node is rejected at registration. To limit a single job, use the job-spec's
   `soft_time_limit`/`time_limit`.
 - If a run makes no progress for 10 minutes (`WORKFLOW_STALL_SECONDS`), the reaper replays
   the last events of its finished steps. This recovers lost messages. You don't need to do
@@ -443,9 +446,10 @@ curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<
 **Run inputs** are checked against the spec when the run starts. Unknown names, missing
 required inputs and type mismatches all return `400` with the full list.
 
-**Queues.** The entry job's queue comes from its own `queue` or from `defaults.queue`, and
-one of the two is **required**. Later jobs also fall back to the job-spec's first
-`recommended-queues` entry. Setting `defaults.queue` is the simplest choice.
+**Queues.** Every job, the entry included, runs on its node's `queue`, else
+`defaults.queue`, else the job-spec's first `recommended-queues` entry. If none of these
+exists, starting a run returns `400` (for the entry job). For a later job, the run fails
+with `error_class: no_queue`. Setting `defaults.queue` is the simplest choice.
 
 ---
 
@@ -482,7 +486,8 @@ with a worked plugin in the `workflow-connectors-example` repo.
 | `'next' has 2 targets; v1 allows at most 1` | v1 has no parallel branches. Split the work into separate specs, or scatter over a list. |
 | `fan-in is not allowed; has predecessors [...]` | Two nodes point at one node. v1 has no joins. |
 | `$.X.y refers to 'X', which is not a strict ancestor of 'Z'` | You can only reference upstream nodes. Check the `next` chain, and note that a scatter child is not an ancestor of anything. |
-| `refers to output 'y' not declared by node 'X'` | Add `y` to X's `out`. For a gather, only the `collect` outputs exist, not `n_completed`. |
+| `refers to output 'y' not declared by node 'X'` | Add `y` to X's `out`. A gather declares only its `collect` outputs plus `n_completed` and `n_failed`. |
+| `node X: timeout_hours is not supported per node in v1; use defaults.timeout_hours …` | Move it to `defaults.timeout_hours` (the run timeout), or set the job-spec's `time_limit`. |
 | `refers to scatter child 'P', whose outputs are not stored` | In `spec.outputs` or downstream, reference the gather instead (`$.G.y`). |
 | `'$.scatter.item' is only allowed in a scatter child's 'in'` | Move the ref into the child's `in`. |
 | `bind key 'C.x' targets 'C' but next is 'B'` | A pass binds only its own successor's params. |
