@@ -32,3 +32,8 @@ Simply go to:
 * `https://<mozart host>/mozart/api/v0.2/` (api `v0.2`)
 
 ![Swagger UI](./img/swagger_ui.png)
+
+Workflows
+--------------------------
+Mozart registers workflow specs and runs them through the `/workflow` API. To write a spec and
+make a job workflow-ready, see [docs/workflow-spec-guide.md](docs/workflow-spec-guide.md).
