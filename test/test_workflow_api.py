@@ -250,6 +250,27 @@ def test_run_no_queue_400(env):
     submit.assert_not_called()
 
 
+def test_run_entry_falls_back_to_recommended_queue(env):
+    c, es, submit = env
+    spec = linear_spec()
+    del spec["defaults"]["queue"]
+    c.post("/workflow/specs", json=spec)
+    es.docs[("job_specs", "job-wf_test:v1.0")] = ({"recommended-queues": ["rec_q", "other"]}, 1)
+    assert _post_run(c).status_code == 202
+    assert submit.call_args.kwargs["queue"] == "rec_q"
+
+
+def test_run_no_queue_400_message_after_fallback(env):
+    c, es, submit = env
+    spec = linear_spec()
+    del spec["defaults"]["queue"]
+    c.post("/workflow/specs", json=spec)
+    es.docs[("job_specs", "job-wf_test:v1.0")] = ({"recommended-queues": []}, 1)
+    r = _post_run(c)
+    assert r.status_code == 400 and "no queue for entry node 'A'" in r.get_json()["message"]
+    submit.assert_not_called()
+
+
 def test_run_unknown_spec_404(env):
     c, _, _ = env
     assert _post_run(c, spec_id="nope:1").status_code == 404

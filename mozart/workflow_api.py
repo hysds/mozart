@@ -24,6 +24,7 @@ from hysds_commons.workflow_spec import (
     DEFAULT_WORKFLOW_CONNECTORS,
     WorkflowSpecError,
     check_spec,
+    resolve_node_queue,
     resolve_connectors,
     spec_doc_id,
     validate_run_inputs,
@@ -72,6 +73,13 @@ def _body():
 
 def _is_error(resp, code):
     return isinstance(resp, dict) and "error" in resp and resp.get("status") == code
+
+
+def _recommended_queue(job_type):
+    """The job_spec's first recommended queue (same fallback the rules engine uses for later nodes)."""
+    r = _es().get(index=app.config["JOB_SPECS_INDEX"], id=job_type, ignore=404)
+    qs = ((r or {}).get("_source") or {}).get("recommended-queues") or []
+    return qs[0] if qs else None
 
 
 def _missing_connector_specs(spec):
@@ -215,10 +223,14 @@ def create_run():
     user = body.get("user") or DEFAULT_USER
     entry = spec["entry"]
     node = spec["nodes"][entry]
-    queue = node.get("queue") or (spec.get("defaults") or {}).get("queue")
+    try:
+        queue = resolve_node_queue(spec, node, _recommended_queue)
+    except Exception as e:
+        return _fail(f"Failed to look up recommended queue. {type(e)}:{e}", 500)
     if not queue:
         return _fail(
-            f"no queue for entry node '{entry}': set node.queue or defaults.queue", 400
+            f"no queue for entry node '{entry}': set node.queue or defaults.queue, "
+            f"or give job spec '{node['run']}' a recommended queue", 400
         )
 
     run_id = "run-" + uuid.uuid4().hex
