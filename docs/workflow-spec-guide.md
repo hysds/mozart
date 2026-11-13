@@ -170,7 +170,7 @@ to `_error_class.txt` before exiting non-zero. For example, `throttled` becomes
 | `entry` | yes | The first node. It must be a `job` with no predecessors. |
 | `nodes` | yes | `{node_id: node}`. Ids match `^[A-Za-z0-9_-]+$`. `inputs`, `scatter`, `finalize`, `halt`, `_finalize` and `_halt` are reserved. |
 | `inputs` | no | `{name: {"type": T, "default"?: v}}`. T is one of `string`, `int`, `float`, `bool`, `string[]`, `int[]` or `float[]`. An input with no default is required at run time. A `float` input accepts ints. |
-| `defaults` | no | `queue`, `max_retries`, `retry_on` and `timeout_hours`. Each job node can override the first three. |
+| `defaults` | no | `queue`, `max_retries` and `retry_on`, which each job node can override, plus `timeout_hours`, the run timeout ([§5.3](#53-run-timeout-and-stalls)). |
 | `outputs` | no | `{name: "$.<node>.<output>"}`. They're resolved into the run's `outputs` when it completes. |
 | `label`, `description` | no | Free text. These are also allowed on every node. |
 
@@ -331,8 +331,10 @@ and its class matches `retry_on`**.
 `worker`, `pge:<token>`, `pge:*` and `*` (anything). Invalid patterns are rejected at
 registration.
 
-Scatter children are retried individually. A child counts as failed only when its last
-attempt fails.
+A retry re-runs the same job. It keeps its `job_id` and `payload_id`, its job status doc is
+overwritten, and `job.retry_count` goes up by one. Earlier attempts' errors aren't kept on the
+job doc. Scatter children are retried individually, and a child counts as failed only when
+its last attempt fails.
 
 > **Operator note:** workflow jobs are retried **only by their workflow**. A retry started
 > from a user rule or the UI is skipped (and logged) for any job that carries a
@@ -346,8 +348,7 @@ because it retries real bugs too.
 
 - `defaults.timeout_hours` caps the **whole run**. The deployment default is 48h, set by
   `WORKFLOW_RUN_TIMEOUT_HOURS`. When the cap is hit, the reaper fails the run with
-  `run timed out after <h>h` and revokes its jobs. **A `timeout_hours` on a job node is
-  accepted but ignored in v1.** For a per-job limit, use the job-spec's
+  `run timed out after <h>h` and revokes its jobs. To limit a single job, use the job-spec's
   `soft_time_limit`/`time_limit`.
 - If a run makes no progress for 10 minutes (`WORKFLOW_STALL_SECONDS`), the reaper replays
   the last events of its finished steps. This recovers lost messages. You don't need to do
@@ -469,7 +470,7 @@ job-spec-existence checks.
 ## 9. Not in v1
 
 Conditionals (`gate`, `switch`), parallel branches, fan-in joins, loops, pause and resume,
-per-run overrides, spec permissions, a CWL adapter, and per-job `timeout_hours`.
+per-run overrides, spec permissions, and a CWL adapter.
 
 ## See also
 
