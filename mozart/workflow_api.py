@@ -29,9 +29,12 @@ from hysds_commons.workflow_spec import (
     validate_run_inputs,
 )
 from hysds_commons.workflow_status import (
+    ERROR_CLASS_INPUT_RESOLUTION,
+    ERROR_CLASS_SUBMIT,
     WorkflowStatusNotFound,
     create_status,
     get_status,
+    set_failure,
     update_status,
 )
 # mozart is the submission authority, so it submits the entry job in-process
@@ -170,10 +173,11 @@ def get_spec(spec_id):
     return {"success": True, "message": "", "result": spec}, 200
 
 
-def _mark_failed(run_id, entry, error):
+def _mark_failed(run_id, entry, error, error_class):
     def mutate(doc):
         doc["status"] = "failed"
         doc["error"] = error
+        set_failure(doc, entry, error_class)
         doc["updated_at"] = _now()
         if entry in doc.get("nodes", {}):
             doc["nodes"][entry] = {**doc["nodes"][entry], "state": "failed"}
@@ -203,6 +207,11 @@ def create_run():
     if errors:
         return {"success": False, "message": "invalid run inputs", "errors": errors}, 400
 
+    tags = body.get("tags", [])
+    if tags is None:
+        tags = []
+    if not isinstance(tags, list) or not all(isinstance(t, str) and t for t in tags):
+        return _fail("tags must be a list of non-empty strings", 400)
     user = body.get("user") or DEFAULT_USER
     entry = spec["entry"]
     node = spec["nodes"][entry]
@@ -217,6 +226,11 @@ def create_run():
     status_doc = {
         "run_id": run_id,
         "spec_id": spec_id,
+        "spec_name": spec.get("id"),
+        "spec_version": str(spec.get("version")),
+        "has_scatter": any(n.get("kind") == "scatter" for n in spec["nodes"].values()),
+        "tags": tags,
+        "current_nodes": [],
         "status": "running",
         "username": user,
         "inputs": inputs,
@@ -236,7 +250,7 @@ def create_run():
         params = resolve_inputs(node, build_context(status_doc))
     except WorkflowRefError as e:
         msg = f"entry '{entry}' input resolution failed: {e}"
-        _mark_failed(run_id, entry, msg)
+        _mark_failed(run_id, entry, msg, ERROR_CLASS_INPUT_RESOLUTION)
         return {"success": False, "message": msg, "run_id": run_id}, 400
 
     try:
@@ -250,7 +264,7 @@ def create_run():
     except Exception as e:
         msg = f"Failed to submit entry '{entry}'. {type(e)}:{e}"
         app.logger.error(msg)
-        _mark_failed(run_id, entry, msg)
+        _mark_failed(run_id, entry, msg, ERROR_CLASS_SUBMIT)
         return {"success": False, "message": msg, "run_id": run_id}, 500
 
     def mutate(doc):

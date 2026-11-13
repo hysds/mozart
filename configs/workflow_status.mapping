@@ -7,6 +7,24 @@
       "spec_id": {
         "type": "keyword"
       },
+      "spec_name": {
+        "type": "keyword"
+      },
+      "spec_version": {
+        "type": "keyword"
+      },
+      "has_scatter": {
+        "type": "boolean"
+      },
+      "failed_node": {
+        "type": "keyword"
+      },
+      "error_class": {
+        "type": "keyword"
+      },
+      "duration_s": {
+        "type": "float"
+      },
       "schema_version": {
         "type": "keyword"
       },

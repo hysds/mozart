@@ -213,7 +213,12 @@ def test_run_happy_path(stored):
     assert doc["error"] is None and doc["outputs"] is None
     assert doc["inputs"] == {"greeting": "hi", "n": 3}
     assert doc["submitted_at"].endswith("Z") and doc["updated_at"].endswith("Z")
-    assert doc["nodes"]["A"] == {"state": "running", "payload_id": "payload-1"}
+    assert doc["nodes"]["A"] == {"state": "running", "payload_id": "payload-1",
+                                 "started_at": doc["updated_at"]}
+    assert doc["current_nodes"] == ["A"]
+    assert doc["spec_name"] == "demo-linear" and doc["spec_version"] == "1.0.0"
+    assert doc["has_scatter"] is False and doc["tags"] == []
+    assert "failed_node" not in doc and "error_class" not in doc and "duration_s" not in doc
     assert doc["nodes"]["pass_1"] == {"state": "pending"}
     assert doc["nodes"]["B"] == {"state": "pending"}
     kw = submit.call_args.kwargs
@@ -277,6 +282,8 @@ def test_run_entry_ref_failure_marks_failed(env):
     assert doc["status"] == "failed" and "boom" in doc["error"]
     assert doc["nodes"]["A"]["state"] == "failed"
     assert doc["ended_at"] == doc["updated_at"]
+    assert doc["failed_node"] == "A" and doc["error_class"] == "input_resolution"
+    assert doc["current_nodes"] == [] and doc["duration_s"] >= 0
     submit.assert_not_called()
 
 
@@ -288,6 +295,35 @@ def test_run_submit_failure_500_marks_failed(stored):
     doc = es.doc("status", r.get_json()["run_id"])
     assert doc["status"] == "failed" and "amqp down" in doc["error"]
     assert doc["ended_at"].endswith("Z") and doc["ended_at"] == doc["updated_at"]
+    assert doc["failed_node"] == "A" and doc["error_class"] == "submit"
+
+
+def test_run_has_scatter_true(env):
+    c, es, submit = env
+    spec = scatter_gather_spec()
+    spec.setdefault("defaults", {})["queue"] = "q"
+    assert c.post("/workflow/specs", json=spec).status_code == 201
+    r = _post_run(c, spec_id=f"{spec['id']}:{spec['version']}", inputs={})
+    assert r.status_code == 202, r.data
+    doc = es.doc("status", r.get_json()["run_id"])
+    assert doc["has_scatter"] is True and doc["spec_name"] == spec["id"]
+    assert doc["spec_version"] == str(spec["version"])
+
+
+def test_run_tags_stored(stored):
+    c, es, _ = stored
+    r = _post_run(c, tags=["nightly", "figaro"])
+    assert r.status_code == 202
+    assert es.doc("status", r.get_json()["run_id"])["tags"] == ["nightly", "figaro"]
+
+
+@pytest.mark.parametrize("bad", ["nightly", [1], ["ok", ""], {"a": "b"}, [["x"]]])
+def test_run_tags_invalid_400(stored, bad):
+    c, es, submit = stored
+    r = _post_run(c, tags=bad)
+    assert r.status_code == 400 and "tags" in r.get_json()["message"]
+    submit.assert_not_called()
+    assert not [k for k in es.docs if k[0] == "status"]
 
 
 def test_run_get(stored):
@@ -382,6 +418,18 @@ def test_cancel_terminal_409(stored, st):
     assert r.status_code == 409 and st in r.get_json()["message"]
     submit.assert_not_called()
     assert es.doc("status", run_id)["status"] == st
+
+
+def test_cancel_sets_error_class_and_duration(stored):
+    c, es, _ = stored
+    run_id = _post_run(c).get_json()["run_id"]
+    es.search_result = _hits()
+    assert c.post(f"/workflow/runs/{run_id}/cancel").status_code == 202
+    doc = es.doc("status", run_id)
+    assert doc["error_class"] == "cancelled" and "failed_node" not in doc
+    assert doc["current_nodes"] == [] and doc["duration_s"] >= 0
+    assert doc["nodes"]["A"]["ended_at"] == doc["updated_at"] and doc["nodes"]["A"]["started_at"]
+    assert "ended_at" not in doc["nodes"]["B"]  # never started
 
 
 def test_cancel_already_cancelled_200_sweeps(stored):

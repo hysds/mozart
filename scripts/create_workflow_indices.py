@@ -42,5 +42,13 @@ for index, mapping_file in INDICES:
         body = {**body, **json.load(f)}
 
     # create destination index
-    mozart_es.es.indices.create(index=index, body=body, ignore=400)
+    r = mozart_es.es.indices.create(index=index, body=body, ignore=400)
+    if isinstance(r, dict) and r.get("status") == 400:
+        # the index already exists: add any new mapping fields (additive; OpenSearch rejects a
+        # change to an existing field's type, which leaves the index as it was)
+        try:
+            mozart_es.es.indices.put_mapping(index=index, body=body["mappings"])
+        except Exception as e:  # noqa: BLE001
+            print("WARNING: could not add mapping fields to %s: %s" % (index, e))
+    # up.sh greps for "success": keep it in both cases
     print("Successfully created index %s" % index)
