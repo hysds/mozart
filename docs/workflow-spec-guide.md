@@ -139,7 +139,30 @@ URL. The rules:
 A `class: File` list fed to a scatter gives one child per published file. That's the
 standard way to fan out over a job's products.
 
-### 2.4 Telling the retry policy why you failed (optional)
+### 2.4 Knowing you're running in a workflow
+
+A job can tell it was started by a workflow from **`_job.json`** in its work directory. A
+workflow job has a top-level `workflow` block:
+
+```json
+"workflow": { "run_id": "run-…", "spec_id": "granule-mosaic:1.0.0", "step_id": "process",
+              "child_index": 17, "child_total": 50 }
+```
+
+`child_index` and `child_total` are set only for scatter children, and are `null` otherwise.
+If the block is absent, the job is running standalone.
+
+```python
+wf = json.load(open("_job.json")).get("workflow")
+if wf:
+    print("step", wf["step_id"], "of run", wf["run_id"])
+```
+
+The block appears **only** in `_job.json`. `_context.json` doesn't carry it, and no
+environment variables are set. Most PGEs don't need to check: they get their inputs as
+params and write `_workflow_outputs.json` either way.
+
+### 2.5 Telling the retry policy why you failed (optional)
 
 Every failed attempt gets an **error class**, which is what `retry_on` matches against
 ([§5.2](#52-retries)):
@@ -323,7 +346,7 @@ failed scatter child is the exception: its failure counts against the threshold 
 | field | default | meaning |
 |---|---|---|
 | `max_retries` | `0` | The number of re-runs allowed after the first attempt. |
-| `retry_on` | `[]` | The error classes ([§2.4](#24-telling-the-retry-policy-why-you-failed-optional)) worth retrying. |
+| `retry_on` | `[]` | The error classes ([§2.5](#25-telling-the-retry-policy-why-you-failed-optional)) worth retrying. |
 
 Set them on a job node, or in `defaults` for every job node. A node's value replaces the
 default; the two aren't merged. A failure is retried when **attempts so far < `max_retries`
@@ -339,8 +362,8 @@ job doc. Scatter children are retried individually, and a child counts as failed
 its last attempt fails.
 
 > **Operator note:** workflow jobs are retried **only by their workflow**. A retry started
-> from a user rule or the UI is skipped (and logged) for any job that carries a
-> workflow tag.
+> from a user rule or the UI is skipped (and logged) for any job that has a `workflow`
+> block ([§2.4](#24-knowing-youre-running-in-a-workflow)).
 
 Good defaults: `["offline"]` for transient infrastructure failures, plus the specific
 `pge:` classes your PGE emits for transient failures. Avoid `*` on expensive steps,
@@ -422,7 +445,7 @@ curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<
 
 | value | meaning | `failed_node` |
 |---|---|---|
-| the job's own class, e.g. `exit_code:1`, `worker`, `pge:throttled` | A job failed and wasn't retried ([§2.4](#24-telling-the-retry-policy-why-you-failed-optional)). | the failing job node |
+| the job's own class, e.g. `exit_code:1`, `worker`, `pge:throttled` | A job failed and wasn't retried ([§2.5](#25-telling-the-retry-policy-why-you-failed-optional)). | the failing job node |
 | `threshold` | Too few scatter children completed. | the scatter child node |
 | `timeout` | The run hit `defaults.timeout_hours`. | the first node that was running |
 | `cancelled` | Someone cancelled the run. | none |
