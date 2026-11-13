@@ -218,7 +218,7 @@ def create_run():
         "run_id": run_id,
         "spec_id": spec_id,
         "status": "running",
-        "user": user,
+        "username": user,
         "inputs": inputs,
         "submitted_at": now,
         "updated_at": now,

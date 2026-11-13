@@ -209,7 +209,8 @@ def test_run_happy_path(stored):
     assert run_id.startswith("run-") and len(run_id) == 36
     doc = es.doc("status", run_id)
     assert doc["status"] == "running" and doc["spec_id"] == "demo-linear:1.0.0"
-    assert doc["user"] == "jdoe" and doc["error"] is None and doc["outputs"] is None
+    assert doc["username"] == "jdoe" and "user" not in doc and "ended_at" not in doc
+    assert doc["error"] is None and doc["outputs"] is None
     assert doc["inputs"] == {"greeting": "hi", "n": 3}
     assert doc["submitted_at"].endswith("Z") and doc["updated_at"].endswith("Z")
     assert doc["nodes"]["A"] == {"state": "running", "payload_id": "payload-1"}
@@ -275,6 +276,7 @@ def test_run_entry_ref_failure_marks_failed(env):
     doc = es.doc("status", run_id)
     assert doc["status"] == "failed" and "boom" in doc["error"]
     assert doc["nodes"]["A"]["state"] == "failed"
+    assert doc["ended_at"] == doc["updated_at"]
     submit.assert_not_called()
 
 
@@ -285,6 +287,7 @@ def test_run_submit_failure_500_marks_failed(stored):
     assert r.status_code == 500 and "amqp down" in r.get_json()["message"]
     doc = es.doc("status", r.get_json()["run_id"])
     assert doc["status"] == "failed" and "amqp down" in doc["error"]
+    assert doc["ended_at"].endswith("Z") and doc["ended_at"] == doc["updated_at"]
 
 
 def test_run_get(stored):
@@ -338,6 +341,7 @@ def test_cancel_running_run_202(stored):
     assert r.get_json()["revoked"] == 2 and r.get_json()["run_id"] == run_id
     doc = es.doc("status", run_id)
     assert doc["status"] == "cancelled" and doc["error"] == "cancelled by bob"
+    assert doc["ended_at"] == doc["updated_at"] and doc["ended_at"] >= doc["submitted_at"]
     assert {n["state"] for n in doc["nodes"].values()} == {"cancelled"}
     kw = submit.call_args.kwargs  # the last call is the revoke (entry submit was earlier)
     assert kw["job_type"] == "job-lw-mozart-revoke:test" and kw["queue"] == "system-jobs-queue"
