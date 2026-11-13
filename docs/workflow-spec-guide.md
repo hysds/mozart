@@ -398,6 +398,10 @@ curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<
   Jobs go from `queued` straight to `completed` or `failed`, so use `/steps` to see
   progress.
 - After the gather finishes, the scatter child's entry adds `completed` and `failed` counts.
+- **In progress, not yet available:** more run fields (`spec_name`, `spec_version`,
+  `has_scatter`, `tags`, `failed_node`, `error_class`, `current_nodes`, `duration_s`) and
+  per-node `started_at`, `ended_at` and `attempts`. These are for the upcoming Workflows UI.
+  Don't depend on them yet.
 
 **Run inputs** are checked against the spec when the run starts. Unknown names, missing
 required inputs and type mismatches all return `400` with the full list.
