@@ -18,38 +18,46 @@ It covers **schema version 1.0** (the `feature/workflow-orchestration-v1` branch
 
 ## 1. Quick start
 
-**1. Write a spec.** Two jobs: A's `message` output feeds B.
+**1. Write a spec.** Two steps of a radiometer processing chain. `L1B` turns an L1A granule
+into L1B brightness temperatures (`L1B_TB`), and `L1C` grids them onto the EASE-Grid 2.0 36 km
+grid (`L1C_TB`). L1B's `l1b_file` output feeds L1C.
 
 ```json
 {
-  "id": "hello-chain", "version": "1.0.0", "schema_version": "1.0",
-  "defaults": { "queue": "my_worker" },
-  "inputs":   { "greeting": { "type": "string", "default": "hi" } },
-  "entry": "A",
-  "nodes": {
-    "A":    { "kind": "job",  "run": "job-say:v1.0", "in": { "text": "$.inputs.greeting" },
-              "out": ["message"], "next": ["to_B"] },
-    "to_B": { "kind": "pass", "bind": { "B.text": "$.A.message" }, "next": ["B"] },
-    "B":    { "kind": "job",  "run": "job-say:v1.0", "in": { "text": "$.to_B.text" },
-              "out": ["message"], "next": [] }
+  "id": "radiometer-l1c", "version": "1.0.0", "schema_version": "1.0",
+  "defaults": { "queue": "sps-job_worker-large" },
+  "inputs": {
+    "l1a_file": { "type": "string" },
+    "crid":     { "type": "string", "default": "R19240" }
   },
-  "outputs": { "final": "$.B.message" }
+  "entry": "L1B",
+  "nodes": {
+    "L1B":    { "kind": "job", "run": "job-l1b_tb:R19", "tag": "L1B_TB",
+                "in": { "l1a_file": "$.inputs.l1a_file", "crid": "$.inputs.crid" },
+                "out": ["l1b_file"], "next": ["to_L1C"] },
+    "to_L1C": { "kind": "pass", "bind": { "L1C.l1b_file": "$.L1B.l1b_file" }, "next": ["L1C"] },
+    "L1C":    { "kind": "job", "run": "job-l1c_tb:R19", "tag": "L1C_TB",
+                "in": { "l1b_file": "$.to_L1C.l1b_file", "grid": "EASE2_M36km", "crid": "$.inputs.crid" },
+                "out": ["l1c_file"], "next": [] }
+  },
+  "outputs": { "l1c_tb": "$.L1C.l1c_file" }
 }
 ```
 
-**2. Register it.** The response is `201 {"spec_id": "hello-chain:1.0.0"}`, or a `400` that
+**2. Register it.** The response is `201 {"spec_id": "radiometer-l1c:1.0.0"}`, or a `400` that
 lists every validation error.
 
 ```bash
 M=https://<mozart-host>/mozart/api/v0.2/workflow     # v0.1 has the same endpoints
-curl -X POST -H 'content-type: application/json' -d @hello-chain.json $M/specs
+curl -X POST -H 'content-type: application/json' -d @radiometer-l1c.json $M/specs
 ```
 
 **3. Start a run.** The response is `202 {"run_id": "run-…"}`.
 
 ```bash
 curl -X POST -H 'content-type: application/json' \
-     -d '{"spec_id": "hello-chain:1.0.0", "inputs": {"greeting": "hello"}, "user": "jdoe"}' \
+     -d '{"spec_id": "radiometer-l1c:1.0.0", "user": "jdoe",
+          "inputs": {"l1a_file": "s3://<bucket>/L1A_Radiometer/SMAP_L1A_RADIOMETER_45678_D_20261112T013517_R19240_001.h5"}}' \
      $M/runs
 ```
 
@@ -59,7 +67,8 @@ curl -X POST -H 'content-type: application/json' \
 curl -s $M/runs/<run_id> | jq '.result | {status, error, outputs, nodes}'
 ```
 
-For `job-say` to work here, it must accept a `text` param and write a `message` output.
+For `job-l1b_tb` to work here, it must accept `l1a_file` and `crid` params and write an
+`l1b_file` output.
 [§2](#2-making-a-job-workflow-ready) explains how.
 
 ---
@@ -77,13 +86,13 @@ A job node's `in` object becomes the job's submit params, exactly as if you had 
 
 ```json
 "params": [
-  { "name": "mode",     "destination": "context" },
-  { "name": "item_url", "destination": "localize" }
+  { "name": "l1a_file", "destination": "localize" },
+  { "name": "crid",     "destination": "context" }
 ]
 ```
 
 A `localize` param that holds an `s3://` URL is downloaded into the job directory before the
-PGE starts, which is how a step consumes an upstream file. The full example is
+PGE starts. That's how L1B gets its L1A granule. The full example is
 `local-stack/wf-stac/` (`job-spec.json`, `hysds-io.json` and `run_wf_stac.py`).
 
 ### 2.2 Outputs out: `_workflow_outputs.json`
@@ -95,10 +104,10 @@ at the job directory root** (its working directory):
 {
   "version": "1.0",
   "outputs": [
-    { "name": "qa_score",  "value_d": 0.93 },
-    { "name": "qa_status", "value_s": "PASS" },
-    { "name": "reprocess", "value_b": false },
-    { "name": "granules",  "value_s": ["s3://bucket/a.h5", "s3://bucket/b.h5"] }
+    { "name": "rfi_flagged_pct", "value_d": 3.7 },
+    { "name": "orbit_direction", "value_s": "Descending" },
+    { "name": "nrt",             "value_b": false },
+    { "name": "bad_scans",       "value_d": [1182, 1183, 2410] }
   ]
 }
 ```
@@ -121,13 +130,14 @@ A PGE usually doesn't know where its products will be published. Mark an output 
 or directory reference and give the **local path, relative to the job directory**:
 
 ```json
-{ "name": "catalog", "class": "Directory", "value_s": "output/MY_DATASET_ID/catalog.json" },
-{ "name": "items",   "class": "File",      "value_s": ["output/MY_DATASET_ID/a/a.json",
-                                                       "output/MY_DATASET_ID/b/b.json"] }
+{ "name": "l1b_file", "class": "File",
+  "value_s": "output/SMAP_L1B_TB_45678_D_20261112T013517_R19240_001/SMAP_L1B_TB_45678_D_20261112T013517_R19240_001.h5" },
+{ "name": "qa_dir",   "class": "Directory",
+  "value_s": "output/SMAP_L1B_TB_45678_D_20261112T013517_R19240_001/qa" }
 ```
 
 After the job's datasets are published, HySDS rewrites each path to its published URL,
-such as `s3://bucket/products/…/MY_DATASET_ID/a/a.json`. Downstream nodes only ever see the
+such as `s3://<bucket>/products/L1B_TB/…/SMAP_L1B_TB_45678_D_…_001.h5`. Downstream nodes only ever see the
 URL. The rules:
 
 - `class` requires the `value_s` slot.
@@ -145,8 +155,8 @@ A job can tell it was started by a workflow from **`_job.json`** in its work dir
 workflow job has a top-level `workflow` block:
 
 ```json
-"workflow": { "run_id": "run-…", "spec_id": "granule-mosaic:1.0.0", "step_id": "process",
-              "child_index": 17, "child_total": 50 }
+"workflow": { "run_id": "run-…", "spec_id": "radiometer-l3smp-daily:1.0.0", "step_id": "L2SMP",
+              "child_index": 9, "child_total": 30 }
 ```
 
 `child_index` and `child_total` are set only for scatter children, and are `null` otherwise.
@@ -204,7 +214,7 @@ to `_error_class.txt` before exiting non-zero. For example, `throttled` becomes
 
 | kind | required fields | optional | `next` must be |
 |---|---|---|---|
-| `job` | `run` (a job_spec id, e.g. `job-foo:v1.0`), `in`, `out` (list of output names) | `queue`, `max_retries`, `retry_on` | `[]`, or one `pass` or `scatter` |
+| `job` | `run` (a job_spec id, e.g. `job-l1b_tb:R19`), `in`, `out` (list of output names) | `tag`, `queue`, `max_retries`, `retry_on` | `[]`, or one `pass` or `scatter` |
 | `pass` | `bind`: `{"<next_node>.<param>": "$.ref"}`, non-empty | `connector` | exactly one `job`, the one named in every bind key |
 | `scatter` | `child` (a `job` node id), `over` (usually a `$`-ref to a list) | `completion.threshold` in (0, 1], default `1.0`; `connector` | exactly one `gather` |
 | `gather` | `collect`: `"$.<child>.<output>"` or a list of them | `connector` | `[]`, or one `pass` |
@@ -238,20 +248,20 @@ Any string value that starts with `$.` is a reference. Every other value is a li
 Which outputs a node declares depends on its kind:
 
 - a `job` declares its `out` list
-- a `pass` declares the `<param>` part of each bind key, so `"B.text"` declares `text`
+- a `pass` declares the `<param>` part of each bind key, so `"L1C.l1b_file"` declares `l1b_file`
 - a `gather` declares the `<output>` part of each `collect` ref, whose value is a **list**.
   It also always declares `n_completed` and `n_failed`, the integer child counts.
 
 **Rules to remember:**
 
 - Refs can sit at any depth in `in`, inside nested objects and lists:
-  `{"options": {"files": ["$.A.f1", "$.A.f2"]}}`.
-- A ref replaces the **whole string**. There's no interpolation: `"prefix-$.A.x"` is a
-  literal.
+  `{"ancillary": {"dem": "$.inputs.dem", "landcover": ["$.inputs.igbp", "$.inputs.ndvi"]}}`.
+- A ref replaces the **whole string**. There's no interpolation: `"CRID-$.inputs.crid"`
+  is a literal.
 - Values keep their JSON type. A ref to a `value_d` list yields a list of numbers, not a
   string.
-- You can reference **any** ancestor, not just the one right before. A job after a pass can
-  use `$.A.x` straight from an earlier job.
+- You can reference **any** ancestor, not just the one right before. In the chain in
+  [§3.6](#36-a-complete-chain-l1a-to-l2_sm_p), `L2SMP` could read `$.L1B.l1b_file` directly.
 - A scatter child can reference ancestors of its scatter, such as `$.inputs.*` and the
   upstream job's outputs.
 - `spec.outputs` can reference any node except a scatter child, because per-child outputs
@@ -261,61 +271,132 @@ Which outputs a node declares depends on its kind:
 
 ### 3.4 What `pass` is for
 
-With the default connector, a `pass` just copies values under new names. B could equally
-reference `$.A.message` directly. The pass exists for two reasons: it's the required hop
+With the default connector, a `pass` just copies values under new names. L1C could equally
+reference `$.L1B.l1b_file` directly. The pass exists for two reasons: it's the required hop
 between two jobs, and it's the extension point for a mission **pass connector** that
 computes the next job's params. A connector can rename, reshape or look up the previous
 job's published products. See [§7](#7-custom-connectors).
+
+### 3.5 Job tags
+
+Each job a job node submits is tagged with the node's `tag`, or with the node id if `tag` is
+unset. Think of it as the step name: Figaro's tag facet shows `L1B_TB`, `L1C_TB`, `L2_SM_P`
+and so on. `tag` must match `^[A-Za-z0-9_.:-]{1,128}$`, and only job nodes take it.
+
+- Connector jobs are tagged with their node id (`to_L1B`, `per_half_orbit`, `collect_L2`).
+  The internal end-of-run jobs are tagged `_finalize` and `_halt`.
+- All children of a scatter carry the child node's tag. Tell them apart by
+  `workflow.child_index`.
+- A retried job keeps its tag.
+- The run-level `tags` from `POST /workflow/runs` stay on the run doc and are not copied onto
+  jobs.
+- To find every job of a run, filter job status on `workflow.run_id` (add `workflow.step_id`
+  for one step). Don't rely on tags for that.
+
+### 3.6 A complete chain: L1A to L2_SM_P
+
+A per-half-orbit radiometer chain, L0B → L1A → L1B_TB → L1C_TB → L2_SM_P. The L0B granule is
+a run input. `L1B` retries a transient exit code or a lost worker twice, and the whole run is
+capped at 6 hours.
+
+```
+L1A ─▶ to_L1B ─▶ L1B ─▶ to_L1C ─▶ L1C ─▶ to_L2 ─▶ L2SMP
+```
+
+```json
+{
+  "id": "radiometer-l2smp", "version": "1.0.0", "schema_version": "1.0",
+  "description": "Per half-orbit radiometer chain: L0B -> L1A -> L1B_TB -> L1C_TB -> L2_SM_P",
+  "defaults": { "queue": "sps-job_worker-large", "timeout_hours": 6 },
+  "inputs": {
+    "l0b_granule": { "type": "string" },
+    "half_orbit":  { "type": "string" },
+    "crid":        { "type": "string", "default": "R19240" },
+    "ancillary":   { "type": "string" }
+  },
+  "entry": "L1A",
+  "nodes": {
+    "L1A":      { "kind": "job", "run": "job-l1a_radiometer:R19", "tag": "L1A_Radiometer",
+                  "in": { "l0b_granule": "$.inputs.l0b_granule", "half_orbit": "$.inputs.half_orbit",
+                          "crid": "$.inputs.crid" },
+                  "out": ["l1a_file"], "next": ["to_L1B"] },
+    "to_L1B":   { "kind": "pass", "bind": { "L1B.l1a_file": "$.L1A.l1a_file" }, "next": ["L1B"] },
+    "L1B":      { "kind": "job", "run": "job-l1b_tb:R19", "tag": "L1B_TB",
+                  "max_retries": 2, "retry_on": ["exit_code:75", "offline"],
+                  "in": { "l1a_file": "$.to_L1B.l1a_file", "ancillary": "$.inputs.ancillary",
+                          "crid": "$.inputs.crid" },
+                  "out": ["l1b_file", "rfi_flagged_pct"], "next": ["to_L1C"] },
+    "to_L1C":   { "kind": "pass", "bind": { "L1C.l1b_file": "$.L1B.l1b_file" }, "next": ["L1C"] },
+    "L1C":      { "kind": "job", "run": "job-l1c_tb:R19", "tag": "L1C_TB",
+                  "in": { "l1b_file": "$.to_L1C.l1b_file", "grid": "EASE2_M36km", "crid": "$.inputs.crid" },
+                  "out": ["l1c_file"], "next": ["to_L2"] },
+    "to_L2":    { "kind": "pass", "bind": { "L2SMP.l1c_file": "$.L1C.l1c_file" }, "next": ["L2SMP"] },
+    "L2SMP":    { "kind": "job", "run": "job-l2_sm_p:R19", "tag": "L2_SM_P",
+                  "in": { "l1c_file": "$.to_L2.l1c_file", "ancillary": "$.inputs.ancillary",
+                          "crid": "$.inputs.crid" },
+                  "out": ["l2_file", "retrieval_qual_pct"], "next": [] }
+  },
+  "outputs": { "l2_sm_p": "$.L2SMP.l2_file", "l1c_tb": "$.L1C.l1c_file",
+               "rfi_flagged_pct": "$.L1B.rfi_flagged_pct" }
+}
+```
 
 ---
 
 ## 4. Fan-out: scatter and gather
 
+A daily soil-moisture composite. `find_L1C` lists the day's L1C_TB half-orbit granules. The
+scatter runs `L2SMP` once per granule, the gather collects the L2_SM_P files, and `L3SMP`
+composites them into the daily L3_SM_P product. The pass also hands L3 the number of
+half-orbits that made it in.
+
 ```
-list ─▶ fan_out (scatter over $.list.granules) ─▶ process × N ─▶ collect (gather) ─▶ to_mosaic ─▶ mosaic
+find_L1C ─▶ per_half_orbit (scatter) ─▶ L2SMP × N ─▶ collect_L2 (gather) ─▶ to_L3 ─▶ L3SMP
 ```
 
 ```json
 {
-  "id": "granule-mosaic", "version": "1.0.0", "schema_version": "1.0",
-  "label": "List granules, process each, mosaic the results",
-  "defaults": { "queue": "factotum-job_worker-small", "timeout_hours": 12,
-                "max_retries": 1, "retry_on": ["offline", "timeout"] },
+  "id": "radiometer-l3smp-daily", "version": "1.0.0", "schema_version": "1.0",
+  "description": "Daily composite: L2_SM_P for every half-orbit L1C_TB of a day, then L3_SM_P",
+  "defaults": { "queue": "sps-job_worker-large", "timeout_hours": 12 },
   "inputs": {
-    "collection": { "type": "string" },
-    "bbox":       { "type": "float[]" }
+    "date":      { "type": "string" },
+    "crid":      { "type": "string", "default": "R19240" },
+    "ancillary": { "type": "string" }
   },
-  "entry": "list",
+  "entry": "find_L1C",
   "nodes": {
-    "list":    { "kind": "job", "run": "job-list_granules:v2.1",
-                 "in": { "collection": "$.inputs.collection", "bbox": "$.inputs.bbox" },
-                 "out": ["granules", "count"], "next": ["fan_out"] },
-    "fan_out": { "kind": "scatter", "child": "process", "over": "$.list.granules",
-                 "completion": { "threshold": 0.9 }, "next": ["collect"] },
-    "process": { "kind": "job", "run": "job-process_granule:v2.1",
-                 "queue": "factotum-job_worker-large",
-                 "max_retries": 3, "retry_on": ["exit_code:75", "pge:throttled", "offline"],
-                 "in": { "granule_url": "$.scatter.item", "collection": "$.inputs.collection",
-                         "options": { "compress": true, "bands": ["B04", "B08"] } },
-                 "out": ["product", "cloud_pct"], "next": [] },
-    "collect": { "kind": "gather", "collect": ["$.process.product", "$.process.cloud_pct"],
-                 "next": ["to_mosaic"] },
-    "to_mosaic": { "kind": "pass", "bind": { "mosaic.products": "$.collect.product" },
-                   "next": ["mosaic"] },
-    "mosaic":  { "kind": "job", "run": "job-make_mosaic:v2.1",
-                 "in": { "products": "$.to_mosaic.products", "bbox": "$.inputs.bbox" },
-                 "out": ["mosaic"], "next": [] }
+    "find_L1C": { "kind": "job", "run": "job-list_l1c_tb:R19", "tag": "find_L1C_TB",
+                  "queue": "sps-job_worker-small",
+                  "in": { "date": "$.inputs.date", "crid": "$.inputs.crid" },
+                  "out": ["l1c_files", "count"], "next": ["per_half_orbit"] },
+    "per_half_orbit": { "kind": "scatter", "child": "L2SMP", "over": "$.find_L1C.l1c_files",
+                  "completion": { "threshold": 0.9 }, "next": ["collect_L2"] },
+    "L2SMP":    { "kind": "job", "run": "job-l2_sm_p:R19", "tag": "L2_SM_P",
+                  "max_retries": 2, "retry_on": ["exit_code:75", "offline"],
+                  "in": { "l1c_file": "$.scatter.item", "ancillary": "$.inputs.ancillary",
+                          "crid": "$.inputs.crid" },
+                  "out": ["l2_file"], "next": [] },
+    "collect_L2": { "kind": "gather", "collect": "$.L2SMP.l2_file", "next": ["to_L3"] },
+    "to_L3":    { "kind": "pass", "bind": { "L3SMP.l2_files": "$.collect_L2.l2_file",
+                                             "L3SMP.n_half_orbits": "$.collect_L2.n_completed" },
+                  "next": ["L3SMP"] },
+    "L3SMP":    { "kind": "job", "run": "job-l3_sm_p:R19", "tag": "L3_SM_P",
+                  "in": { "l2_files": "$.to_L3.l2_files", "n_half_orbits": "$.to_L3.n_half_orbits",
+                          "date": "$.inputs.date", "crid": "$.inputs.crid" },
+                  "out": ["l3_file"], "next": [] }
   },
-  "outputs": { "mosaic": "$.mosaic.mosaic", "products": "$.collect.product" }
+  "outputs": { "l3_sm_p": "$.L3SMP.l3_file", "l2_sm_p": "$.collect_L2.l2_file",
+               "n_half_orbits": "$.collect_L2.n_completed" }
 }
 ```
 
 **How it runs:**
 
-1. When `list` completes, the scatter resolves `over`. With the default connector, the
+1. When `find_L1C` completes, the scatter resolves `over`. With the default connector, the
    value **must be a list**, or the run halts. Each item can be any JSON value. A `string[]`
    run input works too: `"over": "$.inputs.files"`.
-2. One `process` job is submitted per item, and the item is bound to `$.scatter.item`.
+2. One `L2SMP` job is submitted per granule, and the item is bound to `$.scatter.item`.
    Children run in parallel, as far as the queue's workers allow.
 3. The gather **waits until every child is terminal**, after its retries are used up. Then
    it checks the threshold:
@@ -323,7 +404,8 @@ list ─▶ fan_out (scatter over $.list.granules) ─▶ process × N ─▶ co
      the **completed** children's values, **in item order**. Failed children are left out,
      so the list can be shorter than N. The gather also outputs the counts `n_completed`
      and `n_failed`.
-   - Otherwise the run halts with `scatter process: k/N completed < threshold t`.
+   - Otherwise the run halts. With 26 of 30 half-orbits done against a 0.9 threshold, the
+     error is `scatter L2SMP: 26/30 completed < threshold 0.9`.
 4. An **empty list** (N = 0) skips straight to the gather, which outputs empty lists.
 
 **Sizing.** A default scatter's list comes from an upstream output, so the 512 KB outputs
@@ -402,28 +484,28 @@ curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<
 | `GET /workflow/specs`, `GET /workflow/specs/<id:version>` | List specs or fetch one. |
 | `POST /workflow/runs` `{spec_id, inputs, user?, tags?}` | Start a run. `tags` is an optional list of non-empty strings for finding runs later. Returns `202 {run_id}`, `400` for bad inputs or tags, or `404` for an unknown spec. |
 | `GET /workflow/runs/<run_id>` | Get the status doc (below). |
-| `GET /workflow/runs/<run_id>/steps` | Job counts per step and status, e.g. `{"process": {"job-completed": 41, "job-started": 9}}`. Use it for live progress, since the doc only shows node state. |
+| `GET /workflow/runs/<run_id>/steps` | Job counts per step and status, e.g. `{"L2SMP": {"job-completed": 26, "job-started": 4}}`. Use it for live progress, since the doc only shows node state. |
 | `POST /workflow/runs/<run_id>/cancel` | Cancel a run ([§5.4](#54-cancelling)). |
 
 **Status doc** (`.result`). This one is for a run that failed below its scatter threshold:
 
 ```json
-{ "run_id": "run-…", "spec_id": "granule-mosaic:1.0.0",
-  "spec_name": "granule-mosaic", "spec_version": "1.0.0", "has_scatter": true,
-  "status": "failed", "username": "jdoe", "tags": ["campaign-7"],
-  "inputs": { "collection": "…", "bbox": [ … ] },
+{ "run_id": "run-…", "spec_id": "radiometer-l3smp-daily:1.0.0",
+  "spec_name": "radiometer-l3smp-daily", "spec_version": "1.0.0", "has_scatter": true,
+  "status": "failed", "username": "jdoe", "tags": ["R19-reprocessing"],
+  "inputs": { "date": "2026-11-12", "crid": "R19240", "ancillary": "…" },
   "submitted_at": "…Z", "updated_at": "…Z", "ended_at": "…Z", "duration_s": 5412.8,
-  "current_nodes": [], "failed_node": "process", "error_class": "threshold",
-  "error": "step process failed: scatter process: 41/50 completed < threshold 0.9", "outputs": null,
+  "current_nodes": [], "failed_node": "L2SMP", "error_class": "threshold",
+  "error": "step L2SMP failed: scatter L2SMP: 26/30 completed < threshold 0.9", "outputs": null,
   "nodes": {
-    "list":    { "state": "completed", "job_id": "…", "started_at": "…Z", "ended_at": "…Z",
-                 "outputs": { "granules": [ … ], "count": 50 } },
-    "fan_out": { "state": "completed", "outputs": { "n": 50 } },
-    "process": { "state": "failed", "expected": 50, "threshold": 0.9,
-                 "attempts": [ { "job_id": "…", "payload_id": "…", "status": "job-failed",
-                                 "error": "…", "error_class": "pge:throttled", "retry_count": 0,
-                                 "ended_at": "…Z", "child_index": 17 } ] },
-    "collect": { "state": "pending" }, "to_mosaic": { "state": "pending" }, "mosaic": { "state": "pending" } } }
+    "find_L1C":       { "state": "completed", "job_id": "…", "started_at": "…Z", "ended_at": "…Z",
+                        "outputs": { "l1c_files": [ … ], "count": 30 } },
+    "per_half_orbit": { "state": "completed", "outputs": { "n": 30 } },
+    "L2SMP":          { "state": "failed", "expected": 30, "threshold": 0.9,
+                        "attempts": [ { "job_id": "…", "payload_id": "…", "status": "job-failed",
+                                        "error": "…", "error_class": "exit_code:75", "retry_count": 0,
+                                        "ended_at": "…Z", "child_index": 9 } ] },
+    "collect_L2": { "state": "pending" }, "to_L3": { "state": "pending" }, "L3SMP": { "state": "pending" } } }
 ```
 
 **Run fields**
@@ -484,8 +566,8 @@ gather that reduces instead of collecting, or a pass that looks up the previous 
 products. To use one, name it on the node:
 
 ```json
-"fan_out": { "kind": "scatter", "connector": "job-stac-scatter:v1.0", "child": "process",
-             "over": "$.inputs.stac_query", "next": ["collect"] }
+"per_half_orbit": { "kind": "scatter", "connector": "job-stac-scatter:v1.0", "child": "L2SMP",
+                    "over": "$.inputs.stac_query", "next": ["collect_L2"] }
 ```
 
 - With a custom scatter, `over` can be any value. Its meaning belongs to the connector.
