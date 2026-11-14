@@ -215,7 +215,7 @@ to `_error_class.txt` before exiting non-zero. For example, `throttled` becomes
 | kind | required fields | optional | `next` must be |
 |---|---|---|---|
 | `job` | `run` (a job_spec id, e.g. `job-l1b_tb:R19`), `in`, `out` (list of output names) | `tag`, `queue`, `max_retries`, `retry_on` | `[]`, or one `pass` or `scatter` |
-| `pass` | `bind`: `{"<next_node>.<param>": "$.ref"}`, non-empty | `connector` | exactly one `job`, the one named in every bind key |
+| `pass` | none | `bind`: `{"<next_node>.<param>": "$.ref"}`, or `{}` / omitted for a pass that only orders steps; `connector` | exactly one `job`, the one named in every bind key |
 | `scatter` | `child` (a `job` node id), `over` (usually a `$`-ref to a list) | `completion.threshold` in (0, 1], default `1.0`; `connector` | exactly one `gather` |
 | `gather` | `collect`: `"$.<child>.<output>"` or a list of them | `connector` | `[]`, or one `pass` |
 
@@ -229,7 +229,8 @@ job → (pass → job)* → [scatter → gather → (pass → job)*] → …end
 ```
 
 - **A job can't link straight to another job.** Put a `pass` between them, even if it just
-  forwards a value.
+  forwards a value or, with no `bind`, only sets the order (see
+  [§3.7](#37-sequence-only-chains-no-outputs)).
 - **A scatter child is owned by its scatter.** It must have `next: []`, must not appear in any
   other node's `next`, and can't be the entry.
 - **One successor per node and one predecessor per node.** Specs with branches, joins or
@@ -248,7 +249,8 @@ Any string value that starts with `$.` is a reference. Every other value is a li
 Which outputs a node declares depends on its kind:
 
 - a `job` declares its `out` list
-- a `pass` declares the `<param>` part of each bind key, so `"L1C.l1b_file"` declares `l1b_file`
+- a `pass` declares the `<param>` part of each bind key, so `"L1C.l1b_file"` declares `l1b_file`.
+  A pass with an empty or omitted `bind` declares nothing.
 - a `gather` declares the `<output>` part of each `collect` ref, whose value is a **list**.
   It also always declares `n_completed` and `n_failed`, the integer child counts.
 
@@ -276,6 +278,10 @@ reference `$.L1B.l1b_file` directly. The pass exists for two reasons: it's the r
 between two jobs, and it's the extension point for a mission **pass connector** that
 computes the next job's params. A connector can rename, reshape or look up the previous
 job's published products. See [§7](#7-custom-connectors).
+
+A pass may also have an empty `bind` (`{}`) or no `bind` at all. It then passes nothing on
+and only orders the steps: the next job starts after the previous one completes. It still
+runs as a step, tagged with its node id. See [§3.7](#37-sequence-only-chains-no-outputs).
 
 ### 3.5 Job tags
 
@@ -340,6 +346,73 @@ L1A ─▶ to_L1B ─▶ L1B ─▶ to_L1C ─▶ L1C ─▶ to_L2 ─▶ L2SMP
                "rfi_flagged_pct": "$.L1B.rfi_flagged_pct" }
 }
 ```
+
+### 3.7 Sequence-only chains (no outputs)
+
+Some PGE chains already hand products to each other through storage they agree on, and you
+only need them to run in order. To do that, give every job `"out": []` and use passes
+without a `bind`. No job writes `_workflow_outputs.json`.
+
+```
+L1B ─▶ seq_1 ─▶ L1C ─▶ seq_2 ─▶ L2SMP        (no values flow along the arrows)
+```
+
+```json
+{
+  "id": "radiometer-l2smp-shared", "version": "1.0.0", "schema_version": "1.0",
+  "label": "Half-orbit L1B_TB -> L1C_TB -> L2_SM_P, products handed over on shared storage",
+  "defaults": { "queue": "sps-job_worker-large", "timeout_hours": 6 },
+  "inputs": {
+    "half_orbit": { "type": "string" },
+    "crid":       { "type": "string", "default": "R19240" },
+    "shared_dir": { "type": "string", "default": "/data/wf-shared" }
+  },
+  "entry": "L1B",
+  "nodes": {
+    "L1B":   { "kind": "job", "run": "job-l1b_tb_shared:R19", "tag": "L1B_TB",
+               "in": { "half_orbit": "$.inputs.half_orbit", "crid": "$.inputs.crid",
+                       "shared_dir": "$.inputs.shared_dir" },
+               "out": [], "next": ["seq_1"] },
+    "seq_1": { "kind": "pass", "bind": {}, "next": ["L1C"] },
+    "L1C":   { "kind": "job", "run": "job-l1c_tb_shared:R19", "tag": "L1C_TB",
+               "in": { "half_orbit": "$.inputs.half_orbit", "crid": "$.inputs.crid",
+                       "shared_dir": "$.inputs.shared_dir", "grid": "EASE2_M36km", "after": "L1B" },
+               "out": [], "next": ["seq_2"] },
+    "seq_2": { "kind": "pass", "next": ["L2SMP"] },
+    "L2SMP": { "kind": "job", "run": "job-l2_sm_p_shared:R19", "tag": "L2_SM_P",
+               "in": { "half_orbit": "$.inputs.half_orbit", "crid": "$.inputs.crid",
+                       "shared_dir": "$.inputs.shared_dir", "after": "L1C" },
+               "out": [], "next": [] }
+  },
+  "outputs": {}
+}
+```
+
+How the jobs find each other's products:
+
+- Each job reads `workflow.run_id` from its `_job.json` ([§2.4](#24-knowing-youre-running-in-a-workflow))
+  and works under `<shared_dir>/<run_id>/`. That directory is unique per run, so concurrent
+  runs don't collide.
+- `L1B` writes its L1B_TB granule there under the agreed half-orbit name. `L1C` reads it and
+  writes the L1C_TB granule, and `L2SMP` reads that.
+- `after` is a plain literal (`"L1B"`, `"L1C"`). The job uses it to check that the step
+  before it finished, for example by looking for `<shared_dir>/<run_id>/L1B.done`. If the file
+  is missing, exit non-zero so the run halts ([§5.1](#51-implicit-halt)).
+
+Things to know:
+
+- `shared_dir` must be mounted on every worker that serves the queue. The orchestrator
+  doesn't move these files and doesn't publish them for you.
+- `seq_1` and `seq_2` declare no outputs, so a ref like `$.seq_1.x` is rejected at
+  registration. With no job outputs, `spec.outputs` is `{}`.
+- A retry reruns the job in the same run, with the same `run_id`, so it sees what the failed
+  attempt left behind. Write to a temporary name and rename it when done.
+- `bind: {}` and an omitted `bind` mean the same thing. A `bind` that isn't an object, such as
+  `[]`, is rejected.
+
+A version of this spec that is tested end to end is `wf-e2e/spec-noout-1.2.json` in
+local-stack (`e2e-noout:1.2.0`). It runs A → pass_1 (`"bind": {}`) → B → pass_2 (no `bind`)
+→ C.
 
 ---
 
@@ -596,6 +669,7 @@ with a worked plugin in the `workflow-connectors-example` repo.
 | `refers to scatter child 'P', whose outputs are not stored` | In `spec.outputs` or downstream, reference the gather instead (`$.G.y`). |
 | `'$.scatter.item' is only allowed in a scatter child's 'in'` | Move the ref into the child's `in`. |
 | `bind key 'C.x' targets 'C' but next is 'B'` | A pass binds only its own successor's params. |
+| `'bind' must be an object (or omitted/{} for a pure sequencing pass)` | Use an object, `{}`, or leave `bind` out. |
 | `unknown field 'xyz'` | Check for a typo. Unknown fields are rejected, except `label` and `description`. |
 | `kind 'switch' is not supported in v1` | `gate`, `switch` and `halt` are reserved for later versions. |
 | `connector 'job-x' is not allowed for kind 'scatter'` | Ask an operator to add it to `WORKFLOW_CONNECTORS`. |
@@ -624,4 +698,4 @@ per-run overrides, spec permissions, and a CWL adapter.
   `PLAN-workflow-orchestration-v1-contract.md`
 - Output binding design: ADR-003, *Workflow Output Binding via Job-Scoped `_workflow_outputs.json`*
 - Fixture specs: `hysds_commons.workflow_examples` and the `local-stack/wf-e2e/spec-*.json`
-  files (linear, scatter/gather, retry, File/Directory outputs)
+  files (linear, scatter/gather, retry, File/Directory outputs, sequence-only)
