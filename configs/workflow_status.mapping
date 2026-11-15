@@ -22,6 +22,9 @@
       "error_class": {
         "type": "keyword"
       },
+      "halt_reason": {
+        "type": "keyword"
+      },
       "duration_s": {
         "type": "float"
       },

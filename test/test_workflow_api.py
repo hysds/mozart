@@ -13,7 +13,7 @@ from flask_restx import Api
 from hysds_commons.workflow_examples import linear_spec, scatter_gather_spec
 
 DEFAULT_WORKFLOW_CONNECTORS_IDS = ["job-workflow-pass:v1.0.0", "job-workflow-scatter:v1.0.0",
-                                   "job-workflow-gather:v1.0.0"]
+                                   "job-workflow-gather:v1.0.0", "job-workflow-switch:v1.0.0"]
 REPO = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
@@ -116,6 +116,27 @@ def test_spec_post_valid(env, fixture):
             assert n.pop("connector") == f"job-workflow-{k}:v1.0.0"
             assert n.pop("connector_queue") == f"workflow-connector-{k}"
     assert stored_doc["nodes"] == spec["nodes"]
+
+
+def test_spec_post_switch_gate_halt_resolves_switch_connector(env):
+    c, es, _ = env
+    spec = json.load(open(os.path.join(REPO, "test", "fixtures", "spec-switch.json")))
+    r = c.post("/workflow/specs", json=spec)
+    assert r.status_code == 201, r.data
+    nodes = es.doc("specs", "e2e-switch:1.0.0")["nodes"]
+    for nid in ("qa_route", "qa_gate", "tier"):  # a gate uses the switch entry
+        assert nodes[nid]["connector"] == "job-workflow-switch:v1.0.0"
+        assert nodes[nid]["connector_queue"] == "workflow-connector-switch"
+    assert nodes["pass_pub"]["connector"] == "job-workflow-pass:v1.0.0"
+    assert "connector" not in nodes["reject"] and nodes["reject"]["kind"] == "halt"
+
+
+def test_spec_switch_without_registered_connector_job_spec_rejected(env):
+    c, es, _ = env
+    del es.docs[("job_specs", "job-workflow-switch:v1.0.0")]
+    spec = json.load(open(os.path.join(REPO, "test", "fixtures", "spec-switch.json")))
+    r = c.post("/workflow/specs", json=spec)
+    assert r.status_code == 400 and any("job-workflow-switch:v1.0.0" in e for e in r.get_json()["errors"])
 
 
 def test_spec_post_invalid_lists_all_errors(env):

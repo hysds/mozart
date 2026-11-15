@@ -2,20 +2,16 @@
   "id": "job-workflow-switch:v1.0.0",
   "job-version": "v1.0.0",
   "label": "Workflow connector: switch",
-  "description": "N-way routing: evaluate cases (or a $.-ref label against choices) and route to the winning arm.",
+  "description": "Evaluate a switch or gate (cases, or a $.-ref label against choices), record the chosen arm and skip the untaken arms.",
   "container": "hysds/workflow-connectors:v1.0.0",
   "command": "/home/ops/workflow_connectors/run_switch.sh",
   "recommended-queues": [
     "workflow-connector-switch"
   ],
-  "imported_worker_files": {
-    "$HOME/.netrc": [
-      "/home/ops/.netrc"
-    ],
-    "$HOME/.aws": [
-      "/home/ops/.aws",
-      "ro"
-    ]
+  "imported_worker_files": {},
+  "runtime_options": {
+    "network": "host",
+    "env-file": "$HOME/.workflow-connectors.env"
   },
   "params": [
     {

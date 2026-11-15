@@ -41,6 +41,9 @@ WORKFLOW_CONNECTORS = {
                 "allowed": {"job-workflow-scatter:v1.0.0": "workflow-connector-scatter"}},
     "gather":  {"default": "job-workflow-gather:v1.0.0",
                 "allowed": {"job-workflow-gather:v1.0.0": "workflow-connector-gather"}},
+    # a gate node uses this entry too
+    "switch":  {"default": "job-workflow-switch:v1.0.0",
+                "allowed": {"job-workflow-switch:v1.0.0": "workflow-connector-switch"}},
 }
 
 # key file for fabric

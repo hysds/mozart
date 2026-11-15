@@ -23,7 +23,7 @@ from test_configs import VALID_FIELD_TYPES, _iter_properties
 
 WORKFLOW_MAPPINGS = ("workflow_specs.mapping", "workflow_status.mapping")
 
-CONNECTORS = ("pass", "scatter", "gather", "gate", "switch", "halt", "finalize")
+CONNECTORS = ("pass", "scatter", "gather", "switch", "halt", "finalize")  # a gate runs the switch connector
 
 SHARED_CONTAINER = "hysds/workflow-connectors:v1.0.0"
 
@@ -164,7 +164,7 @@ def test_shared_container_doc(connectors_dir):
     assert container["id"] == f"{container['name']}:{container['version']}"
     # id/name must equal the image the connector job_specs reference in "container"
     assert container["name"] == "hysds/workflow-connectors"
-    for connector in ("pass", "finalize", "halt", "scatter", "gather"):
+    for connector in ("pass", "switch", "finalize", "halt", "scatter", "gather"):
         with open(os.path.join(connectors_dir, f"job-spec.json.workflow-{connector}")) as f:
             assert json.load(f)["container"] == container["id"]
     assert container["url"].startswith("s3://")
