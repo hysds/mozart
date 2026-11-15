@@ -276,6 +276,9 @@ Which outputs a node declares depends on its kind:
   `{"ancillary": {"dem": "$.inputs.dem", "landcover": ["$.inputs.igbp", "$.inputs.ndvi"]}}`.
 - A ref replaces the **whole string**. There's no interpolation: `"CRID-$.inputs.crid"`
   is a literal.
+- Where arms of a switch rejoin, `{"first_of": ["$.a.x", "$.b.x"]}` takes the value from the
+  first listed node that completed
+  ([§5.6](#56-rejoining-arms-and-what-a-node-can-reference)).
 - Values keep their JSON type. A ref to a `value_d` list yields a list of numbers, not a
   string.
 - You can reference **any** upstream node on every path, not just the one right before. In the chain in
@@ -537,7 +540,6 @@ taken become **`skipped`**. The spec's `schema_version` stays `"1.0"`.
   "defaults": { "queue": "sps-job_worker-large", "timeout_hours": 8 },
   "inputs": {
     "l1c_file":   { "type": "string" },
-    "half_orbit": { "type": "string" },
     "crid":       { "type": "string", "default": "R19240" },
     "ancillary":  { "type": "string" },
     "qa_min":     { "type": "float",  "default": 0.8 }
@@ -567,11 +569,12 @@ taken become **`skipped`**. The spec's `schema_version` stays `"1.0"`.
                          "out": ["l2_file"], "next": ["to_deliver"] },
     "to_deliver": { "kind": "pass", "next": ["deliver"] },
     "deliver":  { "kind": "job", "run": "job-l2_deliver:R19", "tag": "L2_SM_P_deliver",
-                  "in": { "half_orbit": "$.inputs.half_orbit", "crid": "$.inputs.crid",
-                          "route": "$.qa_route.arm" },
+                  "in": { "l2_file": { "first_of": ["$.reprocess_L2SMP.l2_file", "$.L2SMP.l2_file"] },
+                          "crid": "$.inputs.crid", "route": "$.qa_route.arm" },
                   "out": ["delivered_granule"], "next": [] }
   },
-  "outputs": { "route": "$.qa_route.arm", "l2_sm_p": "$.L2SMP.l2_file",
+  "outputs": { "route": "$.qa_route.arm",
+               "l2_sm_p": { "first_of": ["$.reprocess_L2SMP.l2_file", "$.L2SMP.l2_file"] },
                "reprocessed": "$.reprocess_L2SMP.l2_file",
                "delivered": "$.deliver.delivered_granule" }
 }
@@ -587,9 +590,9 @@ taken become **`skipped`**. The spec's `schema_version` stays `"1.0"`.
 
 `deliver` is reached from two arms. That's an **exclusive rejoin**, and it's allowed because
 only one arm can fire ([§5.6](#56-rejoining-arms-and-what-a-node-can-reference)). `deliver`
-can't read `$.reprocess_L2SMP.l2_file`, because that node may have been skipped. Instead it
-gets the half-orbit and the arm taken, and looks up the newest L2_SM_P granule for that
-half-orbit in GRQ, where `reprocess_L2SMP` published its granule.
+gets its granule through **`first_of`**: the reprocessed `l2_file` if `reprocess_L2SMP` ran,
+otherwise the original from `L2SMP`. The run output `l2_sm_p` uses the same `first_of`, so it
+always names the granule that was delivered.
 
 ### 5.2 `switch`
 
@@ -750,30 +753,53 @@ have been skipped:
   is rejected the same way.
 - A switch can't read its own arms' nodes either.
 
-When the node after the arms needs a product that only one arm makes, use one of two
-patterns:
+**`first_of`: take the value from whichever arm ran.** When the node after a rejoin needs a
+product that depends on the arm, list the candidates in order of preference:
 
-1. **Rejoin and look the product up.** Pass the node something every path has, such as
-   `$.qa_route.arm`, ids and run inputs, and let it find the product: in GRQ, as `deliver`
-   does, or on agreed storage ([§3.7](#37-sequence-only-chains-no-outputs)).
-2. **Don't rejoin: one pass per arm.** End each arm with its own pass and its own copy of the
-   next job. Each pass binds from its own arm, which lies on every path to that copy:
+```json
+"l2_file": { "first_of": ["$.reprocess_L2SMP.l2_file", "$.L2SMP.l2_file"] }
+```
 
-   ```json
-   "qa_route":     { "kind": "switch", "cases": [ … as above … ], "default": ["to_deliver"] },
-   "to_deliver":   { "kind": "pass", "bind": { "deliver.l2_file": "$.L2SMP.l2_file" }, "next": ["deliver"] },
-   "deliver":      { "kind": "job", "run": "job-l2_deliver:R19", "tag": "L2_SM_P_deliver",
-                     "in": { "l2_file": "$.to_deliver.l2_file" }, "out": ["delivered_granule"], "next": [] },
-   "reprocess_L2SMP": { …, "next": ["to_deliver_r"] },
-   "to_deliver_r": { "kind": "pass", "bind": { "deliver_r.l2_file": "$.reprocess_L2SMP.l2_file" },
-                     "next": ["deliver_r"] },
-   "deliver_r":    { "kind": "job", "run": "job-l2_deliver:R19", "tag": "L2_SM_P_deliver",
-                     "in": { "l2_file": "$.to_deliver_r.l2_file" }, "out": ["delivered_granule"], "next": [] }
-   ```
+At run time the first entry whose node **completed** wins. Skipped, pending and running nodes
+fall through to the next entry. It's modeled on CWL's `pickValue: first_non_null`.
+
+- **Form.** An object with the single key `first_of` and a list of **2 or more** refs, each
+  `$.<node>.<output>` or `$.inputs.<name>`. No literals, no `$.scatter.item` and no nesting.
+- **Where.** In a job's `in` (at any depth), as a pass `bind` value, and in spec `outputs`.
+  Switch and gate conditions, scatter `over` and gather `collect` reject it.
+- **Order matters.** A node on every path to the owner always completes, and a `$.inputs`
+  entry always resolves, so either one wins over anything listed after it. Registration
+  rejects entries that could never be used. Put the arm-specific nodes first and the shared
+  upstream node, or a run input as a fallback, **last**.
+- **Coverage.** Every path to the owner must pass through a listed node, unless an
+  `$.inputs` entry is listed. Otherwise some run would have nothing to pick. Each listed node
+  must be upstream of the owner on at least one path, and must declare the output.
+- **A completed node must deliver.** If the chosen node completed but its output is missing
+  or `null`, the run fails with `error_class: input_resolution`; it doesn't fall through.
+  `false` and `0` are real values. If no entry resolves, the run also fails with
+  `input_resolution`.
+- **In spec outputs** there's no coverage rule (but `$.inputs` entries still go last). If
+  nothing resolves, the output is `null`.
+
+**Alternative: don't rejoin; one pass per arm.** End each arm with its own pass and its own
+copy of the next job. Each pass binds from its own arm, which lies on every path to that copy.
+This suits arms whose next steps really differ:
+
+```json
+"qa_route":     { "kind": "switch", "cases": [ … as above … ], "default": ["to_deliver"] },
+"to_deliver":   { "kind": "pass", "bind": { "deliver.l2_file": "$.L2SMP.l2_file" }, "next": ["deliver"] },
+"deliver":      { "kind": "job", "run": "job-l2_deliver:R19", "tag": "L2_SM_P_deliver",
+                  "in": { "l2_file": "$.to_deliver.l2_file" }, "out": ["delivered_granule"], "next": [] },
+"reprocess_L2SMP": { …, "next": ["to_deliver_r"] },
+"to_deliver_r": { "kind": "pass", "bind": { "deliver_r.l2_file": "$.reprocess_L2SMP.l2_file" },
+                  "next": ["deliver_r"] },
+"deliver_r":    { "kind": "job", "run": "job-l2_deliver:R19", "tag": "L2_SM_P_deliver",
+                  "in": { "l2_file": "$.to_deliver_r.l2_file" }, "out": ["delivered_granule"], "next": [] }
+```
 
 **Spec outputs** may reference any node except a scatter child, including nodes that might
 be skipped. A ref into a node that was skipped resolves to **`null`**, as `reprocessed` does on
-the `default` path in §5.1.
+the `default` path in §5.1. Use `first_of` when you want a fallback instead of `null`.
 
 ### 5.7 At run time
 
@@ -918,7 +944,7 @@ curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<
 | `threshold` | Too few scatter children completed. | the scatter child node |
 | `timeout` | The run hit `defaults.timeout_hours`. | the first node that was running |
 | `cancelled` | Someone cancelled the run. | none |
-| `input_resolution` | A node's `in` or `bind` refs couldn't be resolved, or a switch's ref was missing or `null`. | the node |
+| `input_resolution` | A node's `in` or `bind` refs couldn't be resolved, a switch's ref was missing or `null`, or a `first_of` found no completed node or picked one with a missing or `null` output. | the node |
 | `routing` | A switch or gate couldn't compare its operands, e.g. `lt` on a string and a number ([§5.7](#57-at-run-time)). | the switch |
 | `halted` | The run reached a `halt` with `status: failed`. `error` is `halted at <id>: <reason>`. | the halt node |
 | `output_resolution` | `spec.outputs` couldn't be resolved at the end of the run. | the last node |
@@ -994,6 +1020,13 @@ with a worked plugin in the `workflow-connectors-example` repo.
 | `'default' must be a list with exactly one node id, got [...]` | Each arm has exactly one target. The same applies to `cases[i].next`, each `choices` value, `on_true` and `on_false`. |
 | `arm 'X' target 'Y' does not exist` | Fix the node id in the arm. |
 | `arm 'X' target must be a job or pass or scatter or switch or gate or halt node, but 'G' is 'gather'` | A gather can only follow its scatter. |
+| `first_of entry $.reprocess_L2SMP.l2_file can never be used; $.L2SMP.l2_file before it always resolves (it is on every path to 'deliver')` | Move the shared node (or a `$.inputs` entry: `… (is a workflow input)`) to the end of the list. |
+| `first_of does not cover every path to 'deliver'; add a ref on the path through ['qa_route']` | Some path reaches the node without passing a listed node. List a node on that path, or end with a `$.inputs` fallback. |
+| `first_of entry $.X.y refers to 'X', which is not an ancestor of 'N'` | List only nodes upstream of the owner. |
+| `first_of must be a list of at least 2 refs, got [...]` | With one ref, use the plain ref. |
+| `first_of entry 'x.h5' must be a '$.' ref (literals and nesting are not allowed)` | Use refs only. For a fallback, list a run input last. |
+| `first_of must be an object with the single key 'first_of', has [...]` | Remove the extra keys. |
+| `first_of is only allowed in a job's 'in', a pass 'bind' value and spec outputs (found at '…')` | Move it into a job's `in`, a pass `bind` or spec `outputs`. |
 | `the arm label 'default' is reserved` | Rename the case or choice. |
 | `cases[0].when.op must be one of ['eq', 'ne', 'lt', 'le', 'gt', 'ge', 'in'], got '<'` | Use the op names, not symbols. |
 | `cases[0].when: 'in' needs a list literal or a $-ref on the right, got 0.3` | Give `in` a list. |
