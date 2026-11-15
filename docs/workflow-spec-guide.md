@@ -8,11 +8,11 @@ and records the run's state in one status document.
 This guide is for mission developers who write specs and make their PGEs workflow-ready.
 It covers **schema version 1.0** (the `feature/workflow-orchestration-v1` branch).
 
-> **v1 in one paragraph.** A run is a straight line of jobs, with optional
-> scatter/gather fan-out over a list. A node can't branch to two successors, and there are
-> no joins, conditionals or loops. A job that fails for good halts the run. Every error in a
-> spec is reported together when you register it, so a spec that registers is structurally
-> sound.
+> **v1 in one paragraph.** A run is a line of jobs, with optional scatter/gather fan-out
+> over a list. Since v1.2 a `switch` or `gate` can route the run down one of several arms,
+> the arms can rejoin, and a `halt` can end the run early. There are no parallel branches,
+> other joins or loops. A job that fails for good halts the run. Every error in a spec is
+> reported together when you register it, so a spec that registers is structurally sound.
 
 ---
 
@@ -175,7 +175,7 @@ params and write `_workflow_outputs.json` either way.
 ### 2.5 Telling the retry policy why you failed (optional)
 
 Every failed attempt gets an **error class**, which is what `retry_on` matches against
-([§5.2](#52-retries)):
+([§6.2](#62-retries)):
 
 | class | when |
 |---|---|
@@ -203,7 +203,7 @@ to `_error_class.txt` before exiting non-zero. For example, `throttled` becomes
 | `entry` | yes | The first node. It must be a `job` with no predecessors. |
 | `nodes` | yes | `{node_id: node}`. Ids match `^[A-Za-z0-9_-]+$`. `inputs`, `scatter`, `finalize`, `halt`, `_finalize` and `_halt` are reserved. |
 | `inputs` | no | `{name: {"type": T, "default"?: v}}`. T is one of `string`, `int`, `float`, `bool`, `string[]`, `int[]` or `float[]`. An input with no default is required at run time. A `float` input accepts ints. |
-| `defaults` | no | `queue`, `max_retries` and `retry_on`, which each job node can override, plus `timeout_hours`, the run timeout ([§5.3](#53-run-timeout-and-stalls)). |
+| `defaults` | no | `queue`, `max_retries` and `retry_on`, which each job node can override, plus `timeout_hours`, the run timeout ([§6.3](#63-run-timeout-and-stalls)). |
 | `outputs` | no | `{name: "$.<node>.<output>"}`. They're resolved into the run's `outputs` when it completes. |
 | `label`, `description` | no | Free text. These are also allowed on every node. |
 
@@ -214,27 +214,41 @@ to `_error_class.txt` before exiting non-zero. For example, `throttled` becomes
 
 | kind | required fields | optional | `next` must be |
 |---|---|---|---|
-| `job` | `run` (a job_spec id, e.g. `job-l1b_tb:R19`), `in`, `out` (list of output names) | `tag`, `queue`, `max_retries`, `retry_on` | `[]`, or one `pass` or `scatter` |
+| `job` | `run` (a job_spec id, e.g. `job-l1b_tb:R19`), `in`, `out` (list of output names) | `tag`, `queue`, `max_retries`, `retry_on` | `[]`, or one `pass`, `scatter`, `switch`, `gate` or `halt` |
 | `pass` | none | `bind`: `{"<next_node>.<param>": "$.ref"}`, or `{}` / omitted for a pass that only orders steps; `connector` | exactly one `job`, the one named in every bind key |
 | `scatter` | `child` (a `job` node id), `over` (usually a `$`-ref to a list) | `completion.threshold` in (0, 1], default `1.0`; `connector` | exactly one `gather` |
-| `gather` | `collect`: `"$.<child>.<output>"` or a list of them | `connector` | `[]`, or one `pass` |
+| `gather` | `collect`: `"$.<child>.<output>"` or a list of them | `connector` | `[]`, or one `pass`, `switch`, `gate` or `halt` |
+| `switch` | `default`, plus either `cases` or `on` + `choices` ([§5.2](#52-switch)) | `connector` | no `next`; each arm names one `job`, `pass`, `scatter`, `switch`, `gate` or `halt` |
+| `gate` | `when`, `on_true`, `on_false` ([§5.4](#54-gate)) | `connector` | no `next`; arms as for `switch` |
+| `halt` | `status` (`failed` or `completed`), `reason` ([§5.5](#55-halt)) | none | no `next`; it ends the run |
 
 `next` may be omitted, which means `[]`. A node with `next: []` ends the run. The run
 completes when that node completes.
 
-**Allowed shapes**, as a grammar:
+**Allowed shapes.** Each kind may point only to certain kinds:
 
-```
-job → (pass → job)* → [scatter → gather → (pass → job)*] → …end
-```
+| from | may point to |
+|---|---|
+| `job` | `pass`, `scatter`, `switch`, `gate`, `halt` |
+| `pass` | `job` |
+| `scatter` | `gather` |
+| `gather` | `pass`, `switch`, `gate`, `halt` |
+| `switch` / `gate` arm | `job`, `pass`, `scatter`, `switch`, `gate`, `halt` |
+
+Without routing, that gives the familiar line:
+`job → (pass → job)* → [scatter → gather → (pass → job)*] → …end`.
 
 - **A job can't link straight to another job.** Put a `pass` between them, even if it just
   forwards a value or, with no `bind`, only sets the order (see
   [§3.7](#37-sequence-only-chains-no-outputs)).
 - **A scatter child is owned by its scatter.** It must have `next: []`, must not appear in any
   other node's `next`, and can't be the entry.
-- **One successor per node and one predecessor per node.** Specs with branches, joins or
-  cycles are rejected.
+- **One successor per node, and one target per switch arm.** Parallel branches and cycles
+  are rejected.
+- **One predecessor per node**, except an **exclusive rejoin**: a node reached from different
+  arms of one switch ([§5.6](#56-rejoining-arms-and-what-a-node-can-reference)). Other joins
+  are rejected.
+- **The entry is a job.** A scatter child is a job too.
 
 ### 3.3 References (`$`-refs)
 
@@ -243,7 +257,7 @@ Any string value that starts with `$.` is a reference. Every other value is a li
 | ref | resolves to | where it's allowed |
 |---|---|---|
 | `$.inputs.<name>` | the run input, with defaults applied | anywhere |
-| `$.<node>.<output>` | that node's output | the node must be a **strict ancestor** of the node using the ref, and must declare the output |
+| `$.<node>.<output>` | that node's output | the node must lie on **every path** from `entry` to the node using the ref (with no switches, that's any upstream node), and must declare the output |
 | `$.scatter.item` | this child's item from the scatter list | only in a scatter child's `in` |
 
 Which outputs a node declares depends on its kind:
@@ -251,6 +265,8 @@ Which outputs a node declares depends on its kind:
 - a `job` declares its `out` list
 - a `pass` declares the `<param>` part of each bind key, so `"L1C.l1b_file"` declares `l1b_file`.
   A pass with an empty or omitted `bind` declares nothing.
+- a `switch` or `gate` declares `arm` and `target` ([§5.2](#52-switch))
+- a `halt` declares nothing
 - a `gather` declares the `<output>` part of each `collect` ref, whose value is a **list**.
   It also always declares `n_completed` and `n_failed`, the integer child counts.
 
@@ -262,12 +278,13 @@ Which outputs a node declares depends on its kind:
   is a literal.
 - Values keep their JSON type. A ref to a `value_d` list yields a list of numbers, not a
   string.
-- You can reference **any** ancestor, not just the one right before. In the chain in
+- You can reference **any** upstream node on every path, not just the one right before. In the chain in
   [§3.6](#36-a-complete-chain-l1a-to-l2_sm_p), `L2SMP` could read `$.L1B.l1b_file` directly.
-- A scatter child can reference ancestors of its scatter, such as `$.inputs.*` and the
+- A scatter child can reference upstream nodes of its scatter, such as `$.inputs.*` and the
   upstream job's outputs.
 - `spec.outputs` can reference any node except a scatter child, because per-child outputs
-  aren't stored. Reference the gather instead.
+  aren't stored. Reference the gather instead. A ref into a node a switch skipped resolves
+  to `null`.
 - `$.G.n_completed` and `$.G.n_failed` resolve to plain integers, so a later job can be told
   how many children succeeded or failed.
 
@@ -277,7 +294,7 @@ With the default connector, a `pass` just copies values under new names. L1C cou
 reference `$.L1B.l1b_file` directly. The pass exists for two reasons: it's the required hop
 between two jobs, and it's the extension point for a mission **pass connector** that
 computes the next job's params. A connector can rename, reshape or look up the previous
-job's published products. See [§7](#7-custom-connectors).
+job's published products. See [§8](#8-custom-connectors).
 
 A pass may also have an empty `bind` (`{}`) or no `bind` at all. It then passes nothing on
 and only orders the steps: the next job starts after the previous one completes. It still
@@ -397,7 +414,7 @@ How the jobs find each other's products:
   writes the L1C_TB granule, and `L2SMP` reads that.
 - `after` is a plain literal (`"L1B"`, `"L1C"`). The job uses it to check that the step
   before it finished, for example by looking for `<shared_dir>/<run_id>/L1B.done`. If the file
-  is missing, exit non-zero so the run halts ([§5.1](#51-implicit-halt)).
+  is missing, exit non-zero so the run halts ([§6.1](#61-implicit-halt)).
 
 Things to know:
 
@@ -483,20 +500,316 @@ find_L1C ─▶ per_half_orbit (scatter) ─▶ L2SMP × N ─▶ collect_L2 (ga
 
 **Sizing.** A default scatter's list comes from an upstream output, so the 512 KB outputs
 limit caps its length. For larger or computed item sets, such as a STAC search, a manifest
-or a GRQ query, use a mission scatter connector ([§7](#7-custom-connectors)).
+or a GRQ query, use a mission scatter connector ([§8](#8-custom-connectors)).
 
 ---
 
-## 5. Failure handling
+## 5. Routing: switch, gate and halt
 
-### 5.1 Implicit halt
+Three node kinds let a run choose where to go next:
+
+- **`switch`** picks exactly one of several **arms** from a value: an upstream job's output or
+  a run input.
+- **`gate`** is a two-arm switch: true or false.
+- **`halt`** ends the run on purpose, as `failed` or `completed`, with a reason.
+
+Every possible target is named in the spec, so the whole graph is checked at registration.
+A job never names the next node itself; at most it emits a **label**, and the spec maps
+labels to targets ([§5.3](#53-routing-on-a-computed-label)). Nodes on the arms that weren't
+taken become **`skipped`**. The spec's `schema_version` stays `"1.0"`.
+
+### 5.1 Example: QA-routed L2_SM_P
+
+`L2SMP` writes a `qa_score` output. The switch `qa_route` sends the run one of three ways:
+
+```
+                         ┌─ reject     (qa_score < 0.3) ──▶ reject  [halt: failed]
+                         │
+ L2SMP ──▶ qa_route ─────┼─ reprocess  (0.3 ≤ qa_score < qa_min) ──▶ reprocess_L2SMP ──▶ to_deliver ──┐
+         [switch]        │                                                                [pass]      │
+                         └─ default    (anything else) ───────────────────────────────────────────────┴──▶ deliver
+```
+
+```json
+{
+  "id": "radiometer-l2smp-qa", "version": "1.0.0", "schema_version": "1.0",
+  "label": "L2_SM_P with QA routing: reject, reprocess, or deliver",
+  "defaults": { "queue": "sps-job_worker-large", "timeout_hours": 8 },
+  "inputs": {
+    "l1c_file":   { "type": "string" },
+    "half_orbit": { "type": "string" },
+    "crid":       { "type": "string", "default": "R19240" },
+    "ancillary":  { "type": "string" },
+    "qa_min":     { "type": "float",  "default": 0.8 }
+  },
+  "entry": "L2SMP",
+  "nodes": {
+    "L2SMP":    { "kind": "job", "run": "job-l2_sm_p:R19", "tag": "L2_SM_P",
+                  "in": { "l1c_file": "$.inputs.l1c_file", "ancillary": "$.inputs.ancillary",
+                          "crid": "$.inputs.crid" },
+                  "out": ["l2_file", "qa_score"], "next": ["qa_route"] },
+    "qa_route": { "kind": "switch",
+                  "cases": [
+                    { "name": "reject",
+                      "when": { "left": "$.L2SMP.qa_score", "op": "lt", "right": 0.3 },
+                      "next": ["reject"] },
+                    { "name": "reprocess",
+                      "when": { "all": [
+                        { "left": "$.L2SMP.qa_score", "op": "ge", "right": 0.3 },
+                        { "left": "$.L2SMP.qa_score", "op": "lt", "right": "$.inputs.qa_min" } ] },
+                      "next": ["reprocess_L2SMP"] } ],
+                  "default": ["deliver"] },
+    "reject":   { "kind": "halt", "status": "failed",
+                  "reason": "L2_SM_P retrieval quality below 0.3" },
+    "reprocess_L2SMP": { "kind": "job", "run": "job-l2_sm_p:R19", "tag": "L2_SM_P_reprocess",
+                         "in": { "l1c_file": "$.inputs.l1c_file", "ancillary": "$.inputs.ancillary",
+                                 "crid": "$.inputs.crid", "rfi_filter": "aggressive" },
+                         "out": ["l2_file"], "next": ["to_deliver"] },
+    "to_deliver": { "kind": "pass", "next": ["deliver"] },
+    "deliver":  { "kind": "job", "run": "job-l2_deliver:R19", "tag": "L2_SM_P_deliver",
+                  "in": { "half_orbit": "$.inputs.half_orbit", "crid": "$.inputs.crid",
+                          "route": "$.qa_route.arm" },
+                  "out": ["delivered_granule"], "next": [] }
+  },
+  "outputs": { "route": "$.qa_route.arm", "l2_sm_p": "$.L2SMP.l2_file",
+               "reprocessed": "$.reprocess_L2SMP.l2_file",
+               "delivered": "$.deliver.delivered_granule" }
+}
+```
+
+| `qa_score` | arm (`$.qa_route.arm`) | runs | skipped | run ends |
+|---|---|---|---|---|
+| `0.1` | `reject` | `reject` | `reprocess_L2SMP`, `to_deliver`, `deliver` | `failed`, `error_class: halted`, `error: "halted at reject: L2_SM_P retrieval quality below 0.3"` |
+| `0.5` | `reprocess` | `reprocess_L2SMP`, `to_deliver`, `deliver` | `reject` | `completed` |
+| `0.9` | `default` | `deliver` | `reject`, `reprocess_L2SMP`, `to_deliver` | `completed`; `outputs.reprocessed` is `null` |
+| missing or `null` | none | nothing | nothing | `failed`, `error_class: input_resolution` |
+| `"high"` (a string) | none | nothing | nothing | `failed`, `error_class: routing` |
+
+`deliver` is reached from two arms. That's an **exclusive rejoin**, and it's allowed because
+only one arm can fire ([§5.6](#56-rejoining-arms-and-what-a-node-can-reference)). `deliver`
+can't read `$.reprocess_L2SMP.l2_file`, because that node may have been skipped. Instead it
+gets the half-orbit and the arm taken, and looks up the newest L2_SM_P granule for that
+half-orbit in GRQ, where `reprocess_L2SMP` published its granule.
+
+### 5.2 `switch`
+
+A switch has **either** `cases` **or** `on` + `choices`, plus a `default`, which is required.
+
+**`cases`**: a list of `{name?, when, next}`, tried top-down. The first `when` that is true
+wins. If none is true, the run takes `default`.
+
+- `name` is the arm's label. It matches `^[A-Za-z0-9_.:-]{1,128}$`, is unique in the switch, and
+  defaults to `case_<i>` (`case_0`, `case_1`, …). `default` is reserved.
+- `when` is a tree. A leaf is `{"left": …, "op": …, "right": …}`; `left` and `right` are each a
+  `$`-ref or a JSON literal. Combine leaves with `{"all": [ … ]}`, `{"any": [ … ]}` (both
+  non-empty) and `{"not": { … }}`. Nesting is capped at 8 levels. There's no expression string
+  to parse.
+
+| `op` | true when | operands |
+|---|---|---|
+| `eq`, `ne` | equal / not equal | any JSON values |
+| `lt`, `le`, `gt`, `ge` | `<`, `≤`, `>`, `≥` | two numbers or two strings. A bool isn't a number. Anything else fails the run with `error_class: routing`. |
+| `in` | `left` is an element of `right` | `right` is a list literal, or a ref that resolves to a list |
+
+`all` and `any` stop at the first clause that decides them, so a ref in a clause that's never
+evaluated can't fail the run.
+
+**`on` + `choices`**: `on` is one `$`-ref. Its value is turned into JSON text and looked up
+as a key in `choices`: strings as they are, `true` → `"true"`, `1` → `"1"`, `1.0` → `"1.0"`. A
+value with no matching key takes `default`, so a typo in a label never strands the run.
+`choices` keys follow the same pattern as case names.
+
+**Arms.** `cases[i].next`, each `choices` value and `default` are each a list with **exactly
+one** node id. Two arms may name the same target. An arm can point to a `job`, `pass`,
+`scatter`, `switch`, `gate` or `halt`. When an arm points straight at a job, that job's `in`
+is resolved as it would be after a pass.
+
+**Outputs.** A switch declares two outputs: `arm`, the label taken (`"reprocess"`,
+`"default"`, …), and `target`, the node it chose. Later nodes can read them as
+`$.qa_route.arm` and `$.qa_route.target`.
+
+**Other fields.** A switch takes `label`, `description` and `connector`. It has no `tag`:
+its connector job is tagged with the node id, like any connector ([§3.5](#35-job-tags)).
+
+### 5.3 Routing on a computed label
+
+When the decision needs real work, such as opening a file, running a classifier or calling a
+service, put it in an ordinary **decision job** that writes a label output. Then switch on that
+label. Here an RFI classifier picks the L2_SM_P path for each L1C_TB granule:
+
+```
+                                                            ┌─ clean      ──▶ L2SMP
+ L1C ──▶ to_classify ──▶ classify_rfi ──▶ rfi_route ────────┼─ rfi        ──▶ L2SMP_rfi
+        [pass]          [decision job]   [switch on]        ├─ quarantine ──▶ quarantine  [halt: completed]
+                                                            └─ default    ──▶ unrouted    [halt: failed]
+```
+
+```json
+{
+  "id": "radiometer-l1c-rfi-route", "version": "1.0.0", "schema_version": "1.0",
+  "label": "L1C_TB, then an RFI classifier picks the L2_SM_P path",
+  "defaults": { "queue": "sps-job_worker-large" },
+  "inputs": {
+    "l1b_file":  { "type": "string" },
+    "crid":      { "type": "string", "default": "R19240" },
+    "ancillary": { "type": "string" }
+  },
+  "entry": "L1C",
+  "nodes": {
+    "L1C":          { "kind": "job", "run": "job-l1c_tb:R19", "tag": "L1C_TB",
+                      "in": { "l1b_file": "$.inputs.l1b_file", "grid": "EASE2_M36km", "crid": "$.inputs.crid" },
+                      "out": ["l1c_file"], "next": ["to_classify"] },
+    "to_classify":  { "kind": "pass", "bind": { "classify_rfi.l1c_file": "$.L1C.l1c_file" },
+                      "next": ["classify_rfi"] },
+    "classify_rfi": { "kind": "job", "run": "job-rfi_classifier:v2.0", "tag": "RFI_classify",
+                      "in": { "l1c_file": "$.to_classify.l1c_file" },
+                      "out": ["outcome"], "next": ["rfi_route"] },
+    "rfi_route":    { "kind": "switch", "on": "$.classify_rfi.outcome",
+                      "choices": { "clean": ["L2SMP"], "rfi": ["L2SMP_rfi"], "quarantine": ["quarantine"] },
+                      "default": ["unrouted"] },
+    "L2SMP":        { "kind": "job", "run": "job-l2_sm_p:R19", "tag": "L2_SM_P",
+                      "in": { "l1c_file": "$.L1C.l1c_file", "ancillary": "$.inputs.ancillary",
+                              "crid": "$.inputs.crid" },
+                      "out": ["l2_file"], "next": [] },
+    "L2SMP_rfi":    { "kind": "job", "run": "job-l2_sm_p:R19", "tag": "L2_SM_P",
+                      "in": { "l1c_file": "$.L1C.l1c_file", "ancillary": "$.inputs.ancillary",
+                              "crid": "$.inputs.crid", "rfi_filter": "aggressive" },
+                      "out": ["l2_file"], "next": [] },
+    "quarantine":   { "kind": "halt", "status": "completed",
+                      "reason": "RFI contamination; half-orbit quarantined, no L2_SM_P" },
+    "unrouted":     { "kind": "halt", "status": "failed",
+                      "reason": "classify_rfi returned an unknown outcome" }
+  },
+  "outputs": { "l2_sm_p": "$.L2SMP.l2_file", "l2_sm_p_rfi": "$.L2SMP_rfi.l2_file",
+               "rfi_outcome": "$.classify_rfi.outcome" }
+}
+```
+
+`classify_rfi` writes `{"name": "outcome", "value_s": "rfi"}` to `_workflow_outputs.json`
+([§2.2](#22-outputs-out-_workflow_outputsjson)). An outcome that isn't `clean`, `rfi` or
+`quarantine` takes `default` and fails the run with a clear reason. `quarantine` ends the run
+as `completed`, with `halt_reason` set and `outputs.l2_sm_p` and `outputs.l2_sm_p_rfi` both
+`null`. The arms point straight at jobs, with no pass. `L2SMP` and `L2SMP_rfi` read
+`$.L1C.l1c_file`, which lies on every path to them.
+
+### 5.4 `gate`
+
+A gate is a switch with two arms, for a yes/no question. It takes a `when` tree, `on_true`
+and `on_false`, and its arm labels are `true` and `false`:
+
+```json
+"qa_gate": { "kind": "gate",
+             "when": { "left": "$.L2SMP.qa_score", "op": "ge", "right": "$.inputs.qa_min" },
+             "on_true": ["deliver"], "on_false": ["reject"] }
+```
+
+Everything else about a switch applies: one target per arm, the `arm` and `target` outputs,
+and skipping.
+
+### 5.5 `halt`
+
+```json
+"reject": { "kind": "halt", "status": "failed", "reason": "L2_SM_P retrieval quality below 0.3" }
+```
+
+| field | |
+|---|---|
+| `status` | `failed` or `completed`. Required. |
+| `reason` | A string of 1 to 512 characters. Required. |
+| `label`, `description` | Optional. |
+
+A halt has no `next` and runs no job of its own. When a run reaches one:
+
+- **`failed`**: the run fails with `failed_node` set to the halt node, `error_class: halted`
+  and `error: "halted at <id>: <reason>"`. The halt node's state is `failed`.
+- **`completed`**: the run completes. Its `outputs` are resolved as usual, and `halt_reason`
+  holds the reason. The halt node's state is `completed`.
+
+`halt` and `_halt` can't be used as node ids.
+
+### 5.6 Rejoining arms and what a node can reference
+
+**Exclusive rejoin.** A node may have more than one predecessor only when each incoming edge
+comes from a **different arm of the same switch** (or gate), and that switch lies on every
+path to the node. `deliver` in [§5.1](#51-example-qa-routed-l2_sm_p) qualifies: one edge is
+the `default` arm, and the other comes through `reprocess_L2SMP` → `to_deliver` on the
+`reprocess` arm. Two edges from the same arm, or from nodes that aren't on switch arms at all,
+are still a fan-in and are rejected. Because only one arm fires, a rejoined node runs once.
+
+**References need a node on every path.** A node may reference `$.M.x` only if `M` lies on
+**every** path from `entry` to it. In graph terms, `M` must dominate it. Without switches,
+that is simply every upstream node, as before. With switches it rules out nodes that might
+have been skipped:
+
+- `deliver` **can** read `$.L2SMP.*`, `$.qa_route.arm` and `$.inputs.*`, which run on every
+  path.
+- `deliver` **can't** read `$.reprocess_L2SMP.l2_file`. On the `default` path that node is
+  skipped, so the value wouldn't exist. Registration fails with
+  `$.reprocess_L2SMP.l2_file refers to 'reprocess_L2SMP', which is not on every path to 'deliver' (it may be skipped)`.
+- A bind on `to_deliver` doesn't help: `to_deliver` is on the same arm, so `$.to_deliver.*`
+  is rejected the same way.
+- A switch can't read its own arms' nodes either.
+
+When the node after the arms needs a product that only one arm makes, use one of two
+patterns:
+
+1. **Rejoin and look the product up.** Pass the node something every path has, such as
+   `$.qa_route.arm`, ids and run inputs, and let it find the product: in GRQ, as `deliver`
+   does, or on agreed storage ([§3.7](#37-sequence-only-chains-no-outputs)).
+2. **Don't rejoin: one pass per arm.** End each arm with its own pass and its own copy of the
+   next job. Each pass binds from its own arm, which lies on every path to that copy:
+
+   ```json
+   "qa_route":     { "kind": "switch", "cases": [ … as above … ], "default": ["to_deliver"] },
+   "to_deliver":   { "kind": "pass", "bind": { "deliver.l2_file": "$.L2SMP.l2_file" }, "next": ["deliver"] },
+   "deliver":      { "kind": "job", "run": "job-l2_deliver:R19", "tag": "L2_SM_P_deliver",
+                     "in": { "l2_file": "$.to_deliver.l2_file" }, "out": ["delivered_granule"], "next": [] },
+   "reprocess_L2SMP": { …, "next": ["to_deliver_r"] },
+   "to_deliver_r": { "kind": "pass", "bind": { "deliver_r.l2_file": "$.reprocess_L2SMP.l2_file" },
+                     "next": ["deliver_r"] },
+   "deliver_r":    { "kind": "job", "run": "job-l2_deliver:R19", "tag": "L2_SM_P_deliver",
+                     "in": { "l2_file": "$.to_deliver_r.l2_file" }, "out": ["delivered_granule"], "next": [] }
+   ```
+
+**Spec outputs** may reference any node except a scatter child, including nodes that might
+be skipped. A ref into a node that was skipped resolves to **`null`**, as `reprocessed` does on
+the `default` path in §5.1.
+
+### 5.7 At run time
+
+**Skipped nodes.** When a switch picks an arm, every node reachable only from the other arms
+is set to `state: skipped` with `skipped_by: "<switch id>"`. That includes scatter children
+under those arms. Skipped is terminal, a skipped node is never in `current_nodes`, and it has
+no `started_at` or `ended_at`. A node that is reachable from the taken arm, such as a rejoin
+target, stays `pending` until it runs.
+
+**The switch node** completes with `outputs: {"arm": "<label>", "target": "<node id>"}`. It runs
+as a connector job on the `workflow-connector-switch` queue, tagged with the node id.
+
+**When the switch can't decide**, the run fails and nothing is routed:
+
+| cause | `error_class` | example `error` |
+|---|---|---|
+| A ref the switch needs is missing or `null` | `input_resolution` | `step qa_route failed: qa_route: cannot resolve $.L2SMP.qa_score: value is null` |
+| An operand has the wrong type for `op` | `routing` | `… 'lt' needs two numbers or two strings, got str and float (a bool is not a number)` |
+
+`failed_node` is the switch, which is `failed` with no outputs. The node before it is still
+recorded `completed` with its outputs, so you can see the value that broke the switch. Nothing
+is skipped: the arms stay `pending`. A resolved value that simply matches nothing isn't an
+error. It takes `default`.
+
+---
+
+## 6. Failure handling
+
+### 6.1 Implicit halt
 
 If a job fails and won't be retried, the run's `status` becomes `failed`. The failing node
 gets `state: failed`, the run's `error` says why, and no further nodes are submitted. A
 failed scatter child is the exception: its failure counts against the threshold instead
 ([§4](#4-fan-out-scatter-and-gather)).
 
-### 5.2 Retries
+### 6.2 Retries
 
 | field | default | meaning |
 |---|---|---|
@@ -524,7 +837,7 @@ Good defaults: `["offline"]` for transient infrastructure failures, plus the spe
 `pge:` classes your PGE emits for transient failures. Avoid `*` on expensive steps,
 because it retries real bugs too.
 
-### 5.3 Run timeout and stalls
+### 6.3 Run timeout and stalls
 
 - `defaults.timeout_hours` caps the **whole run**. The deployment default is 48h, set by
   `WORKFLOW_RUN_TIMEOUT_HOURS`. When the cap is hit, the reaper fails the run with
@@ -535,7 +848,7 @@ because it retries real bugs too.
   the last events of its finished steps. This recovers lost messages. You don't need to do
   anything.
 
-### 5.4 Cancelling
+### 6.4 Cancelling
 
 ```bash
 curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<run_id>/cancel
@@ -549,7 +862,7 @@ curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<
 
 ---
 
-## 6. Runs: API and status
+## 7. Runs: API and status
 
 | method & path | purpose |
 |---|---|
@@ -558,7 +871,7 @@ curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<
 | `POST /workflow/runs` `{spec_id, inputs, user?, tags?}` | Start a run. `tags` is an optional list of non-empty strings for finding runs later. Returns `202 {run_id}`, `400` for bad inputs or tags, or `404` for an unknown spec. |
 | `GET /workflow/runs/<run_id>` | Get the status doc (below). |
 | `GET /workflow/runs/<run_id>/steps` | Job counts per step and status, e.g. `{"L2SMP": {"job-completed": 26, "job-started": 4}}`. Use it for live progress, since the doc only shows node state. |
-| `POST /workflow/runs/<run_id>/cancel` | Cancel a run ([§5.4](#54-cancelling)). |
+| `POST /workflow/runs/<run_id>/cancel` | Cancel a run ([§6.4](#64-cancelling)). |
 
 **Status doc** (`.result`). This one is for a run that failed below its scatter threshold:
 
@@ -586,6 +899,7 @@ curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<
 | field | meaning |
 |---|---|
 | `status` | `running`, `completed`, `failed` or `cancelled`. The last three are terminal. |
+| `halt_reason` | Set when a `halt` node with `status: completed` ended the run: its `reason` ([§5.5](#55-halt)). |
 | `spec_id`, `spec_name`, `spec_version` | The spec, as `name:version` and split into its two parts. |
 | `has_scatter` | `true` if the spec has a scatter node. |
 | `username`, `tags` | Who started the run, and the tags from the start request (`[]` if none). |
@@ -593,7 +907,7 @@ curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<
 | `submitted_at`, `updated_at` | When the run started and when the doc last changed. |
 | `ended_at`, `duration_s` | When the run became terminal (set once, never overwritten), and seconds from `submitted_at` to `ended_at`. |
 | `current_nodes` | The nodes queued or running right now. `[]` once the run is terminal. |
-| `error`, `failed_node`, `error_class` | Why the run didn't complete. See below. When a run fails, nodes after the failure stay `pending`; a cancel or timeout sets them to `cancelled`. |
+| `error`, `failed_node`, `error_class` | Why the run didn't complete. See below. When a run fails, nodes after the failure stay `pending`; a cancel or timeout sets them to `cancelled`. Nodes a switch skipped stay `skipped`. |
 | `outputs` | The resolved `spec.outputs`, set when the run completes. |
 
 **`error_class` on a run that didn't complete**
@@ -604,7 +918,9 @@ curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<
 | `threshold` | Too few scatter children completed. | the scatter child node |
 | `timeout` | The run hit `defaults.timeout_hours`. | the first node that was running |
 | `cancelled` | Someone cancelled the run. | none |
-| `input_resolution` | A node's `in` or `bind` refs couldn't be resolved. | the node |
+| `input_resolution` | A node's `in` or `bind` refs couldn't be resolved, or a switch's ref was missing or `null`. | the node |
+| `routing` | A switch or gate couldn't compare its operands, e.g. `lt` on a string and a number ([§5.7](#57-at-run-time)). | the switch |
+| `halted` | The run reached a `halt` with `status: failed`. `error` is `halted at <id>: <reason>`. | the halt node |
 | `output_resolution` | `spec.outputs` couldn't be resolved at the end of the run. | the last node |
 | `submit` | Mozart couldn't submit the entry job. | the entry node |
 | `no_queue` | No queue could be found for a job. | the node |
@@ -614,10 +930,11 @@ curl -X POST -H 'content-type: application/json' -d '{"user": "jdoe"}' $M/runs/<
 
 | field | meaning |
 |---|---|
-| `state` | `pending`, `queued`, `running`, `completed`, `failed` or `cancelled`. `queued` means the node's params are resolved and its submit is imminent. Jobs go from `queued` straight to `completed` or `failed`, so use `/steps` to see progress. |
+| `state` | `pending`, `queued`, `running`, `completed`, `failed`, `cancelled` or `skipped` (on an arm a switch didn't take). `queued` means the node's params are resolved and its submit is imminent. Jobs go from `queued` straight to `completed` or `failed`, so use `/steps` to see progress. |
 | `started_at` | When the node was queued or started. For job nodes after the entry, it's the time the node was queued. |
 | `ended_at` | When the node reached a terminal state. A node cancelled before it started has none. |
-| `job_id`, `payload_id`, `outputs` | The job that ran the node, and its outputs. Scatter children don't store per-child outputs; the gather holds them. |
+| `job_id`, `payload_id`, `outputs` | The job that ran the node, and its outputs. Scatter children don't store per-child outputs; the gather holds them. A switch or gate stores `{"arm", "target"}`. |
+| `skipped_by` | On a `skipped` node: the switch or gate that skipped it. |
 | `expected`, `completed`, `failed`, `threshold` | On a scatter child node: the number of children, how many completed and failed (set only when the gather runs), and the threshold. |
 | `attempts` | One entry per failed attempt that was retried by `retry_on`, newest 100 kept: `job_id`, `payload_id`, `status`, `error`, `error_class`, `retry_count`, `ended_at`, and `child_index` for scatter children. Use it to see why earlier attempts failed, since the job doc only keeps the last one. |
 
@@ -631,9 +948,9 @@ with `error_class: no_queue`. Setting `defaults.queue` is the simplest choice.
 
 ---
 
-## 7. Custom connectors
+## 8. Custom connectors
 
-`pass`, `scatter` and `gather` nodes run as small HySDS jobs called **connectors**. A
+`pass`, `scatter`, `gather`, `switch` and `gate` nodes run as small HySDS jobs called **connectors**. A
 mission can supply its own policy, such as a scatter that enumerates a STAC search, a
 gather that reduces instead of collecting, or a pass that looks up the previous job's
 products. To use one, name it on the node:
@@ -656,14 +973,14 @@ with a worked plugin in the `workflow-connectors-example` repo.
 
 ---
 
-## 8. Common registration errors
+## 9. Common registration errors
 
 | error (abbreviated) | fix |
 |---|---|
-| `a job node's next must be a pass or scatter node, but 'B' is 'job'` | Insert a `pass` between the two jobs. |
-| `'next' has 2 targets; v1 allows at most 1` | v1 has no parallel branches. Split the work into separate specs, or scatter over a list. |
-| `fan-in is not allowed; has predecessors [...]` | Two nodes point at one node. v1 has no joins. |
-| `$.X.y refers to 'X', which is not a strict ancestor of 'Z'` | You can only reference upstream nodes. Check the `next` chain, and note that a scatter child is not an ancestor of anything. |
+| `a job node's next must be a pass or scatter or switch or gate or halt node, but 'B' is 'job'` | Insert a `pass` between the two jobs. |
+| `'next' has 2 targets; v1 allows at most 1` | v1 has no parallel branches. To choose one of several paths, use a `switch`; to run many of the same job, scatter over a list. |
+| `fan-in is only allowed where the incoming edges come from different arms of one switch; has predecessors [...]` | Two nodes point at one node, and they aren't on different arms of one switch ([§5.6](#56-rejoining-arms-and-what-a-node-can-reference)). |
+| `$.X.y refers to 'X', which is not on every path to 'Z' (it may be skipped)` | You can only reference nodes on every path to `Z`. Check the `next` chain. After a rejoin, use one of the patterns in [§5.6](#56-rejoining-arms-and-what-a-node-can-reference). A scatter child is never on the path to anything. |
 | `refers to output 'y' not declared by node 'X'` | Add `y` to X's `out`. A gather declares only its `collect` outputs plus `n_completed` and `n_failed`. |
 | `node X: timeout_hours is not supported per node in v1; use defaults.timeout_hours …` | Move it to `defaults.timeout_hours` (the run timeout), or set the job-spec's `time_limit`. |
 | `refers to scatter child 'P', whose outputs are not stored` | In `spec.outputs` or downstream, reference the gather instead (`$.G.y`). |
@@ -671,7 +988,19 @@ with a worked plugin in the `workflow-connectors-example` repo.
 | `bind key 'C.x' targets 'C' but next is 'B'` | A pass binds only its own successor's params. |
 | `'bind' must be an object (or omitted/{} for a pure sequencing pass)` | Use an object, `{}`, or leave `bind` out. |
 | `unknown field 'xyz'` | Check for a typo. Unknown fields are rejected, except `label` and `description`. |
-| `kind 'switch' is not supported in v1` | `gate`, `switch` and `halt` are reserved for later versions. |
+| `kind 'xyz' is not supported` | Use `job`, `pass`, `scatter`, `gather`, `switch`, `gate` or `halt`. |
+| `a switch needs exactly one of 'cases' or 'on' + 'choices'` | Use one form, not both. |
+| `'default' is required` | Every switch needs a `default` arm. |
+| `'default' must be a list with exactly one node id, got [...]` | Each arm has exactly one target. The same applies to `cases[i].next`, each `choices` value, `on_true` and `on_false`. |
+| `arm 'X' target 'Y' does not exist` | Fix the node id in the arm. |
+| `arm 'X' target must be a job or pass or scatter or switch or gate or halt node, but 'G' is 'gather'` | A gather can only follow its scatter. |
+| `the arm label 'default' is reserved` | Rename the case or choice. |
+| `cases[0].when.op must be one of ['eq', 'ne', 'lt', 'le', 'gt', 'ge', 'in'], got '<'` | Use the op names, not symbols. |
+| `cases[0].when: 'in' needs a list literal or a $-ref on the right, got 0.3` | Give `in` a list. |
+| `cases[0].when.not.not.… nests deeper than 8 levels` | Flatten the `when` tree. |
+| `'status' must be one of ['failed', 'completed'], got 'ok'` | A halt ends the run as `failed` or `completed`. |
+| `'reason' is required: a string of 1..512 characters` | Give the halt a reason. |
+| `unknown field 'next' for kind 'halt'` (or `'tag'` for kind `switch`) | A halt has no successors, and a switch or gate has no `tag`. |
 | `connector 'job-x' is not allowed for kind 'scatter'` | Ask an operator to add it to `WORKFLOW_CONNECTORS`. |
 | `409 workflow spec … already exists` | Specs can't be changed. Bump `version`. |
 
@@ -687,9 +1016,9 @@ job-spec-existence checks.
 
 ---
 
-## 9. Not in v1
+## 10. Not in v1
 
-Conditionals (`gate`, `switch`), parallel branches, fan-in joins, loops, pause and resume,
+Parallel branches, joins other than an exclusive rejoin, loops, pause and resume,
 per-run overrides, spec permissions, and a CWL adapter.
 
 ## See also
