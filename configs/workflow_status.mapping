@@ -69,6 +69,15 @@
       "outputs": {
         "type": "object",
         "enabled": false
+      },
+      "version": {
+        "type": "long"
+      },
+      "index": {
+        "type": "keyword"
+      },
+      "created_at": {
+        "type": "date"
       }
     }
   }
