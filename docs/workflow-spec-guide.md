@@ -157,11 +157,13 @@ at the root of the job directory**:
   something reads it. The reading step then fails with `input_resolution`:
   `cannot resolve $.l2smp.product: step 'l2smp' has no output 'product' (has: [...])`.
 - A boolean that feeds a `when` must be written with `value_b`.
-- These problems **fail the job**: a malformed file, a wrong slot type, a repeated name, or
-  a file over the size limit (512 KB by default, set by `WORKFLOW_OUTPUTS_MAX_BYTES`). The
-  error class is `worker`, or `pge:<token>` if the PGE wrote `_error_class.txt`
-  ([§2.5](#25-telling-the-retry-policy-why-you-failed-optional)). A `retry_on` that includes
-  `worker` (or `*`) therefore retries it, and the same file usually fails again. Outputs travel on a queue
+- These problems **fail the job** with error class **`outputs`**: a malformed file, a wrong
+  slot type, a repeated name, a file over the size limit (512 KB by default, set by
+  `WORKFLOW_OUTPUTS_MAX_BYTES`), or a `class` path that can't be resolved to a published URL
+  ([§2.3](#23-referencing-published-files-class-file--directory)). Rerunning the job would
+  write the same outputs, so `outputs` is **not retried** by `worker` or `pge:*` entries. It
+  also takes precedence over a token in `_error_class.txt`. Only `retry_on: ["*"]` matches
+  it. Outputs travel on a queue
   message, so keep them to scalars and references. Publish payloads as datasets and output
   their location.
 
@@ -209,10 +211,11 @@ against ([§4.4](#44-hysdsretry)):
 | `offline` | the worker went away (job-offline) |
 | `worker` | any other worker-side error |
 | `pge:<token>` | the PGE wrote `<token>` to `_error_class.txt` in the job directory |
+| `outputs` | `_workflow_outputs.json` was invalid or too large, or a `class` path couldn't be resolved ([§2.2](#22-outputs-out-_workflow_outputsjson)) |
 
 To classify your own failures, write one token (`[A-Za-z0-9_:.-]`, at most 64 characters) to
 `_error_class.txt` before exiting non-zero. For example, `throttled` becomes `pge:throttled`.
-A `pge:` class replaces `exit_code:<n>` or `worker`, but never `timeout`.
+A `pge:` class replaces `exit_code:<n>` or `worker`, but never `timeout` or `outputs`.
 
 ---
 
@@ -615,7 +618,10 @@ two fields. A failed attempt is retried when both are true:
 - the exact classes `timeout`, `signal`, `offline` and `worker`;
 - `exit_code:<n>` or `exit_code:*`;
 - `pge:<token>` or `pge:*`;
-- `*`, which matches everything.
+- `*`, which matches everything, including `outputs`.
+
+`outputs` itself isn't an accepted `retry_on` entry (`bad_hint`). An outputs failure is
+deterministic, so it is retried only under `*`.
 
 A retry is a new job attempt with the same inputs. Every attempt is kept in the step's
 `attempts[]` in the run document. Scatter children are retried individually. A run that is
@@ -879,8 +885,9 @@ its own Operation and `hysds:JobType`, and the scatter is plain CWL dataflow, ju
   [§2.3](#23-referencing-published-files-class-file--directory)). Any output name works.
   - An empty list completes the scattered step at once, with empty arrays.
   - Outputs travel on a queue message, so a list is bounded by `WORKFLOW_OUTPUTS_MAX_BYTES`
-    (512 KB by default). A list larger than that fails the lister job (error class
-    `worker`, [§2.2](#22-outputs-out-_workflow_outputsjson)). For very large sets, list batches (such as manifest URLs) and let each child
+    (512 KB by default). A list larger than that fails the lister **once**, with error class
+    `outputs`, and isn't retried ([§2.2](#22-outputs-out-_workflow_outputsjson)). For very
+    large sets, list batches (such as manifest URLs) and let each child
     expand its batch.
 - **Retries and queues** come from the lister step's own hints, as for any job.
 
@@ -1108,9 +1115,9 @@ from them, with or without a `pickValue`, is `null` ([§8.1](#81-dataflow)).
 | class | cause |
 |---|---|
 | `exit_code:<n>`, `timeout`, `signal`, `offline`, `worker`, `pge:<token>` | the job failed ([§2.5](#25-telling-the-retry-policy-why-you-failed-optional)) |
+| `outputs` | the job's `_workflow_outputs.json` was invalid or too large, or a `class` path couldn't be resolved to a published URL. The engine uses the same class if it can't read a completed job's recorded outputs. Retried only under `retry_on: ["*"]` |
 | `revoked`, `deduped` | the job was revoked, or the job worker deduplicated it |
 | `lost` | the job never reported back, as found by the reaper ([§8.5](#85-timeouts-stalls-and-recovery)). It can be retried |
-| `outputs` | the engine couldn't read a completed job's recorded outputs. Not retried. An invalid or oversized `_workflow_outputs.json` normally fails the job itself first, as `worker` ([§2.2](#22-outputs-out-_workflow_outputsjson)) |
 | `input_resolution` | a source didn't resolve: a missing output, a `first_non_null` or `the_only_non_null` with no answer, a `when` flag that isn't a boolean, or a null scatter input |
 | `output_resolution` | a non-optional workflow output was null (also when its `pickValue` found no value), or `the_only_non_null` found several values |
 | `scatter_threshold` | too few scatter children completed |
