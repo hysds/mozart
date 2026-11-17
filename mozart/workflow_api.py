@@ -20,6 +20,7 @@ the engine through ``hysds.workflow_state`` and does not submit any job itself.
 All expected-404/409 paths use the raw opensearch client with ``ignore=``: the
 ``OpenSearchUtility`` wrapper retries every error, 404/409 included, for ~34s.
 """
+import importlib.util
 import json
 import uuid
 from datetime import datetime, timezone
@@ -82,6 +83,25 @@ def _found(resp):
 
 
 # ---------------------------------------------------------------- lazy S4 / CWL / redis access
+
+CWL_EXTRA_MESSAGE = (
+    "CWL workflow authoring (validate, register, operation snippets) needs the optional 'workflows' "
+    "extra of mozart (hysds_commons[cwl]: cwltool and cwl-utils), which is not installed. "
+    "Install it with: pip install 'mozart[workflows]' (or 'hysds_commons[cwl]'). "
+    "Already-registered workflows can still be listed and run."
+)
+
+
+def cwl_available():
+    """True when the ``cwl`` extra (cwltool + cwl-utils) is importable; does not import it (cwltool is slow)."""
+    for name in ("cwltool", "cwl_utils"):
+        try:
+            if importlib.util.find_spec(name) is None:
+                return False
+        except (ImportError, ValueError):
+            return False
+    return True
+
 
 def _cwl():
     """``hysds_commons.cwl`` (needs the ``cwl`` extra); ImportError carries the install hint."""
@@ -187,7 +207,10 @@ def _cwl_source():
 
 
 def _no_cwl_extra(e):
-    return _fail(str(e), 501)
+    """501: this mozart was installed without the ``workflows`` extra (the endpoint exists but is not
+    implemented here); the message names the extra and how to install it."""
+    app.logger.warning("workflow CWL endpoint called without the cwl extra: %s", e)
+    return _fail(CWL_EXTRA_MESSAGE, 501, error=str(e))
 
 
 # ---------------------------------------------------------------- CWL endpoints

@@ -161,3 +161,10 @@ if __name__ != "__main__":
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)
     app.logger.propagate = False
+
+# workflows are optional: without the cwl extra mozart still serves every non-workflow endpoint, and
+# the CWL authoring endpoints answer 501 naming the extra (mozart.workflow_api._no_cwl_extra).
+from mozart.workflow_api import CWL_EXTRA_MESSAGE, cwl_available
+
+if not cwl_available():
+    app.logger.warning(CWL_EXTRA_MESSAGE)

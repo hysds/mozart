@@ -22,7 +22,7 @@ setup(
         'Flask<2.3.0',  # TODO: remove kluge when Flask-DebugToolbar fixes import error
         'flask-restx>=0.5.1',
         'flask-cors',
-        'hysds_commons>=2.4.0',
+        'hysds_commons>=2.5.0',
         'Flask-SQLAlchemy>=3.0.0',
         'Flask-WTF>=0.15.1',
         'Flask-DebugToolbar>=0.11.0',
@@ -47,6 +47,11 @@ setup(
         "cryptography>=39.0.0",
     ],
     extras_require={
+        # CWL workflow authoring (POST /workflow/cwl, /workflow/cwl/validate, /workflow/cwl/operation);
+        # without it those endpoints answer 501 and everything else works.
+        'workflows': [
+            'hysds_commons[cwl]>=2.5.0',
+        ],
         'test': [
             'pytest>=7.2.0',
             # [lua] pulls in lupa, needed for the barrier's atomic EVAL scripts
