@@ -157,9 +157,11 @@ at the root of the job directory**:
   something reads it. The reading step then fails with `input_resolution`:
   `cannot resolve $.l2smp.product: step 'l2smp' has no output 'product' (has: [...])`.
 - A boolean that feeds a `when` must be written with `value_b`.
-- These problems **fail the job** with error class `outputs`, and it is not retried: a
-  malformed file, a wrong slot type, a repeated name, or a file over the size limit
-  (512 KB by default, set by `WORKFLOW_OUTPUTS_MAX_BYTES`). Outputs travel on a queue
+- These problems **fail the job**: a malformed file, a wrong slot type, a repeated name, or
+  a file over the size limit (512 KB by default, set by `WORKFLOW_OUTPUTS_MAX_BYTES`). The
+  error class is `worker`, or `pge:<token>` if the PGE wrote `_error_class.txt`
+  ([§2.5](#25-telling-the-retry-policy-why-you-failed-optional)). A `retry_on` that includes
+  `worker` (or `*`) therefore retries it, and the same file usually fails again. Outputs travel on a queue
   message, so keep them to scalars and references. Publish payloads as datasets and output
   their location.
 
@@ -243,10 +245,15 @@ hints:
   version with different bytes returns 409. Bump `s:version` for every change.
 - **Namespace.** Hints are matched by their expanded URI, not by the prefix. Any prefix
   bound to `https://github.com/hysds/hysds_commons/cwl/v1#` works.
-- **`$graph` documents** (the `cwltool --pack` form) are accepted when the graph holds
-  exactly one `Workflow`. When a step's `run: "#id"` points to an Operation in the graph, the
-  Operation is inlined. Other `run:` strings, such as file paths and URLs, aren't resolved:
-  inline the Operation instead.
+- **Self-contained.** A registered workflow never points outside itself. Each step's `run`
+  is either an inline Operation or, in a packed document (`cwltool --pack`, a `$graph` with
+  exactly one `Workflow`), a `run: "#id"` reference to an Operation in the same graph, which
+  is inlined at registration. A `run:` naming an external file or URL is rejected
+  (`unresolved_run`). So the stored CWL, which is also what the UI's **Download CWL** gives
+  you, is a portable export that cwltool can validate anywhere.
+- **The recommended way to write a step** is to fetch its Operation from
+  `GET /workflow/cwl/operation/<job_type>` ([§1](#1-quick-start)) and inline it. Workflow
+  builders do the same.
 - **`$schemas`** is stripped with a warning. Registration never fetches anything.
 - Other `s:` metadata, such as authors and license, is accepted and ignored.
 
@@ -554,13 +561,14 @@ What a halt does to the rest of the run depends on `hysds:OnError` ([§8.3](#83-
 | `hysds:Queue` | workflow, step, Operation | `queue` | the job queue. Default: the job-spec's first recommended queue |
 | `hysds:Retry` | workflow, step, Operation | `max_retries`, `retry_on` | retries of failed attempts ([§4.4](#44-hysdsretry)) |
 | `hysds:Gather` | scattered step | `tolerated_failure_percentage` | the share of items allowed to fail: at least 0 and less than 100. Default 0 ([§6.2](#62-tolerating-failed-items-hysdsgather)) |
-| `hysds:ScatterConnector` | scattered step | `job_type`, `queue` | a mission job that lists the items ([§6.3](#63-mission-scatter-connectors)) |
 | `hysds:Tag` | step | `tag` | the job tag. Default: the step id |
 | `ToolTimeLimit` (standard) | workflow, step, Operation | `timelimit` | the job's `time_limit` ([§4.6](#46-tooltimelimit)) |
 
 `hysds:` classes are **hints only**. Listing one under `requirements` fails with
 `hysds_requirement`, and an unknown `hysds:` class fails with `unknown_hysds_hint`. Hint
-values must be literals; expressions are rejected.
+values must be literals; expressions are rejected. The former `hysds:ScatterConnector` hint
+is rejected with `scatter_connector_removed`: list items in an ordinary step instead
+([§6.3](#63-listing-items-a-lister-step)).
 
 ### 4.1 Precedence
 
@@ -679,8 +687,7 @@ workflow. Each node has `id`, `kind` (`job` or `halt`), `job_type`, `when` and `
 4. It checks the registry:
    - each job type exists;
    - Operation inputs are hysds-io params, and required params are bound;
-   - Operation outputs are among the job type's declared outputs;
-   - each `hysds:ScatterConnector` job type is on the deployment's allowlist.
+   - Operation outputs are among the job type's declared outputs.
 5. It compiles to schema 2.0 and validates the result.
 
 Job-spec defaults are **not** copied into the CWL or the spec. They apply at submit time.
@@ -698,12 +705,13 @@ POST /workflow/runs
 - **Inputs are checked** against the workflow's declared types. Defaults fill missing
   inputs, and an optional input with no default is `null`. An unknown input, a missing
   required input or a type mismatch gets a 400 response that lists every problem.
-- **Pass `File` and `Directory` inputs as URL strings.** A CWL job-order object such as
-  `{class: File, location: …}` passes the type check, but it isn't flattened to its
-  `location` yet, so the job would receive the whole object.
+- **`File` and `Directory` inputs** may be URL strings or CWL job-order objects
+  (`{"class": "File", "location": "s3://…"}`), also inside arrays, so the input templates
+  that cwltool generates work unchanged. An object is flattened to its `location` (or
+  `path`), and the job receives the URL string. An object with neither field answers 400:
+  `input 'l0b_file': File/Directory object needs a 'location' (or 'path')`.
 - **Job definitions are frozen at run start.** mozart reads each job type's job-spec,
-  hysds-io, container and recommended queue once, including those of scatter connector job
-  types, and stores them with the run. Every submit in the run uses that frozen copy, so
+  hysds-io, container and recommended queue once and stores them with the run. Every submit in the run uses that frozen copy, so
   re-registering a job type doesn't affect runs that have already started. If a job type's
   job-spec, hysds-io or container is missing, the response is 400.
 - **The response is 202 with the `run_id`.** The engine runs the workflow from there; mozart
@@ -833,71 +841,69 @@ children complete:
   ([§3.4](#34-sources-pickvalue-and-linkmerge)), or declare an optional item type
   (`File?[]`). Otherwise registration fails with `null_unsafe_scatter`.
 
-`hysds:Gather` or `hysds:ScatterConnector` on a step that doesn't scatter fails with
-`misplaced_hint`.
+`hysds:Gather` on a step that doesn't scatter fails with `misplaced_hint`.
 
-### 6.3 Mission scatter connectors
+### 6.3 Listing items: a lister step
 
-Sometimes the item list doesn't come from an upstream output, for example when it comes from
-a catalog query. Then a mission supplies a **scatter connector**, a job that lists the items:
+When the items come from a manifest, a catalog query or a GRQ search rather than from a
+product chain, list them in an **ordinary job step**, a *lister*, and scatter the next step
+over its output. There is no special engine phase: a lister is a job like any other, with
+its own Operation and `hysds:JobType`, and the scatter is plain CWL dataflow, just as
+`find_l0b → l1a` is in the worked example ([§7](#7-worked-example-radiometer-orbit-to-l2smp)).
 
 ```yaml
-  l1a:
+  list_l0b:                              # the lister: its own job type and params
     run:
       class: Operation
-      inputs: {granule: File, collection: string?, start: string?, end: string?}
+      inputs:  {collection: string, start: string, end: string}
+      outputs: {items: "File[]"}
+      hints: {hysds:JobType: {job_type: "job-radiometer-list-l0b:v1.0"}}
+    in: {collection: collection, start: start_time, end: end_time}
+    out: [items]
+
+  l1a:                                   # scatters over the lister's output
+    scatter: l0b_file
+    run:
+      class: Operation
+      inputs:  {l0b_file: File, ancillary_version: string}
       outputs: {l1a_file: File}
       hints: {hysds:JobType: {job_type: "job-radiometer-l1a:v3.2"}}
-    scatter: granule
-    in:
-      granule: {default: []}          # replaced by the connector's list
-      collection: collection
-      start: start_time
-      end: end_time
+    in: {l0b_file: list_l0b/items, ancillary_version: ancillary_version}
     out: [l1a_file]
-    hints:
-      hysds:ScatterConnector: {job_type: "job-radiometer-list-l0b:v1.0", queue: radiometer-connector}
 ```
 
-- **The connector runs first.** When the step is ready, the engine submits the connector job
-  with **the step's resolved inputs as its params**. Its `_context.json` holds one entry per
-  step input, including the scatter input. Params that the connector's job-spec doesn't
-  declare are not passed.
-- **The connector's inputs are the step's inputs.** The query parameters (`collection`,
-  `start`, `end` above) therefore have to be Operation inputs. As with any Operation input,
-  they must be params of the scattered job type too, and every child receives them.
-- **It writes an `items` output.** The connector writes `_workflow_outputs.json` with an
-  output named **`items`**: a list of strings, numbers or booleans, all of one kind. Child
-  *i* gets `items[i]` as its scatter input.
-  - An empty list completes the step with empty arrays.
-  - A missing or non-list `items` fails the step with error class `outputs`, without retry.
-- **Retries.** The connector is retried according to the step's `hysds:Retry`. Its attempts
-  are the first entries in the step's `attempts[]`.
-- **The job type must be on the deployment's allowlist**, `WORKFLOW_CONNECTORS` in mozart's
-  settings ([§10](#10-ops-notes)). Otherwise registration fails with
-  `connector_not_allowed`. A hint without `queue` gets the allowlist's queue for that job
-  type.
+- **The query parameters belong to the lister.** Only the lister's job type declares them,
+  and the scattered job type declares only what each child needs.
+- **The list is an ordinary output.** The lister writes it to `_workflow_outputs.json` as a
+  list of strings, numbers or booleans, all of one kind (or `class: File` paths,
+  [§2.3](#23-referencing-published-files-class-file--directory)). Any output name works.
+  - An empty list completes the scattered step at once, with empty arrays.
+  - Outputs travel on a queue message, so a list is bounded by `WORKFLOW_OUTPUTS_MAX_BYTES`
+    (512 KB by default). A list larger than that fails the lister job (error class
+    `worker`, [§2.2](#22-outputs-out-_workflow_outputsjson)). For very large sets, list batches (such as manifest URLs) and let each child
+    expand its batch.
+- **Retries and queues** come from the lister step's own hints, as for any job.
 
-The `workflow_connectors` SDK reduces a connector to a few lines:
+The `workflow_connectors.lister` helper reduces a lister to a few lines. It calls your
+function with the job's params and writes the list as the output `items`:
 
 ```python
 # mission/list_l0b.py   (job command: python /home/ops/mission/list_l0b.py)
-from workflow_connectors import scatter_items
+from workflow_connectors import lister
 
-def list_items(params):                   # params: {step input name: value}
+def list_items(params):                   # params: {job param name: value}
     return query_l0b(params["collection"], params["start"], params["end"])   # -> list of URLs
 
 if __name__ == "__main__":
-    scatter_items.main(list_items)
+    lister.main(list_items)
 ```
 
-To deploy it:
-
-1. Build the mission image from one that has `workflow_connectors`, or install it.
-2. Register a job-spec and hysds-io for the connector.
-3. Add its job type and queue to `WORKFLOW_CONNECTORS`.
-
-The connector needs no OpenSearch or REST access, because the engine owns all state.
+Build the mission image from one that has `workflow_connectors` (or install it), and register
+a job-spec and hysds-io for the lister like any job type. The lister needs no OpenSearch or
+REST access. The reference plugin `workflow-connectors-example` shows the whole shape: the
+lister `job-example-range-list:v2.0.0`, the child job `job-example-process-item:v2.0.0`, a
+sum job, and the CWL fixtures `e2e/mission-list-sum.cwl` and
+`e2e/mission-list-tolerant.cwl` (with a 40% tolerance).
 
 ### 6.4 Built-in connectors
 
@@ -906,7 +912,8 @@ v2 has one built-in connector job, **`job-workflow-decide:v1`**
 queue `workflow-connector-decide`. Everything else is done **inside the engine**, from Redis,
 with no extra job: readiness, `when`, input resolution, gather, halts and finalize. The v1
 `pass`, `switch`, `gate`, `halt`, `finalize`, `scatter` and `gather` connector jobs no longer
-exist.
+exist, and neither does the scatter connector: listing is a lister step
+([§6.3](#63-listing-items-a-lister-step)).
 
 ---
 
@@ -1035,10 +1042,15 @@ The `when`-only input `go` is folded into `when` and isn't passed to the job.
 - **No skip cascade.** A dependent of a skipped step is released normally and sees `null`
   for that source.
 - **Finalize.** When every step has settled, the workflow `outputs` are resolved. A skipped
-  source reads as `null`, with `pickValue` applied. Each output is checked against its
-  declared type. The run fails with `output_resolution` in two cases:
-  - a non-optional output is null;
-  - a `first_non_null` or `the_only_non_null` finds no value.
+  source reads as `null`, with `pickValue` applied. On an **optional** output (`T?`), a
+  `first_non_null` or `the_only_non_null` whose sources are all null gives `null`. Each
+  output is then checked against its declared type. The run fails with `output_resolution`
+  in two cases:
+  - a non-optional output is null, including one whose `pickValue` found no value;
+  - a `the_only_non_null` finds more than one value.
+
+  Step inputs keep CWL's error semantics: an all-null pick on a step input is always an
+  `input_resolution` error.
 - **No concurrency cap.** There is no per-run cap: every released step is submitted, and
   queues and workers throttle the load.
 
@@ -1086,10 +1098,8 @@ is `halting` until they do. Only failures follow the `continue` policy.
 **A failure outranks a completed halt.** If a job that was left running by a drain fails,
 the run ends `failed`. If several halts fire, a `failed` halt outranks a `completed` one.
 
-**Known gap.** Under a `completed` halt, an output with `pickValue: first_non_null` or
-`the_only_non_null` whose sources never ran fails the run with `output_resolution`, instead
-of reading as `null`. Until this is fixed, feed such outputs from a single optional source,
-or use `all_non_null`.
+Under a `completed` halt, steps that never ran read as skipped. An optional output fed only
+from them, with or without a `pickValue`, is `null` ([§8.1](#81-dataflow)).
 
 ### 8.4 Error classes
 
@@ -1100,9 +1110,9 @@ or use `all_non_null`.
 | `exit_code:<n>`, `timeout`, `signal`, `offline`, `worker`, `pge:<token>` | the job failed ([§2.5](#25-telling-the-retry-policy-why-you-failed-optional)) |
 | `revoked`, `deduped` | the job was revoked, or the job worker deduplicated it |
 | `lost` | the job never reported back, as found by the reaper ([§8.5](#85-timeouts-stalls-and-recovery)). It can be retried |
-| `outputs` | the job's `_workflow_outputs.json` was invalid, or a scatter connector wrote no `items` list. Not retried |
+| `outputs` | the engine couldn't read a completed job's recorded outputs. Not retried. An invalid or oversized `_workflow_outputs.json` normally fails the job itself first, as `worker` ([§2.2](#22-outputs-out-_workflow_outputsjson)) |
 | `input_resolution` | a source didn't resolve: a missing output, a `first_non_null` or `the_only_non_null` with no answer, a `when` flag that isn't a boolean, or a null scatter input |
-| `output_resolution` | a workflow output was null but not optional, or its `pickValue` found no value |
+| `output_resolution` | a non-optional workflow output was null (also when its `pickValue` found no value), or `the_only_non_null` found several values |
 | `scatter_threshold` | too few scatter children completed |
 | `halted` | a `failed` halt fired |
 | `submit` | the job couldn't be built from the frozen definition, for example because a required param was missing |
@@ -1174,9 +1184,9 @@ Every error has a `path`, a `code` and a `message`. These are the common ones:
 | `merge_nested_unsupported` | `linkMerge: merge_nested is not supported; use merge_flattened` | use `merge_flattened` |
 | `misplaced_hint` | `hysds:OnError is only allowed on the workflow, not on the step` | move the hint |
 | `hysds_requirement` | `hysds: classes are hints, not requirements: move hysds:Retry to hints` | move the class to `hints` |
-| `unknown_hysds_hint` | `unknown hysds hint 'Retries' (known: Gather, Halt, JobType, OnError, Queue, Retry, ScatterConnector, Tag)` | fix the hint name |
+| `unknown_hysds_hint` | `unknown hysds hint 'Retries' (known: Gather, Halt, JobType, OnError, Queue, Retry, Tag)` | fix the hint name |
+| `scatter_connector_removed` | `hysds:ScatterConnector is no longer supported; list the items in an ordinary job step (a mission lister whose output is a list) and scatter over its output ('in: {item: lister/items}')` | use a lister step ([§6.3](#63-listing-items-a-lister-step)) |
 | `bad_hint` | `invalid retry_on entry 'exit:137'` | see [§4.4](#44-hysdsretry) |
-| `connector_not_allowed` | `scatter connector 'job-list:v1' is not allowed on this deployment (allowed: …)` | ask ops to add it to `WORKFLOW_CONNECTORS` |
 | `decide_cases` | `case name 'value' is reserved` | see [§3.7](#37-the-decision-job) |
 | `decide_out` | `decide output 'maybe' is neither a case name nor the otherwise name (otherwise, reject, reprocess)` | list only case names and the otherwise name in `out` |
 | `file_field_unsupported` | `'secondaryFiles' is not supported (File/Directory values are passed to jobs as URL strings)` | remove the field |
@@ -1196,8 +1206,10 @@ These codes are warnings, and `ok` stays true: `schemas_ignored`, `ignored_requi
 - The workers need:
   - the `workflow_rules` consumer and reaper processes;
   - the `workflow-connector-decide` queue, with the `job-workflow-decide:v1` job-spec and
-    hysds-io registered from `workflow-connectors/configs`;
-  - a queue for each mission scatter connector.
+    hysds-io registered from `workflow-connectors/configs`.
+
+  Mission listers are ordinary job types on ordinary queues: there is no connector
+  allowlist.
 
 **mozart settings** (`settings.cfg`):
 
@@ -1205,7 +1217,6 @@ These codes are warnings, and `ok` stays true: `schemas_ignored`, `ignored_requi
 |---|---|---|
 | `WORKFLOW_SPECS_INDEX` | `workflow_specs` | registered workflows |
 | `WORKFLOW_STATUS_INDEX` | `workflow_status` | the **read alias** over the daily `workflow_status-YYYY.MM.DD` indices |
-| `WORKFLOW_CONNECTORS` | `{"scatter": {"default": None, "allowed": {}}}` | the scatter connector allowlist: `{job_type: queue}` under `allowed`. Remove the setting to skip the check. |
 
 **celery settings** (`celeryconfig.py`):
 
@@ -1243,7 +1254,8 @@ The full list is in `hysds-docs/PLAN-workflow-cwl-profile.md`: §6.11 has the ch
 - Nested or cross-product scatter, `scatter` combined with `when`, and
   `linkMerge: merge_nested`.
 - `secondaryFiles`, `format`, `checksum`, `contents`, `loadContents` and `loadListing`.
-- `run:` references to separate files.
+- `run:` references to separate files: every registered workflow is self-contained.
+- The v1 scatter connector (`hysds:ScatterConnector`): use a lister step.
 - `ToolTimeLimit` of 0 (no limit).
 - A per-run concurrency cap, and pausing and resuming runs.
 
@@ -1261,4 +1273,6 @@ The full list is in `hysds-docs/PLAN-workflow-cwl-profile.md`: §6.11 has the ch
   - `hysds_commons/cwl/`: the profile and compiler;
   - `hysds/workflow_engine.py`: the engine;
   - `mozart/workflow_api.py`: the endpoints;
-  - `workflow-connectors`: the decide job and the `scatter_items` SDK.
+  - `workflow-connectors`: the decide job and the `lister` helper;
+  - `workflow-connectors-example`: a reference mission plugin with a lister, a scattered
+    child job and CWL fixtures.
