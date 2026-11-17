@@ -22,25 +22,18 @@
       "modification_time": {
         "type": "date"
       },
-      "tags": {
+      "sha256": {
         "type": "keyword"
       },
-      "entry": {
-        "type": "keyword"
+      "cwl": {
+        "type": "text",
+        "index": false
       },
-      "defaults": {
+      "cwl_normalized": {
         "type": "object",
         "enabled": false
       },
-      "inputs": {
-        "type": "object",
-        "enabled": false
-      },
-      "nodes": {
-        "type": "object",
-        "enabled": false
-      },
-      "outputs": {
+      "spec": {
         "type": "object",
         "enabled": false
       }

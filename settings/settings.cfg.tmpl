@@ -31,20 +31,9 @@ JOB_SPECS_INDEX = "job_specs"
 JOB_STATUS_INDEX = "job_status-current"
 CONTAINERS_INDEX = "containers"
 WORKFLOW_SPECS_INDEX = "workflow_specs"
+# Run documents live in daily indices workflow_status-YYYY.MM.DD (index template workflow_status.template in sdscli);
+# this is the READ ALIAS over all of them. Nothing creates a concrete index with this name.
 WORKFLOW_STATUS_INDEX = "workflow_status"
-
-# Pluggable workflow connectors (contract section 11.2): kind -> default + allowed {job_spec id: queue}
-WORKFLOW_CONNECTORS = {
-    "pass":    {"default": "job-workflow-pass:v1.0.0",
-                "allowed": {"job-workflow-pass:v1.0.0": "workflow-connector-pass"}},
-    "scatter": {"default": "job-workflow-scatter:v1.0.0",
-                "allowed": {"job-workflow-scatter:v1.0.0": "workflow-connector-scatter"}},
-    "gather":  {"default": "job-workflow-gather:v1.0.0",
-                "allowed": {"job-workflow-gather:v1.0.0": "workflow-connector-gather"}},
-    # a gate node uses this entry too
-    "switch":  {"default": "job-workflow-switch:v1.0.0",
-                "allowed": {"job-workflow-switch:v1.0.0": "workflow-connector-switch"}},
-}
 
 # key file for fabric
 KEY_FILENAME = "{{ KEY_FILENAME }}"

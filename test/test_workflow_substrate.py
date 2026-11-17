@@ -23,7 +23,7 @@ from test_configs import VALID_FIELD_TYPES, _iter_properties
 
 WORKFLOW_MAPPINGS = ("workflow_specs.mapping", "workflow_status.mapping")
 
-CONNECTORS = ("pass", "scatter", "gather", "switch", "halt", "finalize")  # a gate runs the switch connector
+CONNECTORS = ("pass", "scatter", "gather", "switch", "halt", "finalize", "decide")  # pass/switch go in S7
 
 SHARED_CONTAINER = "hysds/workflow-connectors:v1.0.0"
 
@@ -60,21 +60,32 @@ def test_workflow_mapping_field_types_are_known(load_config, doc):
 
 def test_workflow_specs_mapping_keys_the_spec(load_config):
     props = load_config("workflow_specs.mapping")["mappings"]["properties"]
-    for field in ("id", "version", "schema_version", "entry"):
+    for field in ("id", "version", "schema_version", "sha256"):
         assert props[field]["type"] == "keyword"
     assert props["creation_time"]["type"] == "date"
+    assert props["cwl"] == {"type": "text", "index": False}
+    for field in ("spec", "cwl_normalized"):
+        assert props[field] == {"type": "object", "enabled": False}
 
 
 def test_workflow_status_mapping_is_filterable_by_run(load_config):
     props = load_config("workflow_status.mapping")["mappings"]["properties"]
-    for field in ("run_id", "spec_id", "status", "username", "current_nodes"):
+    for field in ("run_id", "spec_id", "spec_sha256", "status", "username", "error_class", "failed_step", "on_error"):
         assert props[field]["type"] == "keyword", f"{field} must be term-filterable"
-    for field in ("submitted_at", "updated_at", "ended_at"):
+    for field in ("created_at", "started_at", "updated_at", "ended_at"):
         assert props[field]["type"] == "date"
+    assert props["version"]["type"] == "long"
 
 
-@pytest.mark.parametrize("doc", WORKFLOW_MAPPINGS)
-def test_author_keyed_subdocuments_are_index_disabled(load_config, doc):
+def test_workflow_status_v2_subdocuments_are_not_indexed(load_config):
+    props = load_config("workflow_status.mapping")["mappings"]["properties"]
+    for field in ("steps", "job_definitions", "cancelled_by"):  # attempts[] live under steps
+        assert props[field] == {"type": "object", "enabled": False}
+
+
+@pytest.mark.parametrize("doc,fields", [("workflow_specs.mapping", ("spec", "cwl_normalized")),
+                                         ("workflow_status.mapping", ("inputs", "steps", "outputs"))])
+def test_author_keyed_subdocuments_are_index_disabled(load_config, doc, fields):
     """``nodes`` / ``inputs`` / ``outputs`` keys are author-chosen.
 
     Leaving them dynamically mapped is exactly the mapping-explosion and
@@ -83,7 +94,7 @@ def test_author_keyed_subdocuments_are_index_disabled(load_config, doc):
     them.
     """
     props = load_config(doc)["mappings"]["properties"]
-    for field in ("inputs", "nodes", "outputs"):
+    for field in fields:
         assert props[field] == {"type": "object", "enabled": False}, (
             f"{doc}: {field} must be index-disabled"
         )
@@ -164,7 +175,7 @@ def test_shared_container_doc(connectors_dir):
     assert container["id"] == f"{container['name']}:{container['version']}"
     # id/name must equal the image the connector job_specs reference in "container"
     assert container["name"] == "hysds/workflow-connectors"
-    for connector in ("pass", "switch", "finalize", "halt", "scatter", "gather"):
+    for connector in CONNECTORS:
         with open(os.path.join(connectors_dir, f"job-spec.json.workflow-{connector}")) as f:
             assert json.load(f)["container"] == container["id"]
     assert container["url"].startswith("s3://")

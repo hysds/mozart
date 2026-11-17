@@ -1,0 +1,14 @@
+{
+  "label": "Workflow decision job",
+  "component": "mozart",
+  "submission_type": "individual",
+  "id": "hysds-io-workflow-decide:v1",
+  "job-specification": "job-workflow-decide:v1",
+  "job-version": "v1",
+  "enable_dedup": false,
+  "params": [
+    {"name": "value", "from": "submitter", "type": "text", "optional": true},
+    {"name": "cases", "from": "submitter", "type": "text"},
+    {"name": "otherwise", "from": "submitter", "type": "text", "optional": true, "default": "otherwise"}
+  ]
+}

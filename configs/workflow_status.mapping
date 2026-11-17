@@ -1,37 +1,40 @@
 {
   "mappings": {
     "properties": {
+      "schema_version": {
+        "type": "keyword"
+      },
       "run_id": {
         "type": "keyword"
       },
       "spec_id": {
         "type": "keyword"
       },
-      "spec_name": {
-        "type": "keyword"
-      },
       "spec_version": {
         "type": "keyword"
       },
-      "has_scatter": {
-        "type": "boolean"
+      "spec_sha256": {
+        "type": "keyword"
       },
-      "failed_node": {
+      "version": {
+        "type": "long"
+      },
+      "index": {
+        "type": "keyword"
+      },
+      "status": {
+        "type": "keyword"
+      },
+      "on_error": {
         "type": "keyword"
       },
       "error_class": {
         "type": "keyword"
       },
-      "halt_reason": {
-        "type": "keyword"
+      "reason": {
+        "type": "text"
       },
-      "duration_s": {
-        "type": "float"
-      },
-      "schema_version": {
-        "type": "keyword"
-      },
-      "status": {
+      "failed_step": {
         "type": "keyword"
       },
       "username": {
@@ -40,7 +43,10 @@
       "tags": {
         "type": "keyword"
       },
-      "submitted_at": {
+      "created_at": {
+        "type": "date"
+      },
+      "started_at": {
         "type": "date"
       },
       "updated_at": {
@@ -49,20 +55,11 @@
       "ended_at": {
         "type": "date"
       },
-      "current_nodes": {
-        "type": "keyword"
-      },
-      "error": {
-        "type": "text"
-      },
-      "traceback": {
-        "type": "text"
-      },
-      "inputs": {
+      "cancelled_by": {
         "type": "object",
         "enabled": false
       },
-      "nodes": {
+      "inputs": {
         "type": "object",
         "enabled": false
       },
@@ -70,14 +67,13 @@
         "type": "object",
         "enabled": false
       },
-      "version": {
-        "type": "long"
+      "steps": {
+        "type": "object",
+        "enabled": false
       },
-      "index": {
-        "type": "keyword"
-      },
-      "created_at": {
-        "type": "date"
+      "job_definitions": {
+        "type": "object",
+        "enabled": false
       }
     }
   }

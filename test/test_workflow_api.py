@@ -1,72 +1,76 @@
-"""``/workflow`` REST namespace, API v0.1 and v0.2 (Flask test client, fake ES)."""
+"""``/workflow`` REST namespace (CWL, schema 2.0), API v0.1 and v0.2.
+
+Flask test client with a fake OpenSearch; Redis and ``hysds.workflow_state`` (S4) are mocked.
+The CWL compiler is the real ``hysds_commons.cwl``.
+"""
 import copy
-import json
 import importlib.util
 import os
 import sys
+import types
 import unittest.mock as umock
 
 import pytest
 from flask import Flask
 from flask_restx import Api
 
-from hysds_commons.workflow_examples import linear_spec, scatter_gather_spec
+pytest.importorskip("cwltool")
 
-DEFAULT_WORKFLOW_CONNECTORS_IDS = ["job-workflow-pass:v1.0.0", "job-workflow-scatter:v1.0.0",
-                                   "job-workflow-gather:v1.0.0", "job-workflow-switch:v1.0.0"]
 REPO = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+TINY = open(os.path.join(REPO, "test", "fixtures", "tiny.cwl")).read()
+RADIOMETER = os.path.expanduser("~/hysds-docs/examples/radiometer-orbit-l2smp-v2.cwl")
 
 
 class FakeES:
     """Minimal in-memory opensearch client: index/get/search with ignore= semantics."""
 
     def __init__(self):
-        self.docs = {}  # (index, id) -> (source, seq_no)
+        self.docs = {}  # (index, id) -> source
         self.searches = []
-        self.search_result = {"aggregations": {"steps": {"buckets": []}}, "hits": {"hits": []}}
-        self._seq = 0
+        self.search_hits = []
+        self.raise_on_get = None
 
-    def index(self, index, id, body, op_type=None, if_seq_no=None, if_primary_term=None,
-              ignore=None):
-        key = (index, id)
-        if op_type == "create" and key in self.docs:
+    def index(self, index, id, body, op_type=None, ignore=None):
+        if op_type == "create" and (index, id) in self.docs:
             return {"error": {"type": "version_conflict_engine_exception"}, "status": 409}
-        if if_seq_no is not None and self.docs[key][1] != if_seq_no:
-            return {"error": {}, "status": 409}
-        self._seq += 1
-        self.docs[key] = (copy.deepcopy(body), self._seq)
+        self.docs[(index, id)] = copy.deepcopy(body)
         return {"result": "created", "_id": id}
 
     def get(self, index, id, ignore=None):
+        if self.raise_on_get:
+            raise self.raise_on_get
         if (index, id) not in self.docs:
             return {"error": {}, "status": 404, "found": False}
-        src, seq = self.docs[(index, id)]
-        return {"found": True, "_source": copy.deepcopy(src), "_seq_no": seq,
-                "_primary_term": 1}
+        return {"found": True, "_source": copy.deepcopy(self.docs[(index, id)])}
 
     def search(self, index=None, body=None, **kw):
         self.searches.append((index, body, kw))
         if index == "specs":
-            hits = [{"_id": k[1], "_source": v[0]} for k, v in self.docs.items()
-                    if k[0] == "specs"]
-            return {"hits": {"hits": hits}}
-        return self.search_result
-
-    def doc(self, index, id):
-        return self.docs[(index, id)][0]
+            return {"hits": {"hits": [{"_id": k[1], "_source": v} for k, v in self.docs.items()
+                                      if k[0] == "specs"]}}
+        if index == "status_alias":
+            return {"hits": {"total": {"value": len(self.search_hits)}, "hits": self.search_hits}}
+        return {"aggregations": {"steps": {"buckets": []}}, "hits": {"hits": []}}
 
 
-def _load(version, monkeypatch):
+def register_job_type(es, jt="job-a:v1", params=("x",), container="img:1", queue="q-a", outputs=None):
+    es.docs[("job_specs", jt)] = {"id": jt, "container": container, "recommended-queues": [queue] if queue else [],
+                                  "params": [{"name": p} for p in params]}
+    io = {"id": jt.replace("job", "hysds-io", 1), "params": [{"name": p, "from": "submitter"} for p in params]}
+    if outputs is not None:
+        io["outputs"] = outputs
+    es.docs[("hysds_ios", jt.replace("job", "hysds-io", 1))] = io
+    es.docs.setdefault(("containers", container), {"id": container, "url": "x"})
+
+
+@pytest.fixture(params=["01", "02"])
+def env(request, monkeypatch):
     flask_app = Flask("t")
-    flask_app.config.update(WORKFLOW_SPECS_INDEX="specs", WORKFLOW_STATUS_INDEX="status",
-                            JOB_STATUS_INDEX="job_status-current",
-                            JOB_SPECS_INDEX="job_specs",
-                            WORKFLOW_REVOKE_JOB_TYPE="job-lw-mozart-revoke:test")
+    flask_app.config.update(WORKFLOW_SPECS_INDEX="specs", WORKFLOW_STATUS_INDEX="status_alias",
+                            JOB_STATUS_INDEX="job_status-current", JOB_SPECS_INDEX="job_specs",
+                            HYSDS_IOS_INDEX="hysds_ios", CONTAINERS_INDEX="containers")
     es = FakeES()
-    for jt in DEFAULT_WORKFLOW_CONNECTORS_IDS:  # default connector job_specs are registered
-        es.docs[("job_specs", jt)] = ({"id": jt}, 1)
-    monkeypatch.setitem(sys.modules, "mozart",
-                        umock.MagicMock(app=flask_app, mozart_es=umock.MagicMock(es=es)))
+    monkeypatch.setitem(sys.modules, "mozart", umock.MagicMock(app=flask_app, mozart_es=umock.MagicMock(es=es)))
 
     def load(name, path):
         s = importlib.util.spec_from_file_location(name, path)
@@ -76,448 +80,277 @@ def _load(version, monkeypatch):
         return m
 
     common = load("mozart.workflow_api", os.path.join(REPO, "mozart", "workflow_api.py"))
-    thin = load(f"_wf_{version}", os.path.join(
-        REPO, "mozart", "services", f"api_v{version}", "workflow.py"))
+    thin = load(f"_wf_{request.param}", os.path.join(REPO, "mozart", "services", f"api_v{request.param}",
+                                                       "workflow.py"))
     api = Api(flask_app)
     api.add_namespace(thin.workflow_ns, path="/workflow")
-    submit = umock.MagicMock(return_value="payload-1")
-    monkeypatch.setattr(common, "submit_workflow_job", submit)
-    return flask_app.test_client(), es, submit
+
+    # S4 contract, mocked
+    state = types.ModuleType("hysds.workflow_state")
+    state.init_run = umock.MagicMock()
+    state.publish_run_event = umock.MagicMock()
+    state.get_run = umock.MagicMock(return_value=None)
+    state.list_active_runs = umock.MagicMock(return_value=[])
+    monkeypatch.setitem(sys.modules, "hysds.workflow_state", state)
+    monkeypatch.setattr(common, "_redis", lambda: "redis-client")
+    register_job_type(es)
+    c = flask_app.test_client()
+    return types.SimpleNamespace(c=c, es=es, state=state, common=common)
 
 
-@pytest.fixture(params=["01", "02"])
-def env(request, monkeypatch):
-    return _load(request.param, monkeypatch)
+def post_cwl(env, path, text=TINY, **kw):
+    return env.c.post(path, data=text, content_type="text/yaml", **kw)
 
 
-@pytest.fixture
-def stored(env):
-    c, es, submit = env
-    assert c.post("/workflow/specs", json=linear_spec()).status_code == 201
-    return env
+# ---- validate
+
+def test_validate_ok_stores_nothing(env):
+    r = post_cwl(env, "/workflow/cwl/validate")
+    j = r.get_json()
+    assert r.status_code == 200 and j["ok"] is True and j["errors"] == []
+    assert j["compiled"]["steps"]["a"]["job_type"] == "job-a:v1" and "graph" in j and j["sha256"]
+    assert ("specs", "tiny:1.0.0") not in env.es.docs
 
 
-# ---- specs
-
-@pytest.mark.parametrize("fixture", [linear_spec, scatter_gather_spec])
-def test_spec_post_valid(env, fixture):
-    c, es, _ = env
-    spec = fixture()
-    r = c.post("/workflow/specs", json=spec)
-    assert r.status_code == 201, r.data
-    sid = f"{spec['id']}:{spec['version']}"
-    assert r.get_json()["spec_id"] == sid
-    stored_doc = es.doc("specs", sid)
-    assert stored_doc["entry"] == spec["entry"]
-    # stored spec is fully resolved (contract 11.3); everything else is as posted
-    for nid, n in stored_doc["nodes"].items():
-        k = n["kind"]
-        if k in ("pass", "scatter", "gather"):
-            assert n.pop("connector") == f"job-workflow-{k}:v1.0.0"
-            assert n.pop("connector_queue") == f"workflow-connector-{k}"
-    assert stored_doc["nodes"] == spec["nodes"]
+def test_validate_json_wrapper(env):
+    r = env.c.post("/workflow/cwl/validate", json={"cwl": TINY})
+    assert r.get_json()["ok"] is True
 
 
-def test_spec_post_switch_gate_halt_resolves_switch_connector(env):
-    c, es, _ = env
-    spec = json.load(open(os.path.join(REPO, "test", "fixtures", "spec-switch.json")))
-    r = c.post("/workflow/specs", json=spec)
-    assert r.status_code == 201, r.data
-    nodes = es.doc("specs", "e2e-switch:1.0.0")["nodes"]
-    for nid in ("qa_route", "qa_gate", "tier"):  # a gate uses the switch entry
-        assert nodes[nid]["connector"] == "job-workflow-switch:v1.0.0"
-        assert nodes[nid]["connector_queue"] == "workflow-connector-switch"
-    assert nodes["pass_pub"]["connector"] == "job-workflow-pass:v1.0.0"
-    assert "connector" not in nodes["reject"] and nodes["reject"]["kind"] == "halt"
+def test_validate_registry_errors(env):
+    del env.es.docs[("job_specs", "job-a:v1")]
+    j = post_cwl(env, "/workflow/cwl/validate").get_json()
+    assert j["ok"] is False and "compiled" not in j
+    assert {e["code"] for e in j["errors"]} == {"unknown_job_type"}
+    assert j["errors"][0]["path"].startswith("steps.a")
 
 
-def test_spec_switch_without_registered_connector_job_spec_rejected(env):
-    c, es, _ = env
-    del es.docs[("job_specs", "job-workflow-switch:v1.0.0")]
-    spec = json.load(open(os.path.join(REPO, "test", "fixtures", "spec-switch.json")))
-    r = c.post("/workflow/specs", json=spec)
-    assert r.status_code == 400 and any("job-workflow-switch:v1.0.0" in e for e in r.get_json()["errors"])
+def test_validate_unknown_param_uses_hysds_io(env):
+    register_job_type(env.es, params=("y",))
+    codes = {e["code"] for e in post_cwl(env, "/workflow/cwl/validate").get_json()["errors"]}
+    assert "unknown_param" in codes
 
 
-def test_spec_post_invalid_lists_all_errors(env):
-    c, es, _ = env
-    spec = linear_spec()
-    spec["entry"] = "nope"
-    spec["nodes"]["A"]["kind"] = "bogus"
-    spec["extra_field"] = 1
-    r = c.post("/workflow/specs", json=spec)
-    assert r.status_code == 400
-    body = r.get_json()
-    assert body["success"] is False and len(body["errors"]) >= 2
-    assert not any(k[0] == "specs" for k in es.docs)
+def test_validate_syntax_error(env):
+    j = post_cwl(env, "/workflow/cwl/validate", text="a: [unclosed").get_json()
+    assert j["ok"] is False and j["errors"]
 
 
-def test_spec_connector_not_allowed_400(env):
-    c, es, _ = env
-    spec = scatter_gather_spec()
-    spec["nodes"]["scatter_1"]["connector"] = "job-rogue:v1"
-    r = c.post("/workflow/specs", json=spec)
-    assert r.status_code == 400
-    errs = r.get_json()["errors"]
-    assert "scatter_1" in errs[0] and "job-workflow-scatter:v1.0.0" in errs[0]
-    assert ("specs", "demo-scatter:1.0.0") not in es.docs and not any(k[0] == "specs" for k in es.docs)
+@pytest.mark.skipif(not os.path.exists(RADIOMETER), reason="radiometer example not present")
+def test_validate_unknown_job_types_radiometer(env):
+    j = post_cwl(env, "/workflow/cwl/validate", text=open(RADIOMETER).read()).get_json()
+    assert j["ok"] is False and "unknown_job_type" in {e["code"] for e in j["errors"]}
 
 
-def test_spec_connector_not_registered_400(env):
-    c, es, _ = env
-    del es.docs[("job_specs", "job-workflow-gather:v1.0.0")]
-    r = c.post("/workflow/specs", json=scatter_gather_spec())
-    assert r.status_code == 400
-    errs = r.get_json()["errors"]
-    assert errs and all("job-workflow-gather:v1.0.0" in e for e in errs)
-    assert not any(k[0] == "specs" for k in es.docs)
+def test_validate_warnings_passed_through(env):
+    res = umock.MagicMock(ok=True, errors=[], warnings=[{"path": "p", "code": "w", "message": "m"}],
+                          sha256="abc")
+    res.as_dict.return_value = {"ok": True, "warnings": res.warnings, "errors": [], "compiled": {}, "graph": {}}
+    with umock.patch("hysds_commons.cwl.compile_cwl", return_value=res):
+        j = post_cwl(env, "/workflow/cwl/validate").get_json()
+    assert j["ok"] is True and j["warnings"][0]["code"] == "w"
 
 
-def test_spec_mission_connector_stored_with_queue(env):
-    c, es, _ = env
-    c.application.config["WORKFLOW_CONNECTORS"] = {
-        "pass": {"default": "job-workflow-pass:v1.0.0",
-                 "allowed": {"job-workflow-pass:v1.0.0": "workflow-connector-pass"}},
-        "scatter": {"default": "job-workflow-scatter:v1.0.0",
-                    "allowed": {"job-workflow-scatter:v1.0.0": "workflow-connector-scatter",
-                                "job-m-scatter:v1": "m-queue"}},
-        "gather": {"default": "job-workflow-gather:v1.0.0",
-                   "allowed": {"job-workflow-gather:v1.0.0": "workflow-connector-gather"}},
-    }
-    es.docs[("job_specs", "job-m-scatter:v1")] = ({}, 1)
-    spec = scatter_gather_spec()
-    spec["nodes"]["scatter_1"].update(connector="job-m-scatter:v1", connector_queue="ignored")
-    r = c.post("/workflow/specs", json=spec)
-    assert r.status_code == 201, r.data
-    n = es.doc("specs", r.get_json()["spec_id"])["nodes"]["scatter_1"]
-    assert n["connector"] == "job-m-scatter:v1" and n["connector_queue"] == "m-queue"
+def test_validate_empty_body(env):
+    assert post_cwl(env, "/workflow/cwl/validate", text="  ").status_code == 400
 
 
-def test_spec_post_non_object(env):
-    c, _, _ = env
-    assert c.post("/workflow/specs", json=[1]).status_code == 400
+# ---- register
+
+def test_register_new(env):
+    r = post_cwl(env, "/workflow/cwl?user=alice")
+    j = r.get_json()
+    assert r.status_code == 201 and j["spec_id"] == "tiny:1.0.0"
+    doc = env.es.docs[("specs", "tiny:1.0.0")]
+    assert doc["cwl"] == TINY and doc["sha256"] == j["sha256"] and doc["username"] == "alice"
+    assert doc["spec"]["steps"]["a"]["job_type"] == "job-a:v1" and doc["cwl_normalized"]["class"] == "Workflow"
 
 
-def test_spec_duplicate_409(env):
-    c, _, _ = env
-    assert c.post("/workflow/specs", json=linear_spec()).status_code == 201
-    assert c.post("/workflow/specs", json=linear_spec()).status_code == 409
+def test_register_idempotent(env):
+    assert post_cwl(env, "/workflow/cwl").status_code == 201
+    r = post_cwl(env, "/workflow/cwl")
+    assert r.status_code == 200 and r.get_json()["success"] is True
 
 
-def test_spec_get_and_list(stored):
-    c, _, _ = stored
-    r = c.get("/workflow/specs/demo-linear:1.0.0")
-    assert r.status_code == 200 and r.get_json()["result"]["id"] == "demo-linear"
-    assert c.get("/workflow/specs/nope:1").status_code == 404
-    r = c.get("/workflow/specs")
-    body = r.get_json()
-    assert r.status_code == 200 and body["count"] == 1
-    assert body["result"][0]["spec_id"] == "demo-linear:1.0.0"
+def test_register_conflict_different_sha(env):
+    post_cwl(env, "/workflow/cwl")
+    r = post_cwl(env, "/workflow/cwl", text=TINY + "\n# edited\n")
+    assert r.status_code == 409 and "different content" in r.get_json()["message"]
 
 
-# ---- runs
-
-def _post_run(c, **over):
-    body = {"spec_id": "demo-linear:1.0.0", "inputs": {"n": 3}, "user": "jdoe"}
-    body.update(over)
-    return c.post("/workflow/runs", json=body)
+def test_register_invalid_not_stored(env):
+    del env.es.docs[("job_specs", "job-a:v1")]
+    r = post_cwl(env, "/workflow/cwl")
+    assert r.status_code == 400 and r.get_json()["errors"] and ("specs", "tiny:1.0.0") not in env.es.docs
 
 
-def test_run_happy_path(stored):
-    c, es, submit = stored
-    r = _post_run(c)
-    assert r.status_code == 202, r.data
-    run_id = r.get_json()["run_id"]
-    assert run_id.startswith("run-") and len(run_id) == 36
-    doc = es.doc("status", run_id)
-    assert doc["status"] == "running" and doc["spec_id"] == "demo-linear:1.0.0"
-    assert doc["username"] == "jdoe" and "user" not in doc and "ended_at" not in doc
-    assert doc["error"] is None and doc["outputs"] is None
-    assert doc["inputs"] == {"greeting": "hi", "n": 3}
-    assert doc["submitted_at"].endswith("Z") and doc["updated_at"].endswith("Z")
-    assert doc["nodes"]["A"] == {"state": "running", "payload_id": "payload-1",
-                                 "started_at": doc["updated_at"]}
-    assert doc["current_nodes"] == ["A"]
-    assert doc["spec_name"] == "demo-linear" and doc["spec_version"] == "1.0.0"
-    assert doc["has_scatter"] is False and doc["tags"] == []
-    assert "failed_node" not in doc and "error_class" not in doc and "duration_s" not in doc
-    assert doc["nodes"]["pass_1"] == {"state": "pending"}
-    assert doc["nodes"]["B"] == {"state": "pending"}
-    kw = submit.call_args.kwargs
-    assert kw["job_type"] == "job-wf_test:v1.0"
-    assert kw["queue"] == "hello_world_worker"
-    assert kw["params"] == {"mode": "ok", "outputs": "hi"}
-    assert kw["workflow"] == {"run_id": run_id, "step_id": "A",
-                              "spec_id": "demo-linear:1.0.0",
-                              "child_index": None, "child_total": None}
-    assert kw["username"] == "jdoe"
+def test_get_and_list_registered(env):
+    post_cwl(env, "/workflow/cwl")
+    assert env.c.get("/workflow/cwl/tiny:1.0.0").get_json()["result"]["spec"]["id"] == "tiny"
+    assert env.c.get("/workflow/cwl/nope:1").status_code == 404
+    assert env.c.get("/workflow/cwl").get_json()["count"] == 1
 
 
-def test_run_node_queue_overrides_default(env):
-    c, es, submit = env
-    spec = linear_spec()
-    spec["nodes"]["A"]["queue"] = "special"
-    c.post("/workflow/specs", json=spec)
-    assert _post_run(c).status_code == 202
-    assert submit.call_args.kwargs["queue"] == "special"
+# ---- operation snippet
+
+def test_operation_yaml(env):
+    r = env.c.get("/workflow/cwl/operation/job-a:v1")
+    assert r.status_code == 200 and r.mimetype == "text/yaml"
+    text = r.get_data(as_text=True)
+    assert "class: Operation" in text and "job_type: job-a:v1" in text and "x:" in text
 
 
-def test_run_no_queue_400(env):
-    c, es, submit = env
-    spec = linear_spec()
-    del spec["defaults"]["queue"]
-    c.post("/workflow/specs", json=spec)
-    r = _post_run(c)
-    assert r.status_code == 400 and "queue" in r.get_json()["message"]
-    submit.assert_not_called()
+def test_operation_json_and_404(env):
+    j = env.c.get("/workflow/cwl/operation/job-a:v1?format=json").get_json()
+    assert j["operation"]["class"] == "Operation" and "x" in j["operation"]["inputs"]
+    assert env.c.get("/workflow/cwl/operation/job-zzz:v1").status_code == 404
 
 
-def test_run_entry_falls_back_to_recommended_queue(env):
-    c, es, submit = env
-    spec = linear_spec()
-    del spec["defaults"]["queue"]
-    c.post("/workflow/specs", json=spec)
-    es.docs[("job_specs", "job-wf_test:v1.0")] = ({"recommended-queues": ["rec_q", "other"]}, 1)
-    assert _post_run(c).status_code == 202
-    assert submit.call_args.kwargs["queue"] == "rec_q"
+# ---- run submit
+
+def registered(env):
+    assert post_cwl(env, "/workflow/cwl").status_code == 201
 
 
-def test_run_no_queue_400_message_after_fallback(env):
-    c, es, submit = env
-    spec = linear_spec()
-    del spec["defaults"]["queue"]
-    c.post("/workflow/specs", json=spec)
-    es.docs[("job_specs", "job-wf_test:v1.0")] = ({"recommended-queues": []}, 1)
-    r = _post_run(c)
-    assert r.status_code == 400 and "no queue for entry node 'A'" in r.get_json()["message"]
-    submit.assert_not_called()
+def test_submit_happy_path(env):
+    registered(env)
+    r = env.c.post("/workflow/runs", json={"spec_id": "tiny:1.0.0", "inputs": {"x": "hello"},
+                                           "user": "bob", "tags": ["t1"]})
+    j = r.get_json()
+    assert r.status_code == 202 and j["run_id"].startswith("run-")
+    (redis, spec, run), _ = env.state.init_run.call_args
+    assert redis == "redis-client" and spec["id"] == "tiny"
+    assert run["run_id"] == j["run_id"] and run["inputs"] == {"x": "hello"} and run["status"] == "running"
+    assert run["username"] == "bob" and run["tags"] == ["t1"] and run["spec_sha256"]
+    assert run["index"].startswith("workflow_status-")
+    d = run["job_definitions"]["job-a:v1"]
+    assert d["queue"] == "q-a" and d["container"]["id"] == "img:1" and d["job_spec"]["id"] == "job-a:v1"
+    assert d["hysds_io"]["id"] == "hysds-io-a:v1"
+    env.state.publish_run_event.assert_called_once_with(j["run_id"], "run_started")
 
 
-def test_run_unknown_spec_404(env):
-    c, _, _ = env
-    assert _post_run(c, spec_id="nope:1").status_code == 404
-    assert c.post("/workflow/runs", json={}).status_code == 400
+def test_submit_init_precedes_publish(env):
+    registered(env)
+    order = []
+    env.state.init_run.side_effect = lambda *a: order.append("init")
+    env.state.publish_run_event.side_effect = lambda *a, **k: order.append("publish")
+    env.c.post("/workflow/runs", json={"spec_id": "tiny:1.0.0", "inputs": {"x": "h"}})
+    assert order == ["init", "publish"]
 
 
-def test_run_bad_inputs_400(stored):
-    c, es, submit = stored
-    r = _post_run(c, inputs={"n": "x", "bogus": 1})
-    assert r.status_code == 400 and len(r.get_json()["errors"]) == 2
-    r = _post_run(c, inputs={})
-    assert r.status_code == 400 and "required" in r.get_json()["errors"][0]
-    submit.assert_not_called()
-    assert not [k for k in es.docs if k[0] == "status"]
+def test_submit_bad_inputs(env):
+    registered(env)
+    for inputs in ({}, {"x": 5}, {"x": "a", "zzz": 1}):
+        r = env.c.post("/workflow/runs", json={"spec_id": "tiny:1.0.0", "inputs": inputs})
+        assert r.status_code == 400 and r.get_json()["errors"], inputs
+    env.state.init_run.assert_not_called()
 
 
-def test_run_entry_ref_failure_marks_failed(env):
-    c, es, submit = env
-    spec = linear_spec()
-    # passes spec validation but cannot resolve at runtime: no such input value supplied
-    spec["nodes"]["A"]["in"] = {"x": "$.inputs.n"}
-    spec["inputs"]["n"] = {"type": "int", "default": 1}
-    c.post("/workflow/specs", json=spec)
-    with umock.patch.object(sys.modules["mozart.workflow_api"], "resolve_inputs",
-                            side_effect=sys.modules["mozart.workflow_api"].WorkflowRefError("boom")):
-        r = _post_run(c, inputs={})
-    assert r.status_code == 400
-    run_id = r.get_json()["run_id"]
-    doc = es.doc("status", run_id)
-    assert doc["status"] == "failed" and "boom" in doc["error"]
-    assert doc["nodes"]["A"]["state"] == "failed"
-    assert doc["ended_at"] == doc["updated_at"]
-    assert doc["failed_node"] == "A" and doc["error_class"] == "input_resolution"
-    assert doc["current_nodes"] == [] and doc["duration_s"] >= 0
-    submit.assert_not_called()
+def test_submit_unknown_spec_and_missing_id(env):
+    assert env.c.post("/workflow/runs", json={"spec_id": "nope:1"}).status_code == 404
+    assert env.c.post("/workflow/runs", json={}).status_code == 400
 
 
-def test_run_submit_failure_500_marks_failed(stored):
-    c, es, submit = stored
-    submit.side_effect = RuntimeError("amqp down")
-    r = _post_run(c)
-    assert r.status_code == 500 and "amqp down" in r.get_json()["message"]
-    doc = es.doc("status", r.get_json()["run_id"])
-    assert doc["status"] == "failed" and "amqp down" in doc["error"]
-    assert doc["ended_at"].endswith("Z") and doc["ended_at"] == doc["updated_at"]
-    assert doc["failed_node"] == "A" and doc["error_class"] == "submit"
+def test_submit_missing_job_type_at_freeze(env):
+    registered(env)
+    del env.es.docs[("job_specs", "job-a:v1")]
+    r = env.c.post("/workflow/runs", json={"spec_id": "tiny:1.0.0", "inputs": {"x": "h"}})
+    assert r.status_code == 400 and "job-a:v1" in r.get_json()["message"]
+    env.state.init_run.assert_not_called()
 
 
-def test_run_has_scatter_true(env):
-    c, es, submit = env
-    spec = scatter_gather_spec()
-    spec.setdefault("defaults", {})["queue"] = "q"
-    assert c.post("/workflow/specs", json=spec).status_code == 201
-    r = _post_run(c, spec_id=f"{spec['id']}:{spec['version']}", inputs={})
-    assert r.status_code == 202, r.data
-    doc = es.doc("status", r.get_json()["run_id"])
-    assert doc["has_scatter"] is True and doc["spec_name"] == spec["id"]
-    assert doc["spec_version"] == str(spec["version"])
+def test_submit_missing_container_at_freeze(env):
+    registered(env)
+    del env.es.docs[("containers", "img:1")]
+    r = env.c.post("/workflow/runs", json={"spec_id": "tiny:1.0.0", "inputs": {"x": "h"}})
+    assert r.status_code == 400 and "container" in r.get_json()["message"]
 
 
-def test_run_tags_stored(stored):
-    c, es, _ = stored
-    r = _post_run(c, tags=["nightly", "figaro"])
+def test_submit_no_queue(env):
+    registered(env)
+    register_job_type(env.es, queue=None)
+    r = env.c.post("/workflow/runs", json={"spec_id": "tiny:1.0.0", "inputs": {"x": "h"}})
+    assert r.status_code == 400 and "no queue" in r.get_json()["message"]
+
+
+def test_submit_engine_state_unavailable(env, monkeypatch):
+    registered(env)
+    monkeypatch.setitem(sys.modules, "hysds.workflow_state", None)  # import raises ImportError
+    r = env.c.post("/workflow/runs", json={"spec_id": "tiny:1.0.0", "inputs": {"x": "h"}})
+    assert r.status_code == 503
+
+
+def test_submit_init_failure(env):
+    registered(env)
+    env.state.init_run.side_effect = RuntimeError("redis down")
+    r = env.c.post("/workflow/runs", json={"spec_id": "tiny:1.0.0", "inputs": {"x": "h"}})
+    assert r.status_code == 500
+    env.state.publish_run_event.assert_not_called()
+
+
+# ---- status
+
+def test_status_from_redis(env):
+    env.state.get_run.return_value = {"run_id": "run-1", "status": "running", "version": 3}
+    j = env.c.get("/workflow/runs/run-1").get_json()
+    assert j["source"] == "redis" and j["result"]["version"] == 3
+    env.state.get_run.assert_called_once_with("redis-client", "run-1")
+    assert env.es.searches == []
+
+
+def test_status_from_opensearch_when_not_active(env):
+    env.es.search_hits = [{"_source": {"run_id": "run-1", "status": "completed", "version": 9}}]
+    j = env.c.get("/workflow/runs/run-1").get_json()
+    assert j["source"] == "opensearch" and j["result"]["status"] == "completed"
+    index, body, _ = env.es.searches[0]
+    assert index == "status_alias" and body["query"] == {"term": {"run_id": "run-1"}}
+
+
+def test_status_opensearch_when_redis_errors(env):
+    env.state.get_run.side_effect = ConnectionError("down")
+    env.es.search_hits = [{"_source": {"run_id": "run-1", "status": "failed"}}]
+    assert env.c.get("/workflow/runs/run-1").get_json()["source"] == "opensearch"
+
+
+def test_status_not_found(env):
+    assert env.c.get("/workflow/runs/run-x").status_code == 404
+
+
+def test_list_runs_through_alias(env):
+    env.es.search_hits = [{"_source": {"run_id": "r1"}}, {"_source": {"run_id": "r2"}}]
+    j = env.c.get("/workflow/runs?status=running&spec_id=tiny:1.0.0&size=5").get_json()
+    assert j["count"] == 2 and j["total"] == 2
+    index, body, _ = env.es.searches[0]
+    assert index == "status_alias" and body["size"] == 5
+    assert {"term": {"status": "running"}} in body["query"]["bool"]["filter"]
+    assert "steps" in body["_source"]["excludes"]
+
+
+# ---- cancel
+
+def test_cancel_publishes_event(env):
+    env.state.get_run.return_value = {"run_id": "run-1", "status": "running"}
+    r = env.c.post("/workflow/runs/run-1/cancel", json={"user": "carol"})
     assert r.status_code == 202
-    assert es.doc("status", r.get_json()["run_id"])["tags"] == ["nightly", "figaro"]
+    env.state.publish_run_event.assert_called_once_with("run-1", "cancel_requested", {"username": "carol"})
 
 
-@pytest.mark.parametrize("bad", ["nightly", [1], ["ok", ""], {"a": "b"}, [["x"]]])
-def test_run_tags_invalid_400(stored, bad):
-    c, es, submit = stored
-    r = _post_run(c, tags=bad)
-    assert r.status_code == 400 and "tags" in r.get_json()["message"]
-    submit.assert_not_called()
-    assert not [k for k in es.docs if k[0] == "status"]
+def test_cancel_unknown_terminal_cancelled(env):
+    assert env.c.post("/workflow/runs/run-x/cancel").status_code == 404
+    env.state.get_run.return_value = {"run_id": "r", "status": "completed"}
+    assert env.c.post("/workflow/runs/r/cancel").status_code == 409
+    env.state.get_run.return_value = {"run_id": "r", "status": "cancelled"}
+    assert env.c.post("/workflow/runs/r/cancel").status_code == 200
+    env.state.publish_run_event.assert_not_called()
 
 
-def test_run_get(stored):
-    c, es, _ = stored
-    run_id = _post_run(c).get_json()["run_id"]
-    r = c.get(f"/workflow/runs/{run_id}")
-    assert r.status_code == 200
-    assert r.get_json()["result"]["run_id"] == run_id
-    assert c.get("/workflow/runs/run-missing").status_code == 404
+def test_cancel_from_opensearch_record(env):
+    env.es.search_hits = [{"_source": {"run_id": "run-1", "status": "running"}}]
+    assert env.c.post("/workflow/runs/run-1/cancel").status_code == 202
 
 
-def test_steps_aggregation(stored):
-    c, es, _ = stored
-    run_id = _post_run(c).get_json()["run_id"]
-    es.search_result = {"aggregations": {"steps": {"buckets": [
-        {"key": "A", "doc_count": 1,
-         "statuses": {"buckets": [{"key": "job-completed", "doc_count": 1}]}}]}}}
-    r = c.get(f"/workflow/runs/{run_id}/steps")
-    assert r.status_code == 200
-    assert r.get_json()["result"] == {"A": {"job-completed": 1}}
-    index, body, _ = es.searches[-1]
-    assert index == "job_status-current"
-    assert body["size"] == 0
-    assert body["query"] == {"term": {"workflow.run_id": run_id}}
-    steps = body["aggs"]["steps"]
-    assert steps["terms"]["field"] == "workflow.step_id"
-    assert steps["aggs"]["statuses"]["terms"]["field"] == "status"
+# ---- v1 is gone
 
-
-def test_steps_empty_and_404(stored):
-    c, es, _ = stored
-    run_id = _post_run(c).get_json()["run_id"]
-    es.search_result = {"hits": {"hits": []}}
-    assert c.get(f"/workflow/runs/{run_id}/steps").get_json()["result"] == {}
-    assert c.get("/workflow/runs/run-missing/steps").status_code == 404
-
-
-# ---- cancel (12.5)
-
-def _hits(*ids):
-    return {"hits": {"hits": [{"_id": i, "_source": {}, "sort": [n, i]}
-                              for n, i in enumerate(ids)]}}
-
-
-def test_cancel_running_run_202(stored):
-    c, es, submit = stored
-    run_id = _post_run(c).get_json()["run_id"]
-    es.search_result = _hits("p1", "p2")
-    r = c.post(f"/workflow/runs/{run_id}/cancel", json={"user": "bob"})
-    assert r.status_code == 202, r.data
-    assert r.get_json()["revoked"] == 2 and r.get_json()["run_id"] == run_id
-    doc = es.doc("status", run_id)
-    assert doc["status"] == "cancelled" and doc["error"] == "cancelled by bob"
-    assert doc["ended_at"] == doc["updated_at"] and doc["ended_at"] >= doc["submitted_at"]
-    assert {n["state"] for n in doc["nodes"].values()} == {"cancelled"}
-    kw = submit.call_args.kwargs  # the last call is the revoke (entry submit was earlier)
-    assert kw["job_type"] == "job-lw-mozart-revoke:test" and kw["queue"] == "system-jobs-queue"
-    assert kw["workflow"] is None and kw["params"]["operation"] == "revoke"
-    assert kw["params"]["component"] == "mozart"
-    import json as _j
-    assert _j.loads(kw["params"]["query"])["query"]["ids"]["values"] == ["p1", "p2"]
-    index, body, _ = es.searches[-1]
-    assert index == "job_status-current"
-    assert body["query"]["bool"]["filter"] == [{"term": {"workflow.run_id": run_id}}]
-
-
-def test_cancel_no_jobs_submits_nothing(stored):
-    c, es, submit = stored
-    run_id = _post_run(c).get_json()["run_id"]
-    submit.reset_mock()
-    es.search_result = {"hits": {"hits": []}}
-    r = c.post(f"/workflow/runs/{run_id}/cancel")
-    assert r.status_code == 202 and r.get_json()["revoked"] == 0
-    assert es.doc("status", run_id)["error"] == "cancelled by anonymous"
-    submit.assert_not_called()
-
-
-def test_cancel_unknown_404(stored):
-    c, es, _ = stored
-    assert c.post("/workflow/runs/run-missing/cancel").status_code == 404
-
-
-@pytest.mark.parametrize("st", ["completed", "failed"])
-def test_cancel_terminal_409(stored, st):
-    c, es, submit = stored
-    run_id = _post_run(c).get_json()["run_id"]
-    doc = es.doc("status", run_id)
-    doc["status"] = st
-    es.index("status", run_id, doc)
-    submit.reset_mock()
-    r = c.post(f"/workflow/runs/{run_id}/cancel")
-    assert r.status_code == 409 and st in r.get_json()["message"]
-    submit.assert_not_called()
-    assert es.doc("status", run_id)["status"] == st
-
-
-def test_cancel_sets_error_class_and_duration(stored):
-    c, es, _ = stored
-    run_id = _post_run(c).get_json()["run_id"]
-    es.search_result = _hits()
-    assert c.post(f"/workflow/runs/{run_id}/cancel").status_code == 202
-    doc = es.doc("status", run_id)
-    assert doc["error_class"] == "cancelled" and "failed_node" not in doc
-    assert doc["current_nodes"] == [] and doc["duration_s"] >= 0
-    assert doc["nodes"]["A"]["ended_at"] == doc["updated_at"] and doc["nodes"]["A"]["started_at"]
-    assert "ended_at" not in doc["nodes"]["B"]  # never started
-
-
-def test_cancel_already_cancelled_200_sweeps(stored):
-    c, es, submit = stored
-    run_id = _post_run(c).get_json()["run_id"]
-    es.search_result = _hits()
-    assert c.post(f"/workflow/runs/{run_id}/cancel").status_code == 202
-    es.search_result = _hits("late-1")
-    before = es.doc("status", run_id)
-    r = c.post(f"/workflow/runs/{run_id}/cancel")
-    assert r.status_code == 200 and r.get_json()["revoked"] == 1
-    assert es.doc("status", run_id) == before
-    assert submit.call_args.kwargs["params"]["operation"] == "revoke"
-
-
-def test_cancel_revoke_failure_500_run_stays_cancelled(stored):
-    c, es, submit = stored
-    run_id = _post_run(c).get_json()["run_id"]
-    es.search_result = _hits("p1")
-    submit.side_effect = RuntimeError("amqp down")
-    r = c.post(f"/workflow/runs/{run_id}/cancel")
-    assert r.status_code == 500 and "retry the cancel" in r.get_json()["message"]
-    assert es.doc("status", run_id)["status"] == "cancelled"
-
-
-def test_entry_job_tag_is_step_id(stored):
-    c, es, submit = stored
-    assert _post_run(c).status_code == 202
-    assert submit.call_args.kwargs["tags"] == ["A"]
-
-
-def test_entry_job_tag_from_node_tag(env):
-    c, es, submit = env
-    spec = linear_spec()
-    spec["nodes"]["A"]["tag"] = "ingest"
-    assert c.post("/workflow/specs", json=spec).status_code == 201
-    assert _post_run(c).status_code == 202
-    assert submit.call_args.kwargs["tags"] == ["ingest"]
-
-
-def test_run_tags_do_not_flow_to_entry_job(stored):
-    c, es, submit = stored
-    r = _post_run(c, tags=["nightly", "figaro"])
-    assert r.status_code == 202
-    assert es.doc("status", r.get_json()["run_id"])["tags"] == ["nightly", "figaro"]
-    kw = submit.call_args.kwargs
-    assert kw["tags"] == ["A"]
-    assert "nightly" not in json.dumps(kw["tags"]) and "nightly" not in json.dumps(kw["workflow"])
+def test_v1_endpoints_removed(env):
+    assert env.c.post("/workflow/specs", json={}).status_code in (404, 405)
+    assert env.c.get("/workflow/specs").status_code in (404, 405)

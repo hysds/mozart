@@ -1,15 +1,20 @@
 #!/usr/bin/env python
-"""Create the workflow-orchestration indices (workflow_specs, workflow_status).
+"""Create the workflow_specs index (registered CWL workflows and their compiled 2.0 specs).
 
 Modeled on create_user_rules_index.py / create_hysds_ios_index.py: merge
 configs/es_settings.json with the per-index mapping and create the index.
 
-Both mappings deliberately declare `nodes`, `inputs`, `outputs` and `defaults`
-as {"type": "object", "enabled": false}. Their keys are author-chosen node ids
-and input names; leaving them dynamically mapped would let two unrelated
-workflows collide on a field type, or walk the index into the default
-1000-field limit -- the same hazard ADR-003 rejects for dataset metadata. Both
-docs are fetched by _id and read whole, so nothing needs to query into them.
+workflow_status is NOT created here. Run documents go to daily indices
+workflow_status-YYYY.MM.DD, created on first write from the sdscli index template
+`workflow_status.template` (pattern workflow_status-*, aliases `workflow_status` and
+`workflow_status-current`); configs/workflow_status.mapping is the same mapping, kept in
+sync with that template.
+
+The spec mapping declares the compiled `spec` and the normalized CWL as
+{"type": "object", "enabled": false}: their keys are author-chosen step and input names,
+and dynamic mapping would let two unrelated workflows collide on a field type or walk the
+index into the 1000-field limit (the hazard ADR-003 rejects for dataset metadata). Specs
+are fetched by _id and read whole.
 """
 from future import standard_library
 
@@ -25,7 +30,6 @@ mozart_es = get_mozart_es()
 
 INDICES = (
     (app.config["WORKFLOW_SPECS_INDEX"], "workflow_specs.mapping"),
-    (app.config["WORKFLOW_STATUS_INDEX"], "workflow_status.mapping"),
 )
 
 # get settings shared by every mozart-created index
