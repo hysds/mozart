@@ -161,9 +161,8 @@ at the root of the job directory**:
   slot type, a repeated name, a file over the size limit (512 KB by default, set by
   `WORKFLOW_OUTPUTS_MAX_BYTES`), or a `class` path that can't be resolved to a published URL
   ([§2.3](#23-referencing-published-files-class-file--directory)). Rerunning the job would
-  write the same outputs, so `outputs` is **not retried** by `worker` or `pge:*` entries. It
-  also takes precedence over a token in `_error_class.txt`. Only `retry_on: ["*"]` matches
-  it. Outputs travel on a queue
+  write the same outputs, so `outputs` is **never retried**, not even by
+  `retry_on: ["*"]`. It also takes precedence over a token in `_error_class.txt`. Outputs travel on a queue
   message, so keep them to scalars and references. Publish payloads as datasets and output
   their location.
 
@@ -618,10 +617,10 @@ two fields. A failed attempt is retried when both are true:
 - the exact classes `timeout`, `signal`, `offline` and `worker`;
 - `exit_code:<n>` or `exit_code:*`;
 - `pge:<token>` or `pge:*`;
-- `*`, which matches everything, including `outputs`.
+- `*`, which matches every class except `outputs`.
 
-`outputs` itself isn't an accepted `retry_on` entry (`bad_hint`). An outputs failure is
-deterministic, so it is retried only under `*`.
+`outputs` is **never retried**: an outputs failure is deterministic. It can't be listed in
+`retry_on` (`bad_hint`), and `*` doesn't match it.
 
 A retry is a new job attempt with the same inputs. Every attempt is kept in the step's
 `attempts[]` in the run document. Scatter children are retried individually. A run that is
@@ -1115,7 +1114,7 @@ from them, with or without a `pickValue`, is `null` ([§8.1](#81-dataflow)).
 | class | cause |
 |---|---|
 | `exit_code:<n>`, `timeout`, `signal`, `offline`, `worker`, `pge:<token>` | the job failed ([§2.5](#25-telling-the-retry-policy-why-you-failed-optional)) |
-| `outputs` | the job's `_workflow_outputs.json` was invalid or too large, or a `class` path couldn't be resolved to a published URL. The engine uses the same class if it can't read a completed job's recorded outputs. Retried only under `retry_on: ["*"]` |
+| `outputs` | the job's `_workflow_outputs.json` was invalid or too large, or a `class` path couldn't be resolved to a published URL. The engine uses the same class if it can't read a completed job's recorded outputs. Never retried |
 | `revoked`, `deduped` | the job was revoked, or the job worker deduplicated it |
 | `lost` | the job never reported back, as found by the reaper ([§8.5](#85-timeouts-stalls-and-recovery)). It can be retried |
 | `input_resolution` | a source didn't resolve: a missing output, a `first_non_null` or `the_only_non_null` with no answer, a `when` flag that isn't a boolean, or a null scatter input |
