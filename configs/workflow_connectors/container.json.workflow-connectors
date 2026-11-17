@@ -1,7 +1,7 @@
 {
-  "id": "hysds/workflow-connectors:v1.0.0",
+  "id": "hysds/workflow-connectors:v2.0.0",
   "name": "hysds/workflow-connectors",
-  "version": "v1.0.0",
-  "url": "s3://{{ CODE_BUCKET }}/container-workflow-connectors_v1.0.0.tar.gz",
+  "version": "v2.0.0",
+  "url": "s3://{{ CODE_BUCKET }}/container-workflow-connectors_v2.0.0.tar.gz",
   "digest": null
 }

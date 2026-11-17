@@ -25,7 +25,7 @@ WORKFLOW_MAPPINGS = ("workflow_specs.mapping", "workflow_status.mapping")
 
 CONNECTORS = ("decide",)  # v2: the engine does pass/switch/halt/finalize/scatter/gather in-process
 
-SHARED_CONTAINER = "hysds/workflow-connectors:v1.0.0"
+SHARED_CONTAINER = "hysds/workflow-connectors:v2.0.0"
 
 @pytest.fixture
 def connectors_dir(configs_dir):
