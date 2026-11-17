@@ -155,6 +155,20 @@ def test_validate_empty_body(env):
     assert post_cwl(env, "/workflow/cwl/validate", text="  ").status_code == 400
 
 
+# ---- connector allowlist (WORKFLOW_CONNECTORS)
+
+@pytest.mark.parametrize("path", ["/workflow/cwl/validate", "/workflow/cwl"])
+def test_endpoints_pass_the_connector_allowlist_to_the_compiler(env, path):
+    allow = {"scatter": {"default": None, "allowed": {"job-lister:v1": "lq"}}}
+    res = umock.MagicMock(ok=False, errors=[{"path": "p", "code": "e", "message": "m"}], warnings=[], sha256="abc")
+    res.as_dict.return_value = {"ok": False, "warnings": [], "errors": res.errors, "compiled": {}, "graph": {}}
+    from mozart import app as mozart_app
+    with umock.patch("hysds_commons.cwl.compile_cwl", return_value=res) as comp, \
+            umock.patch.dict(mozart_app.config, {"WORKFLOW_CONNECTORS": allow}):
+        post_cwl(env, path)
+    assert comp.call_args.kwargs["allowed_connectors"] == allow
+
+
 # ---- register
 
 def test_register_new(env):
