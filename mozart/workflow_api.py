@@ -197,8 +197,7 @@ def validate_cwl():
     if text is None:
         return _fail("request body must be CWL text (YAML or JSON), or a JSON object with a 'cwl' field", 400)
     try:
-        res = _cwl().compile_cwl(text, job_type_lookup,
-                                allowed_connectors=app.config.get("WORKFLOW_CONNECTORS"))
+        res = _cwl().compile_cwl(text, job_type_lookup)
     except ImportError as e:
         return _no_cwl_extra(e)
     except Exception as e:
@@ -212,8 +211,7 @@ def register_cwl():
     if text is None:
         return _fail("request body must be CWL text (YAML or JSON), or a JSON object with a 'cwl' field", 400)
     try:
-        res = _cwl().compile_cwl(text, job_type_lookup,
-                                allowed_connectors=app.config.get("WORKFLOW_CONNECTORS"))
+        res = _cwl().compile_cwl(text, job_type_lookup)
     except ImportError as e:
         return _no_cwl_extra(e)
     except Exception as e:

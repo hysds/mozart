@@ -35,15 +35,6 @@ WORKFLOW_SPECS_INDEX = "workflow_specs"
 # this is the READ ALIAS over all of them. Nothing creates a concrete index with this name.
 WORKFLOW_STATUS_INDEX = "workflow_status"
 
-# Scatter connectors a workflow may use (CWL hint hysds:ScatterConnector): the mission job types that list the items
-# of a scattered step, each with the queue it runs on. Registration fails with connector_not_allowed for any other
-# job type; a hint without a queue gets the queue given here. Remove the setting to skip the check. Accepted shapes:
-#   {"scatter": {"default": None, "allowed": {"<job_type>": "<queue>"}}}   (the v1 shape), {"<job_type>": "<queue>"}
-#   or a list of job types. Example: "job-my-mission-lister:v1": "my-mission-connector"
-WORKFLOW_CONNECTORS = {
-    "scatter": {"default": None, "allowed": {}},
-}
-
 # key file for fabric
 KEY_FILENAME = "{{ KEY_FILENAME }}"
 
