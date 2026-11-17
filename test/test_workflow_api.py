@@ -66,7 +66,7 @@ def register_job_type(es, jt="job-a:v1", params=("x",), container="img:1", queue
 @pytest.fixture(params=["01", "02"])
 def env(request, monkeypatch):
     flask_app = Flask("t")
-    flask_app.config.update(WORKFLOW_SPECS_INDEX="specs", WORKFLOW_STATUS_INDEX="status_alias",
+    flask_app.config.update(WORKFLOWS_ENABLED=True, WORKFLOW_SPECS_INDEX="specs", WORKFLOW_STATUS_INDEX="status_alias",
                             JOB_STATUS_INDEX="job_status-current", JOB_SPECS_INDEX="job_specs",
                             HYSDS_IOS_INDEX="hysds_ios", CONTAINERS_INDEX="containers")
     es = FakeES()
@@ -365,3 +365,31 @@ def test_cancel_from_opensearch_record(env):
 def test_v1_endpoints_removed(env):
     assert env.c.post("/workflow/specs", json={}).status_code in (404, 405)
     assert env.c.get("/workflow/specs").status_code in (404, 405)
+
+
+# ---- workflows opt-in switch
+
+def test_create_run_503_when_workflows_disabled(env):
+    for cfg in ("off", "missing"):
+        if cfg == "off":
+            env.c.application.config["WORKFLOWS_ENABLED"] = False
+        else:
+            env.c.application.config.pop("WORKFLOWS_ENABLED")
+        r = env.c.post("/workflow/runs", json={"spec_id": "tiny:1.0.0"})
+        assert r.status_code == 503
+        assert r.get_json() == {"success": False, "message": "workflows are not enabled on this cluster"}
+    env.state.init_run.assert_not_called()
+
+
+def test_read_only_and_cancel_work_when_workflows_disabled(env):
+    env.c.application.config["WORKFLOWS_ENABLED"] = False
+    assert env.c.get("/workflow/runs").status_code != 503
+    assert env.c.get("/workflow/specs").status_code != 503
+    assert env.c.get("/workflow/runs/nope").status_code != 503
+    assert env.c.get("/workflow/runs/nope/steps").status_code != 503
+    assert env.c.post("/workflow/runs/nope/cancel").status_code != 503
+
+
+def test_create_run_not_503_when_enabled(env):
+    r = env.c.post("/workflow/runs", json={"spec_id": "missing:1"})
+    assert r.status_code == 404

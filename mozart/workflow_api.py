@@ -324,6 +324,8 @@ def list_specs():
 # ---------------------------------------------------------------- runs
 
 def create_run():
+    if not app.config.get("WORKFLOWS_ENABLED", False):
+        return _fail("workflows are not enabled on this cluster", 503)
     body = _json_body()
     if body is None:
         return _fail("request body must be a JSON object", 400)
