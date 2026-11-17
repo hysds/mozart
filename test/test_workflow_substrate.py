@@ -23,7 +23,7 @@ from test_configs import VALID_FIELD_TYPES, _iter_properties
 
 WORKFLOW_MAPPINGS = ("workflow_specs.mapping", "workflow_status.mapping")
 
-CONNECTORS = ("pass", "scatter", "gather", "switch", "halt", "finalize", "decide")  # pass/switch go in S7
+CONNECTORS = ("decide",)  # v2: the engine does pass/switch/halt/finalize/scatter/gather in-process
 
 SHARED_CONTAINER = "hysds/workflow-connectors:v1.0.0"
 
